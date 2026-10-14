@@ -93,3 +93,16 @@ export function playerStats(launch: string, today: string): Stats {
   }
   return { played, perfect, streak: run, bestStreak };
 }
+
+/** Today's unfinished scored game, saved as it goes so leaving and returning cannot reset the clock. */
+export interface Progress {
+  pieces: PieceState[];
+  elapsedMs: number;
+  started: boolean;
+  /** The pieces the hints placed, so a reload cannot earn extra hints. */
+  hintIds?: string[];
+  /** Spares pulled out of the basket, which stay out after a reload. */
+  pulledIds?: string[];
+  /** Saved by games from before the second hint. */
+  hintId?: string | null;
+}

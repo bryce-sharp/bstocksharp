@@ -5,9 +5,10 @@ import { bounds, cellKey, rotateCCW, rotateCW, shapeKey, type Cell } from "./pie
 import { BINDING, LINEN, YARNS } from "./quilt";
 import { StitchBorder } from "./stitches";
 import { QuiltCalendar } from "./calendar";
-import { GAME, LAUNCH_DATE, loadBest, playerStats, saveBest } from "./records";
+import { GAME, LAUNCH_DATE, loadBest, playerStats, saveBest, type Progress } from "./records";
 import { quiltGrid } from "./share";
 import { SNUG_FONTS } from "./fonts";
+import { flushRemote, saveProgressRemote, saveRunRemote, syncSnug } from "./sync";
 import { Basket } from "./basket";
 import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
 import { BoardSvg, Btn, FONT, HowToPlay, INK, KnitDefs, PanelStitches, PatchSvg, QuiltBackdrop, QuiltLabel, RUST_THREAD, ResultCard, SCRIPT, Stat, hintsUsed, panelStyle, plural, type Attempt, type MoreGamesLink, type PieceState, type RunSummary, type Spot } from "./parts";
@@ -61,18 +62,6 @@ function packTray(sizes: number[], widthCells: number): { slots: Slot[]; w: numb
   return { slots, w: maxW, h: y };
 }
 
-/** Today's unfinished scored game, saved as it goes so leaving and returning cannot reset the clock. */
-interface Progress {
-  pieces: PieceState[];
-  elapsedMs: number;
-  started: boolean;
-  /** The pieces the hints placed, so a reload cannot earn extra hints. */
-  hintIds?: string[];
-  /** Spares pulled out of the basket, which stay out after a reload. */
-  pulledIds?: string[];
-  /** Saved by games from before the second hint. */
-  hintId?: string | null;
-}
 
 /** Active play time before each hint becomes available: one at 5 minutes, another at 10. */
 const HINT_AT = [5 * 60_000, 10 * 60_000];
@@ -121,6 +110,8 @@ interface Carry {
 }
 
 const SITE = "https://www.bstocksharp.dev";
+/** How long the day waits for a signed-in player's account before opening on this device's copy. */
+const SYNC_WAIT_MS = 4000;
 const UNDO_LIMIT = 100;
 const visuallyHidden = { position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" } as const;
 
@@ -128,8 +119,22 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 const shift = (cells: readonly Cell[], s: Spot) => cells.map(([x, y]) => [x + s.x, y + s.y] as Cell);
 
 /** `shareUrl` is the link players share; it defaults to this site's Snug page. */
-export function Snug({ shareUrl }: { shareUrl?: string }) {
+/** `profileId` is the signed-in person; their account is merged in before the day opens, and saves go to it. */
+export function Snug({ shareUrl, profileId }: { shareUrl?: string; profileId?: number }) {
   const [today, setToday] = useState(() => todayKey());
+  const [synced, setSynced] = useState(profileId === undefined);
+  useEffect(() => {
+    if (profileId === undefined) return;
+    // A slow or failed fetch never blocks play; the day opens on this device's copy.
+    const giveUp = window.setTimeout(() => setSynced(true), SYNC_WAIT_MS);
+    syncSnug(profileId)
+      .catch(() => {})
+      .finally(() => {
+        window.clearTimeout(giveUp);
+        setSynced(true);
+      });
+    return () => window.clearTimeout(giveUp);
+  }, [profileId]);
   const [dateKey, setDateKey] = useState(today);
   // A tab left open past midnight learns the new date within a minute, or as soon as it is looked at again.
   useEffect(() => {
@@ -147,14 +152,20 @@ export function Snug({ shareUrl }: { shareUrl?: string }) {
   );
   return (
     <div className={SNUG_FONTS}>
-      <SnugDay
-        key={dateKey}
-        dateKey={dateKey}
-        today={today}
-        onPickDate={setDateKey}
-        shareUrl={shareUrl ?? `${window.location.origin}/games/snug`}
-        moreGames={moreGames}
-      />
+      {synced ? (
+        <SnugDay
+          key={dateKey}
+          dateKey={dateKey}
+          today={today}
+          onPickDate={setDateKey}
+          shareUrl={shareUrl ?? `${window.location.origin}/games/snug`}
+          moreGames={moreGames}
+        />
+      ) : (
+        <div style={{ ...panelStyle, minHeight: "60vh", display: "grid", placeItems: "center", fontFamily: SCRIPT, fontSize: 30, color: BINDING }}>
+          Fetching your quilts…
+        </div>
+      )}
     </div>
   );
 }
@@ -654,13 +665,15 @@ function SnugDay({
     const { saved: isSaved, phase: ph, pieces: ps } = live.current;
     const c = clock.current;
     if (!isSaved || ph !== "playing" || !c.started) return;
-    saveProgress(dateKey, {
+    const progress: Progress = {
       pieces: ps,
       elapsedMs: c.base + (c.since === null ? 0 : Date.now() - c.since),
       started: c.started,
       hintIds: live.current.hintIds,
       pulledIds: live.current.pulledIds,
-    });
+    };
+    saveProgress(dateKey, progress);
+    saveProgressRemote(dateKey, progress);
   }, [dateKey]);
 
   useEffect(persist, [pieces, hintIds, pulledIds, persist]);
@@ -671,12 +684,14 @@ function SnugDay({
       if (document.hidden) {
         stopClock();
         persist();
+        flushRemote();
         if (live.current.scored && live.current.phase === "playing" && clock.current.started) setPaused(true);
       } else if (!live.current.scored && !modalRef.current) runClock();
     };
     const onPageHide = () => {
       stopClock();
       persist();
+      flushRemote();
     };
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pagehide", onPageHide);
@@ -722,11 +737,15 @@ function SnugDay({
     setPhase("done");
     setConfirming(false);
     setSelected(null);
-    setBestRun(saveBest(dateKey, { gaps: holes, timeMs, pieces: settledPieces, hints: hintIds.length }));
-    if (!isReplay && !isArchive) {
-      const attempt: Attempt = { gaps: holes, timeMs, pieces: settledPieces, hints: hintIds.length };
-      if (saveAttempt(GAME, dateKey, attempt)) setRecorded(attempt);
+    const run: Attempt = { gaps: holes, timeMs, pieces: settledPieces, hints: hintIds.length };
+    const best = saveBest(dateKey, run);
+    setBestRun(best);
+    let scoredRun: Attempt | null = null;
+    if (!isReplay && !isArchive && saveAttempt(GAME, dateKey, run)) {
+      setRecorded(run);
+      scoredRun = run;
     }
+    saveRunRemote(dateKey, scoredRun, best);
     window.setTimeout(() => setShowCard(true), holes === 0 ? 1500 : 250);
   }, [isReplay, isArchive, pieces, dateKey, saved, stopClock, hintIds, holesIn]);
 
