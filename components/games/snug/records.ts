@@ -1,7 +1,7 @@
 // Per-day results: the scored first run, the best run ever (any mode), and a status for the calendar.
 
 import { addDays, loadAttempt } from "../daily";
-import { hintsUsed, type Attempt } from "./parts";
+import { hintsUsed, type Attempt, type PieceState } from "./parts";
 
 export const GAME = "snug";
 /** Backdated a week so there were past quilts to play from day one. */
@@ -45,16 +45,18 @@ export interface DayRecord {
   status: DayStatus;
   /** Holes in the scored run, or in the best practice run for a day only practiced. */
   holes?: number;
+  /** The quilt to draw for the day: the scored run, or the best practice run. */
+  pieces?: PieceState[];
 }
 
 /** What the calendar shows for a day, from the scored run, the best run, and any unfinished game. */
 export function dayRecord(dateKey: string): DayRecord {
   const scored = loadAttempt<Attempt>(GAME, dateKey);
   const best = loadBest(dateKey) ?? scored;
-  if (scored?.gaps === 0) return { status: "perfect" };
-  if (best?.gaps === 0) return { status: "completedLater", holes: scored?.gaps };
-  if (scored) return { status: "holes", holes: scored.gaps };
-  if (best) return { status: "tried", holes: best.gaps };
+  if (scored?.gaps === 0) return { status: "perfect", pieces: scored.pieces };
+  if (best?.gaps === 0) return { status: "completedLater", holes: scored?.gaps, pieces: scored?.pieces ?? best.pieces };
+  if (scored) return { status: "holes", holes: scored.gaps, pieces: scored.pieces };
+  if (best) return { status: "tried", holes: best.gaps, pieces: best.pieces };
   try {
     // Older versions saved a day as soon as it was opened; only a started game counts.
     const raw = localStorage.getItem(progressPrefix + dateKey);

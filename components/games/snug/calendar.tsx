@@ -1,8 +1,10 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { addDays } from "../daily";
-import { BINDING, LINEN } from "./quilt";
+import { BINDING, LINEN, YARNS } from "./quilt";
 import { GOLD_THREAD, INK, RED_THREAD, RUST_THREAD, SCRIPT, StitchedModal } from "./parts";
 import { dayRecord, type DayRecord } from "./records";
+import { generatePuzzle } from "./generator";
+import { QuiltThumb } from "./collection";
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
 const GOLD_FILL = "#e2b03e";
@@ -24,30 +26,32 @@ function Check({ color }: { color: string }) {
   );
 }
 
-/** The small mark under a day's number. */
+/** The corner badge on a day: a gold check for perfect later, the hole count for runs with holes. */
 function Mark({ record }: { record: DayRecord }) {
   switch (record.status) {
-    case "perfect":
-      return <Check color="#fff8e6" />;
     case "completedLater":
       return <Check color={GOLD_THREAD} />;
     case "holes":
       return <span style={{ fontSize: 10, fontWeight: 700, color: RED_THREAD }}>{record.holes}</span>;
     case "tried":
-      return <span style={{ fontSize: 10, fontWeight: 600, color: RUST_THREAD, opacity: 0.6 }}>{record.holes}</span>;
-    case "inProgress":
-      return <span style={{ width: 10, height: 3, borderRadius: 2, background: RUST_THREAD }} />;
+      return <span style={{ fontSize: 10, fontWeight: 600, color: RUST_THREAD, opacity: 0.7 }}>{record.holes}</span>;
     default:
-      return <span style={{ height: 10 }} />;
+      return null;
   }
 }
 
 const cellLook = (record: DayRecord) => {
-  if (record.status === "perfect") return { background: GOLD_FILL, border: `2px solid ${GOLD_FILL}`, color: "#fff8e6" };
-  if (record.status === "completedLater") return { background: LINEN, border: `2px solid ${GOLD_THREAD}`, color: INK };
+  if (record.status === "perfect") return { background: LINEN, border: `2px solid ${GOLD_FILL}`, color: INK };
   if (record.status === "inProgress") return { background: LINEN, border: `2px dashed ${RUST_THREAD}`, color: INK };
+  if (record.pieces) return { background: LINEN, border: "2px solid rgba(123,59,46,.15)", color: INK };
   return { background: "rgba(123,59,46,.07)", border: "2px solid transparent", color: INK };
 };
+
+/** A played day's quilt, drawn small; the board comes from the day's puzzle. */
+function DayQuilt({ dateKey, record }: { dateKey: string; record: DayRecord }) {
+  const puzzle = useMemo(() => generatePuzzle(dateKey, YARNS.length), [dateKey]);
+  return <QuiltThumb board={puzzle.board} cols={puzzle.cols} rows={puzzle.rows} pieces={record.pieces!} size="70%" />;
+}
 
 function Legend({ swatch, children }: { swatch: DayRecord; children: ReactNode }) {
   return (
@@ -147,6 +151,7 @@ export function QuiltCalendar({
           }
           const look = cellLook(record);
           const isCurrent = key === current;
+          const quilt = !!record.pieces;
           return (
             <button
               key={key}
@@ -155,16 +160,15 @@ export function QuiltCalendar({
               onClick={() => onPick(key)}
               style={{
                 ...look,
+                position: "relative",
                 aspectRatio: "1",
                 borderRadius: 9,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 1,
+                display: "grid",
+                placeItems: "center",
                 padding: 0,
+                overflow: "hidden",
                 fontFamily: "inherit",
-                fontSize: 14,
+                fontSize: quilt ? 9 : 14,
                 fontWeight: key === today ? 700 : 500,
                 cursor: "pointer",
                 boxSizing: "border-box",
@@ -172,14 +176,23 @@ export function QuiltCalendar({
                 outlineOffset: 2,
               }}
             >
-              {i + 1}
-              <Mark record={record} />
+              {quilt ? (
+                <>
+                  <DayQuilt dateKey={key} record={record} />
+                  <span style={{ position: "absolute", top: 1, left: 3, opacity: 0.6 }}>{i + 1}</span>
+                  <span style={{ position: "absolute", bottom: 0, right: 3, lineHeight: 1 }}>
+                    <Mark record={record} />
+                  </span>
+                </>
+              ) : (
+                i + 1
+              )}
             </button>
           );
         })}
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 14px", marginTop: 16, justifyContent: "center" }}>
-        <Legend swatch={{ status: "perfect" }}>Perfect on the day</Legend>
+        <Legend swatch={{ status: "perfect" }}>Perfect on the day (gold edge)</Legend>
         <Legend swatch={{ status: "completedLater" }}>Perfect later</Legend>
         <Legend swatch={{ status: "holes", holes: 3 }}>Holes left (scored)</Legend>
         <Legend swatch={{ status: "tried", holes: 3 }}>Holes left (practice)</Legend>

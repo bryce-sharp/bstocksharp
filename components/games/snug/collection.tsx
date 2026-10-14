@@ -1,12 +1,10 @@
 // Your quilts as a sampler: one small patch per day of the month, each showing the quilt you finished that day.
 
 import { useMemo } from "react";
-import { addDays, loadAttempt } from "../daily";
 import { generatePuzzle } from "./generator";
 import { cellKey, outlinePath, type Cell } from "./pieces";
 import { BINDING, LINEN, YARNS } from "./quilt";
-import { GOLD_THREAD, INK, RED_THREAD, SCRIPT, plural, type Attempt, type PieceState } from "./parts";
-import { GAME, loadBest } from "./records";
+import { GOLD_THREAD, INK, RED_THREAD, SCRIPT, plural, type PieceState } from "./parts";
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
 
@@ -18,7 +16,7 @@ export interface CollectionDay {
 }
 
 /** A finished quilt drawn small: the board, each patch in its yarn color, holes marked, a gold binding when perfect. */
-export function QuiltThumb({ board, cols, rows, pieces, size }: { board: Cell[]; cols: number; rows: number; pieces: PieceState[]; size: number }) {
+export function QuiltThumb({ board, cols, rows, pieces, size }: { board: Cell[]; cols: number; rows: number; pieces: PieceState[]; size: number | string }) {
   const filled = new Set<string>();
   for (const p of pieces) if (p.at && !p.loose) for (const [x, y] of p.cells) filled.add(cellKey(x + p.at.x, y + p.at.y));
   const holes = board.filter(([x, y]) => !filled.has(cellKey(x, y)));
@@ -94,15 +92,4 @@ function DayPatch({ dateKey, day, entry }: { dateKey: string; day: number; entry
       )}
     </div>
   );
-}
-
-/** This browser's finished quilts for a month, from the scored run or else the best practice run. */
-export function playedDays(month: string, launch: string, today: string): CollectionDay[] {
-  const out: CollectionDay[] = [];
-  for (let k = `${month}-01`; k.startsWith(month) && k <= today; k = addDays(k, 1)) {
-    if (k < launch) continue;
-    const run = loadAttempt<Attempt>(GAME, k) ?? loadBest(k);
-    out.push(run ? { dateKey: k, pieces: run.pieces, holes: run.gaps } : { dateKey: k });
-  }
-  return out;
 }

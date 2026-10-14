@@ -68,12 +68,16 @@ interface Progress {
   started: boolean;
   /** The pieces the hints placed, so a reload cannot earn extra hints. */
   hintIds?: string[];
+  /** Spares pulled out of the basket, which stay out after a reload. */
+  pulledIds?: string[];
   /** Saved by games from before the second hint. */
   hintId?: string | null;
 }
 
 /** Active play time before each hint becomes available: one at 5 minutes, another at 10. */
 const HINT_AT = [5 * 60_000, 10 * 60_000];
+/** Active play time before a spare can be pulled out of the basket; it does not count as a hint. */
+const SPARE_AT = 3 * 60_000;
 
 const progressKey = (dateKey: string) => `${GAME}.progress.${dateKey}`;
 
@@ -242,8 +246,11 @@ function SnugDay({
   // Only today's scored game comes back covered; practice picks up where it left off.
   const [paused, setPaused] = useState(!!progress?.started && !isArchive);
   const [hintIds, setHintIds] = useState<string[]>(() => progress?.hintIds ?? (progress?.hintId ? [progress.hintId] : []));
-  const hintRef = useRef(hintIds);
-  hintRef.current = hintIds;
+  const [pulledIds, setPulledIds] = useState<string[]>(() => progress?.pulledIds ?? []);
+  /** Patches the player can no longer move: hinted ones on the quilt and pulled spares. */
+  const fixed = [...hintIds, ...pulledIds];
+  const hintRef = useRef(fixed);
+  hintRef.current = fixed;
   const playRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
 
@@ -479,7 +486,7 @@ function SnugDay({
   };
 
   const onPieceDown = (e: ReactPointerEvent, p: PieceState, index: number, grab: number) => {
-    if (phase !== "playing" || e.button !== 0 || hintIds.includes(p.id)) return;
+    if (phase !== "playing" || e.button !== 0 || fixed.includes(p.id)) return;
     e.preventDefault();
     const { px, py } = pointerIn(e);
     const pos = piecePos(p, index);
@@ -641,8 +648,8 @@ function SnugDay({
     if (c.started && c.since === null) c.since = Date.now();
   }, []);
 
-  const live = useRef({ scored, saved, phase, pieces, hintIds });
-  live.current = { scored, saved, phase, pieces, hintIds };
+  const live = useRef({ scored, saved, phase, pieces, hintIds, pulledIds });
+  live.current = { scored, saved, phase, pieces, hintIds, pulledIds };
   const persist = useCallback(() => {
     const { saved: isSaved, phase: ph, pieces: ps } = live.current;
     const c = clock.current;
@@ -652,10 +659,11 @@ function SnugDay({
       elapsedMs: c.base + (c.since === null ? 0 : Date.now() - c.since),
       started: c.started,
       hintIds: live.current.hintIds,
+      pulledIds: live.current.pulledIds,
     });
   }, [dateKey]);
 
-  useEffect(persist, [pieces, hintIds, persist]);
+  useEffect(persist, [pieces, hintIds, pulledIds, persist]);
 
   // Leaving the tab, switching days, or closing the page stops the clock and saves; the scored game comes back covered.
   useEffect(() => {
@@ -746,9 +754,22 @@ function SnugDay({
     clock.current = { base: 0, since: null, started: false };
     setPaused(false);
     setHintIds([]);
+    setPulledIds([]);
   };
 
   /** Places one solution patch where it belongs, moving anything in its way back to the basket. */
+  /** Pulls one spare out of the basket (or off the quilt), faded and locked, so it cannot be used. */
+  const pullSpare = () => {
+    const spare = puzzle.pieces.find((p) => !puzzle.solution[p.id] && !pulledIds.includes(p.id));
+    if (!spare) return;
+    clearHistory();
+    setCarry(null);
+    setPieces((all) => all.map((p) => (p.id === spare.id ? { ...p, at: null, loose: false } : p)));
+    setPulledIds([...pulledIds, spare.id]);
+    setSelected(null);
+    setSaid("A spare was pulled out of the basket.");
+  };
+
   const applyHint = () => {
     if (hintIds.length >= HINT_AT.length) return;
     const placed = (p: PieceState) => (p.at && !p.loose ? new Set(shift(p.cells, p.at).map(([x, y]) => cellKey(x, y))) : null);
@@ -839,6 +860,7 @@ function SnugDay({
     .join(" ");
   const nextHintAt = HINT_AT[hintIds.length];
   const canHint = phase === "playing" && !paused && nextHintAt !== undefined && clock.current.started && elapsed >= nextHintAt;
+  const canPull = phase === "playing" && !paused && pulledIds.length === 0 && clock.current.started && elapsed >= SPARE_AT;
   const canNativeShare = coarsePointer && typeof navigator.share === "function";
   const copyShare = () => {
     if (canNativeShare) {
@@ -964,7 +986,7 @@ function SnugDay({
 
               {phase === "playing" &&
                 pieces.map((p, index) => {
-                  if (p.at || (drag?.moved && drag.id === p.id)) return null;
+                  if (p.at || (drag?.moved && drag.id === p.id) || pulledIds.includes(p.id)) return null;
                   const slot = layout.slots[index]!;
                   return (
                     <div
@@ -979,7 +1001,8 @@ function SnugDay({
                 const { w, h } = bounds(p.cells);
                 const dragged = !!drag?.moved && drag.id === p.id;
                 const lifted = dragged || carry?.id === p.id;
-                const movable = phase === "playing" && !paused && !hintIds.includes(p.id);
+                const movable = phase === "playing" && !paused && !fixed.includes(p.id);
+                const pulled = pulledIds.includes(p.id);
                 return (
                   <div
                     key={p.id}
@@ -997,7 +1020,8 @@ function SnugDay({
                       height: h * cell,
                       transformOrigin: "0 0",
                       transform: `translate(${pos.x}px, ${pos.y}px) scale(${pos.s})`,
-                      transition: dragged ? "none" : "transform 220ms cubic-bezier(.2,.9,.3,1.15)",
+                      transition: dragged ? "none" : "transform 220ms cubic-bezier(.2,.9,.3,1.15), opacity 400ms ease",
+                      opacity: pulled && phase === "playing" ? 0.25 : 1,
                       zIndex: lifted ? 50 : p.loose ? 30 : p.at ? 10 : 5,
                       pointerEvents: "none",
                       filter: [
@@ -1086,15 +1110,20 @@ function SnugDay({
               </Btn>
               <Btn
                 small={compact}
-                disabled={paused || !pieces.some((p) => p.at && !hintIds.includes(p.id))}
+                disabled={paused || !pieces.some((p) => p.at && !fixed.includes(p.id))}
                 onClick={() => {
                   setCarry(null);
-                  commit(pieces.map((p) => (hintIds.includes(p.id) ? p : { ...p, at: null, loose: false })));
+                  commit(pieces.map((p) => (fixed.includes(p.id) ? p : { ...p, at: null, loose: false })));
                 }}
               >
                 {compact ? "Empty" : "Empty the quilt"}
               </Btn>
               <span style={{ flex: 1 }} />
+              {canPull && (
+                <Btn small={compact} onClick={pullSpare}>
+                  {compact ? "Spare" : "Pull a spare"}
+                </Btn>
+              )}
               {canHint && (
                 <Btn small={compact} onClick={applyHint}>
                   {hintIds.length === 0 ? (compact ? "Hint" : "Use a hint") : compact ? "Hint 2" : "Use a second hint"}
