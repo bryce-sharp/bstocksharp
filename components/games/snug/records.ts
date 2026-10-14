@@ -2,6 +2,7 @@
 
 import { addDays, loadAttempt } from "../daily";
 import { hintsUsed, type Attempt, type PieceState } from "./parts";
+import { isCurrent } from "./version";
 
 export const GAME = "snug";
 /** Backdated a week so there were past quilts to play from day one. */
@@ -105,4 +106,29 @@ export interface Progress {
   pulledIds?: string[];
   /** Saved by games from before the second hint. */
   hintId?: string | null;
+  /** The puzzle version it was played on (see version.ts). */
+  v?: number;
+}
+
+const SAVED_DAY = new RegExp(`^${GAME}\\.(attempt|best|progress)\\.\\d{4}-\\d{2}-\\d{2}$`);
+
+/** Removes saved runs and unfinished games from older puzzles, whose boards no longer exist. */
+export function clearStaleRecords() {
+  try {
+    const stale: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i) ?? "";
+      if (!SAVED_DAY.test(key)) continue;
+      let record: unknown = null;
+      try {
+        record = JSON.parse(localStorage.getItem(key) ?? "null");
+      } catch {
+        // Unreadable counts as stale.
+      }
+      if (!isCurrent(record)) stale.push(key);
+    }
+    stale.forEach((k) => localStorage.removeItem(k));
+  } catch {
+    // Unreadable storage holds nothing to clear.
+  }
 }

@@ -15,3 +15,4 @@ function Loading() {
 // Snug reads window and localStorage while rendering, so it only renders in the browser.
 export const SnugGame = dynamic(() => import("./Snug").then((m) => m.Snug), { ssr: false, loading: Loading });
 export const SnugArt = dynamic(() => import("./ArtSheet").then((m) => m.SnugArtSheet), { ssr: false, loading: Loading });
+export const SnugLab = dynamic(() => import("./MonthLab").then((m) => m.MonthLab), { ssr: false, loading: Loading });
