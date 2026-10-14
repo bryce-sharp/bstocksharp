@@ -143,7 +143,7 @@ export function SnugArtSheet() {
         </div>
         <div style={{ ...wrapRow, marginTop: 18 }}>
           {[0, 3].map((gaps) => (
-            <div key={gaps} style={{ position: "relative", width: 440, maxWidth: "100%", height: 300 }}>
+            <div key={gaps} style={{ position: "relative", width: 440, maxWidth: "100%", height: 470 }}>
               <ResultCard
                 number={1}
                 result={{ gaps, timeMs: 161_000 }}
@@ -164,6 +164,7 @@ export function SnugArtSheet() {
           ))}
         </div>
       </Section>
+
     </div>
   );
 }

@@ -5,6 +5,8 @@ import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import { usePathname } from "next/navigation";
+import { gameAtPath } from "@/lib/games";
 
 const KEY = "games.headerHidden";
 const listeners = new Set<() => void>();
@@ -56,17 +58,31 @@ const tabSx = {
 /** The site header above the games, which players can tuck away to see just the game. */
 export default function GamesChrome({ header, children }: { header: React.ReactNode; children: React.ReactNode }) {
   const hidden = React.useSyncExternalStore(subscribe, read, () => false);
+  const chrome = gameAtPath(usePathname())?.chrome;
+  // A game's own colors, laid over the shared header without changing its layout.
+  const skin = chrome
+    ? {
+        "& .MuiAppBar-root": {
+          bgcolor: chrome.background,
+          color: chrome.text,
+          borderBottom: `2px ${chrome.dividerStyle ?? "solid"} ${chrome.divider}`,
+        },
+      }
+    : {};
+  const tabSkin = chrome
+    ? { bgcolor: chrome.background, color: chrome.text, borderColor: chrome.divider, "&:hover": { bgcolor: chrome.background } }
+    : {};
 
   return (
     <>
       {hidden ? (
-        <IconButton aria-label="Show the menu" onClick={() => write(false)} sx={{ ...tabSx, position: "fixed", top: 0, zIndex: 1100 }}>
+        <IconButton aria-label="Show the menu" onClick={() => write(false)} sx={{ ...tabSx, ...tabSkin, position: "fixed", top: 0, zIndex: 1100 }}>
           <ExpandMoreIcon fontSize="small" />
         </IconButton>
       ) : (
-        <Box sx={{ position: "sticky", top: 0, zIndex: 1100 }}>
+        <Box sx={{ position: "sticky", top: 0, zIndex: 1100, ...skin }}>
           {header}
-          <IconButton aria-label="Hide the menu" onClick={() => write(true)} sx={{ ...tabSx, top: "100%" }}>
+          <IconButton aria-label="Hide the menu" onClick={() => write(true)} sx={{ ...tabSx, ...tabSkin, top: "100%" }}>
             <ExpandLessIcon fontSize="small" />
           </IconButton>
         </Box>

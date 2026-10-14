@@ -8,6 +8,7 @@ import { QuiltCalendar } from "./calendar";
 import { GAME, loadBest, playerStats, saveBest } from "./records";
 import { quiltGrid } from "./share";
 import { SNUG_FONTS } from "./fonts";
+import { Basket } from "./basket";
 import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
 import { BoardSvg, Btn, FONT, HowToPlay, INK, KnitDefs, PanelStitches, PatchSvg, QuiltBackdrop, QuiltLabel, RUST_THREAD, ResultCard, SCRIPT, Stat, panelStyle, plural, type Attempt, type MoreGamesLink, type PieceState, type Spot } from "./parts";
 
@@ -930,20 +931,7 @@ function SnugDay({
         <div ref={playRef} style={{ position: "relative", width: "100%", height: width ? layout.height : 420, touchAction: "none" }}>
           {width > 0 && (
             <>
-              <div
-                style={{
-                  position: "absolute",
-                  left: tray.x - 8,
-                  top: tray.y - 8,
-                  width: tray.w + 16,
-                  height: tray.h + 16,
-                  borderRadius: 18,
-                  background: "repeating-linear-gradient(45deg, #d8b98d 0 6px, #cfae80 6px 12px), #d8b98d",
-                  boxShadow: "inset 0 2px 10px rgba(80,45,20,.35)",
-                }}
-              >
-                <StitchBorder inset={7} radius={12} color="#8a5a3c" width={2} stitch={6} gap={4} seed="basket" />
-              </div>
+              <Basket style={{ left: tray.x - 8, top: tray.y - 8, width: tray.w + 16, height: tray.h + 16 }} />
 
               <BoardSvg
                 board={puzzle.board}

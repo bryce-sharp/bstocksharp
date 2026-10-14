@@ -19,7 +19,7 @@ function mix(hex: string, target: number, amount: number): string {
 const yarn = (name: string, base: string): Yarn => ({ name, base, light: mix(base, 255, 0.35), dark: mix(base, 0, 0.38) });
 
 export const YARNS: Yarn[] = [
-  yarn("tomato", "#d9574f"),
+  yarn("coral", "#ec7b67"),
   yarn("tangerine", "#ec8a3a"),
   yarn("mustard", "#e2b03e"),
   yarn("moss", "#7ea54e"),

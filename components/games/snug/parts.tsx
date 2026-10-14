@@ -330,6 +330,24 @@ export function QuiltBackdrop({ dateKey }: { dateKey: string }) {
         },
         "@keyframes snugShimmer": { "0%, 100%": { opacity: 1, filter: "brightness(1)" }, "50%": { opacity: 0.85, filter: "brightness(1.35)" } },
         ".snug-gold": { animation: "snugShimmer 1.3s ease-in-out infinite" },
+        // Scrollbars as sewing: a running stitch for the track and a striped yarn pill for the thumb.
+        ".snug-scroll::-webkit-scrollbar": { width: 14 },
+        ".snug-scroll::-webkit-scrollbar-track": {
+          // Starts below the card's close button.
+          margin: "46px 0 10px",
+          background: "repeating-linear-gradient(to bottom, rgba(163,90,66,.55) 0 6px, transparent 6px 11px) center / 2px 100% no-repeat",
+        },
+        ".snug-scroll::-webkit-scrollbar-thumb": {
+          borderRadius: 999,
+          border: "3px solid transparent",
+          backgroundClip: "padding-box",
+          backgroundColor: BINDING,
+          backgroundImage: "repeating-linear-gradient(135deg, rgba(255,246,230,.28) 0 2px, transparent 2px 5px)",
+          boxShadow: `inset 0 0 0 1px ${BINDING}`,
+        },
+        ".snug-scroll::-webkit-scrollbar-thumb:hover": { backgroundColor: "#93493a" },
+        // Firefox has no scrollbar parts, only colors; Chrome would drop the parts above if it saw these.
+        "@supports (-moz-appearance: none)": { ".snug-scroll": { scrollbarWidth: "thin", scrollbarColor: `${BINDING} transparent` } },
         "@keyframes snugHover": { "0%, 100%": { transform: "translateY(-4px)" }, "50%": { transform: "translateY(-8px)" } },
         "@keyframes snugPopIn": { "0%": { transform: "scale(.92)", opacity: 0 }, "100%": { transform: "scale(1)", opacity: 1 } },
         "@keyframes snugFadeIn": { "0%": { opacity: 0 }, "100%": { opacity: 1 } },
@@ -404,15 +422,27 @@ export function BoardSvg({
           strokeDasharray="2 1.4"
         />
       )}
-      {holes.map(([x, y]) => (
-        <path
-          key={`hole-${x},${y}`}
-          d={`M${x * U + 3} ${y * U + 3}L${x * U + 7} ${y * U + 7}M${x * U + 7} ${y * U + 3}L${x * U + 3} ${y * U + 7}`}
-          stroke={RED_THREAD}
-          strokeWidth={1.2}
-          strokeLinecap="round"
-        />
-      ))}
+      {holes.map(([x, y]) => {
+        // A small cross-stitch: two short stitches, the top one laid over the bottom, with needle holes at the ends.
+        const [a, b] = [3.7, 6.3];
+        const under = `M${x * U + a} ${y * U + a}L${x * U + b} ${y * U + b}`;
+        const over = `M${x * U + b} ${y * U + a}L${x * U + a} ${y * U + b}`;
+        return (
+          <g key={`hole-${x},${y}`} strokeLinecap="round">
+            <path d={under + over} stroke="rgba(60,25,12,.22)" strokeWidth={1} transform="translate(0 .35)" />
+            <path d={under} stroke="#a8322a" strokeWidth={0.75} />
+            <path d={over} stroke={RED_THREAD} strokeWidth={0.75} />
+            {[
+              [a, a],
+              [b, b],
+              [b, a],
+              [a, b],
+            ].map(([dx, dy]) => (
+              <circle key={`${dx}${dy}`} cx={x * U + dx!} cy={y * U + dy!} r={0.22} fill="#6b4a36" opacity={0.45} />
+            ))}
+          </g>
+        );
+      })}
     </svg>
   );
 }
@@ -530,7 +560,9 @@ export function StitchedModal({ label, onClose, width = 480, children }: { label
         <StitchBorder inset={10} radius={13} color={RUST_THREAD} width={2.2} stitch={7} gap={4.5} seed={label} />
         <CloseButton onClick={onClose} />
         {/* Content scrolls inside the stitched edge so the seam stays put. */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "12px 8px 6px" }}>{children}</div>
+        <div className="snug-scroll" style={{ flex: 1, overflowY: "auto", padding: "12px 8px 6px" }}>
+          {children}
+        </div>
       </div>
     </div>
   );
