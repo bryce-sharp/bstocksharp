@@ -73,21 +73,45 @@ export default function GamesChrome({ header, children }: { header: React.ReactN
     ? { bgcolor: chrome.background, color: chrome.text, borderColor: chrome.divider, "&:hover": { bgcolor: chrome.background } }
     : {};
 
+  const barRef = React.useRef<HTMLDivElement>(null);
+  const [barHeight, setBarHeight] = React.useState(64);
+  React.useEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setBarHeight(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  // Only a tap animates, so a page that loads with the bar tucked away does not slide on arrival.
+  const [animate, setAnimate] = React.useState(false);
+  const toggle = () => {
+    setAnimate(true);
+    write(!hidden);
+  };
+
   return (
-    <>
-      {hidden ? (
-        <IconButton aria-label="Show the menu" onClick={() => write(false)} sx={{ ...tabSx, ...tabSkin, position: "fixed", top: 0, zIndex: 1100 }}>
-          <ExpandMoreIcon fontSize="small" />
-        </IconButton>
-      ) : (
-        <Box sx={{ position: "sticky", top: 0, zIndex: 1100, ...skin }}>
+    // flow-root keeps the bar's negative margin inside, so the page gets shorter and games notice the resize.
+    <Box sx={{ display: "flow-root" }}>
+      {/* Hidden, the bar sits just above the screen with only its tab showing, and the page moves up into its place. */}
+      <Box
+        sx={{
+          position: "sticky",
+          top: hidden ? -barHeight : 0,
+          mt: hidden ? `${-barHeight}px` : 0,
+          zIndex: 1100,
+          transition: animate ? "top 280ms ease, margin-top 280ms ease" : "none",
+          "@media (prefers-reduced-motion: reduce)": { transition: "none" },
+          ...skin,
+        }}
+      >
+        <div ref={barRef} inert={hidden}>
           {header}
-          <IconButton aria-label="Hide the menu" onClick={() => write(true)} sx={{ ...tabSx, ...tabSkin, top: "100%" }}>
-            <ExpandLessIcon fontSize="small" />
-          </IconButton>
-        </Box>
-      )}
+        </div>
+        <IconButton aria-label={hidden ? "Show the menu" : "Hide the menu"} onClick={toggle} sx={{ ...tabSx, ...tabSkin, top: "100%" }}>
+          {hidden ? <ExpandMoreIcon fontSize="small" /> : <ExpandLessIcon fontSize="small" />}
+        </IconButton>
+      </Box>
       {children}
-    </>
+    </Box>
   );
 }

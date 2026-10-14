@@ -257,8 +257,13 @@ function SnugDay({
     ro.observe(el);
     // The header grows when fonts load, which moves the play area down.
     if (topRef.current) ro.observe(topRef.current);
-    // A site header showing or hiding above the game moves the play area without resizing it.
-    ro.observe(document.body);
+    // A site header sliding in or out moves the play area; re-lay out once it settles, not on every frame.
+    let settle = 0;
+    const page = new ResizeObserver(() => {
+      window.clearTimeout(settle);
+      settle = window.setTimeout(measure, 150);
+    });
+    page.observe(document.body);
     let lastWidth = window.innerWidth;
     const onResize = () => {
       // Phone browsers change the height as the address bar hides and shows while scrolling; re-laying out then
@@ -271,6 +276,8 @@ function SnugDay({
     window.addEventListener("resize", onResize);
     return () => {
       ro.disconnect();
+      page.disconnect();
+      window.clearTimeout(settle);
       window.removeEventListener("resize", onResize);
     };
   }, []);

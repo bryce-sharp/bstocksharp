@@ -157,7 +157,7 @@ export function StitchBorder({
   gap?: number;
   seed: string;
 }) {
-  const ref = useRef<SVGSVGElement>(null);
+  const ref = useRef<HTMLSpanElement>(null);
   const [size, setSize] = useState<[number, number] | null>(null);
   useEffect(() => {
     const el = ref.current;
@@ -177,8 +177,13 @@ export function StitchBorder({
     [size, inset, radius, seed, stitch, gap, width],
   );
   return (
-    <svg ref={ref} aria-hidden style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", overflow: "hidden" }}>
-      {paths && <Stitching paths={paths} width={width} color={color} />}
-    </svg>
+    <span ref={ref} aria-hidden style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden" }}>
+      {/* A new svg per size, since iOS Safari can leave stale stitches when an svg is redrawn in place. */}
+      {size && paths && (
+        <svg key={`${size[0]}x${size[1]}`} width={size[0]} height={size[1]} style={{ display: "block" }}>
+          <Stitching paths={paths} width={width} color={color} />
+        </svg>
+      )}
+    </span>
   );
 }

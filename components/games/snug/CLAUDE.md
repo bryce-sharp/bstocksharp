@@ -37,3 +37,4 @@ Daily piece-fitting puzzle with a yarn and patchwork look. Moved here from Val's
 - Chrome ignores `touch-action` on inner SVG shapes; it must be on the piece's outer `<svg>` or touch drags get a `pointercancel` and scroll the page.
 - Phones: the whole play area is `touch-action: none` plus a non-passive `touchmove` preventDefault, and the page has `overscroll-behavior: none`, so missed touches never scroll. Basket slots have invisible hit areas (z 4, under the pieces) that grab the nearest square.
 - On touch screens, height-only resizes (address bar showing/hiding) are ignored; re-laying out mid-scroll resized the game and left stale stitch borders on iOS.
+- `StitchBorder` renders a new svg (keyed by size) whenever its box resizes; redrawing one in place left stale stitches on iOS Safari when the site header hid or showed.
