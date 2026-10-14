@@ -12,6 +12,22 @@ const nextConfig = {
   // empty `turbopack` block also silences the "webpack config, no turbopack
   // config" error now that the webpack alias is gone.
   turbopack: {},
+
+  // Only /embed/* may be framed, and only by the sites listed here.
+  async headers() {
+    return [
+      {
+        source: "/embed/:path*",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value:
+              "frame-ancestors 'self' https://aurp-e6a4b.web.app https://aurp-e6a4b.firebaseapp.com http://localhost:*",
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;
