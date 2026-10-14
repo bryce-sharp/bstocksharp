@@ -30,9 +30,15 @@ export interface Attempt {
   gaps: number;
   timeMs: number;
   pieces: PieceState[];
-  /** True when the one-time hint was used. */
+  /** Hints used; older runs saved only `hinted`, which counts as one. */
+  hints?: number;
   hinted?: boolean;
 }
+
+/** A finished run's score, as the result card and share line describe it. */
+export type RunSummary = { gaps: number; timeMs: number; hints?: number; hinted?: boolean };
+
+export const hintsUsed = (r: Pick<RunSummary, "hints" | "hinted">) => r.hints ?? (r.hinted ? 1 : 0);
 
 /** Thread color for hole marks and pieces that do not fit. */
 export const RED_THREAD = "#c0392b";
@@ -215,7 +221,7 @@ export function Btn({
 
 export function ResultCard(props: {
   number: number;
-  result: { gaps: number; timeMs: number; hinted?: boolean };
+  result: RunSummary;
   recorded: Attempt | null;
   isReplay: boolean;
   shareLine: string;
@@ -224,7 +230,7 @@ export function ResultCard(props: {
   /** Label for the share button; defaults to Copy / Copied. */
   shareLabel?: string;
   copied: boolean;
-  describe: (r: { gaps: number; timeMs: number; hinted?: boolean }) => string;
+  describe: (r: RunSummary) => string;
   onCopy: () => void;
   onReveal: () => void;
   onShowMine: () => void;
@@ -267,7 +273,7 @@ export function ResultCard(props: {
       </div>
       <div style={{ fontSize: 15, marginTop: 8 }}>
         Snug No. {props.number} &middot; {formatDuration(result.timeMs)}
-        {result.hinted && <> &middot; 1 hint</>}
+        {hintsUsed(result) > 0 && <> &middot; {plural(hintsUsed(result), "hint")}</>}
       </div>
       {props.note && <div style={{ fontSize: 13, marginTop: 10, opacity: 0.8 }}>{props.note}</div>}
       {isReplay && recorded && (
@@ -629,7 +635,7 @@ export function HowToPlay({ onClose, touch, spares }: { onClose: () => void; tou
         {!touch &&
           section("Keyboard", "Press Tab to pick a patch, move it with the arrow keys, press Enter to stitch it down, and Esc to put it back.")}
         {section("Scoring", "Fewer holes is better, and time breaks ties. The clock starts with your first patch. A perfect fill finishes on its own; otherwise press Tie it off.")}
-        {section("Stuck?", "After 5 minutes you can use one hint. It stitches a patch into its right spot in gold thread, and your result notes that you used it.")}
+        {section("Stuck?", "After 5 minutes you can use a hint, and after 10 minutes a second one. Each stitches a patch into its right spot in gold thread, and your result notes how many you used.")}
         {section(
           "One quilt a day",
           "Your first finish each day is your recorded result, and your best run on every day is kept too. Replays and past quilts are not scored. Tap the date to open the calendar and jump to any day. A new quilt arrives at midnight: gentle on Monday, trickier through the week, toughest on Sunday.",

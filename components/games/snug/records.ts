@@ -1,18 +1,18 @@
 // Per-day results: the scored first run, the best run ever (any mode), and a status for the calendar.
 
 import { addDays, loadAttempt } from "../daily";
-import type { Attempt } from "./parts";
+import { hintsUsed, type Attempt } from "./parts";
 
 export const GAME = "snug";
 
 const bestKey = (dateKey: string) => `${GAME}.best.${dateKey}`;
 const progressPrefix = `${GAME}.progress.`;
 
-/** Fewer holes wins, then not using the hint, then the faster time. */
+/** Fewer holes wins, then fewer hints, then the faster time. */
 export function isBetter(a: Attempt, b: Attempt | null): boolean {
   if (!b) return true;
   if (a.gaps !== b.gaps) return a.gaps < b.gaps;
-  if (!!a.hinted !== !!b.hinted) return !a.hinted;
+  if (hintsUsed(a) !== hintsUsed(b)) return hintsUsed(a) < hintsUsed(b);
   return a.timeMs < b.timeMs;
 }
 
