@@ -10,7 +10,7 @@ import { quiltGrid } from "./share";
 import { SNUG_FONTS } from "./fonts";
 import { Basket } from "./basket";
 import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
-import { BoardSvg, Btn, FONT, HowToPlay, INK, KnitDefs, PanelStitches, PatchSvg, QuiltBackdrop, QuiltLabel, RUST_THREAD, ResultCard, SCRIPT, Stat, panelStyle, plural, type Attempt, type MoreGamesLink, type PieceState, type Spot } from "./parts";
+import { BoardSvg, Btn, FONT, HowToPlay, INK, KnitDefs, PanelStitches, PatchSvg, QuiltBackdrop, QuiltLabel, RUST_THREAD, ResultCard, SCRIPT, Stat, hintsUsed, panelStyle, plural, type Attempt, type MoreGamesLink, type PieceState, type RunSummary, type Spot } from "./parts";
 
 const HOW_TO_SEEN = "snug.howToSeen";
 /** Backdated a week so there are past quilts to play from day one. */
@@ -68,12 +68,14 @@ interface Progress {
   pieces: PieceState[];
   elapsedMs: number;
   started: boolean;
-  /** The piece the one-time hint placed, so a reload cannot earn a second hint. */
+  /** The pieces the hints placed, so a reload cannot earn extra hints. */
+  hintIds?: string[];
+  /** Saved by games from before the second hint. */
   hintId?: string | null;
 }
 
-/** Active play time before the one-time hint becomes available. */
-const HINT_AFTER_MS = 5 * 60_000;
+/** Active play time before each hint becomes available: one at 5 minutes, another at 10. */
+const HINT_AT = [5 * 60_000, 10 * 60_000];
 
 const progressKey = (dateKey: string) => `${GAME}.progress.${dateKey}`;
 
@@ -191,7 +193,7 @@ function SnugDay({
   const [recorded, setRecorded] = useState<Attempt | null>(initial);
   const [pieces, setPieces] = useState<PieceState[]>(() => shown?.pieces ?? progress?.pieces ?? freshPieces());
   const [phase, setPhase] = useState<"playing" | "done">(shown ? "done" : "playing");
-  const [result, setResult] = useState<{ gaps: number; timeMs: number; hinted?: boolean } | null>(shown);
+  const [result, setResult] = useState<RunSummary | null>(shown);
   const [bestRun, setBestRun] = useState<Attempt | null>(bestInit);
   const [showCalendar, setShowCalendar] = useState(false);
   const [isReplay, setIsReplay] = useState(false);
@@ -239,9 +241,9 @@ function SnugDay({
   const clock = useRef({ base: progress?.elapsedMs ?? 0, since: null as number | null, started: progress?.started ?? false });
   // Only today's scored game comes back covered; practice picks up where it left off.
   const [paused, setPaused] = useState(!!progress?.started && !isArchive);
-  const [hintId, setHintId] = useState<string | null>(progress?.hintId ?? null);
-  const hintRef = useRef(hintId);
-  hintRef.current = hintId;
+  const [hintIds, setHintIds] = useState<string[]>(() => progress?.hintIds ?? (progress?.hintId ? [progress.hintId] : []));
+  const hintRef = useRef(hintIds);
+  hintRef.current = hintIds;
   const playRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
 
@@ -399,7 +401,7 @@ function SnugDay({
   /** Turns a piece; a placed piece pivots on `anchor` and hovers loose if it no longer fits. */
   const transformPiece = useCallback(
     (id: string, fn: (cells: readonly Cell[]) => Cell[], anchor: number) => {
-      if (id === hintRef.current) return;
+      if (hintRef.current.includes(id)) return;
       commit(
         latest.current.pieces.map((p) => {
           if (p.id !== id) return p;
@@ -474,7 +476,7 @@ function SnugDay({
   };
 
   const onPieceDown = (e: ReactPointerEvent, p: PieceState, index: number, grab: number) => {
-    if (phase !== "playing" || e.button !== 0 || p.id === hintId) return;
+    if (phase !== "playing" || e.button !== 0 || hintIds.includes(p.id)) return;
     e.preventDefault();
     const { px, py } = pointerIn(e);
     const pos = piecePos(p, index);
@@ -565,7 +567,7 @@ function SnugDay({
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const id = dragRef.current?.id ?? carryRef.current?.id ?? selected;
-      if (!id || id === hintRef.current) return;
+      if (!id || hintRef.current.includes(id)) return;
       const anchor = dragRef.current?.grab ?? lastGrab.current;
       const turn = key === "q" || (key === "r" && e.shiftKey) ? rotateCCW : key === " " || key === "r" || key === "e" ? rotateCW : null;
       if (turn) {
@@ -636,8 +638,8 @@ function SnugDay({
     if (c.started && c.since === null) c.since = Date.now();
   }, []);
 
-  const live = useRef({ scored, saved, phase, pieces, hintId });
-  live.current = { scored, saved, phase, pieces, hintId };
+  const live = useRef({ scored, saved, phase, pieces, hintIds });
+  live.current = { scored, saved, phase, pieces, hintIds };
   const persist = useCallback(() => {
     const { saved: isSaved, phase: ph, pieces: ps } = live.current;
     if (!isSaved || ph !== "playing") return;
@@ -646,11 +648,11 @@ function SnugDay({
       pieces: ps,
       elapsedMs: c.base + (c.since === null ? 0 : Date.now() - c.since),
       started: c.started,
-      hintId: live.current.hintId,
+      hintIds: live.current.hintIds,
     });
   }, [dateKey]);
 
-  useEffect(persist, [pieces, hintId, persist]);
+  useEffect(persist, [pieces, hintIds, persist]);
 
   // Leaving the tab, switching days, or closing the page stops the clock and saves; the scored game comes back covered.
   useEffect(() => {
@@ -703,17 +705,17 @@ function SnugDay({
     setUndoCount(0);
     setSaid(gaps === 0 ? "Perfectly snug!" : `Tied off with ${plural(gaps, "hole")}.`);
     setFinalPieces(settledPieces);
-    setResult({ gaps, timeMs, hinted: !!hintId });
+    setResult({ gaps, timeMs, hints: hintIds.length });
     setPhase("done");
     setConfirming(false);
     setSelected(null);
-    setBestRun(saveBest(dateKey, { gaps, timeMs, pieces: settledPieces, hinted: !!hintId }));
+    setBestRun(saveBest(dateKey, { gaps, timeMs, pieces: settledPieces, hints: hintIds.length }));
     if (!isReplay && !isArchive) {
-      const attempt: Attempt = { gaps, timeMs, pieces: settledPieces, hinted: !!hintId };
+      const attempt: Attempt = { gaps, timeMs, pieces: settledPieces, hints: hintIds.length };
       if (saveAttempt(GAME, dateKey, attempt)) setRecorded(attempt);
     }
     window.setTimeout(() => setShowCard(true), gaps === 0 ? 1500 : 250);
-  }, [gaps, isReplay, isArchive, pieces, dateKey, saved, stopClock, hintId]);
+  }, [gaps, isReplay, isArchive, pieces, dateKey, saved, stopClock, hintIds]);
 
   useEffect(() => {
     if (phase === "playing" && !dragging && gaps === 0) finish();
@@ -738,12 +740,12 @@ function SnugDay({
     setSelected(null);
     clock.current = { base: 0, since: null, started: false };
     setPaused(false);
-    setHintId(null);
+    setHintIds([]);
   };
 
   /** Places one solution patch where it belongs, moving anything in its way back to the basket. */
   const applyHint = () => {
-    if (hintId) return;
+    if (hintIds.length >= HINT_AT.length) return;
     const placed = (p: PieceState) => (p.at && !p.loose ? new Set(shift(p.cells, p.at).map(([x, y]) => cellKey(x, y))) : null);
     const target = (id: string) => {
       const s = puzzle.solution[id]!;
@@ -773,7 +775,7 @@ function SnugDay({
         return o && [...o].some((k) => t.has(k)) ? { ...p, at: null, loose: false } : p;
       }),
     );
-    setHintId(pick);
+    setHintIds([...hintIds, pick]);
     setSelected(null);
   };
 
@@ -795,8 +797,10 @@ function SnugDay({
   };
 
   const elapsed = phase === "playing" ? clockMs() : (result?.timeMs ?? 0);
-  const describe = (r: { gaps: number; timeMs: number; hinted?: boolean }) =>
-    `${r.gaps === 0 ? "perfectly snug" : plural(r.gaps, "hole")} in ${formatDuration(r.timeMs)}${r.hinted ? " with a hint" : ""}`;
+  const describe = (r: RunSummary) => {
+    const hints = hintsUsed(r);
+    return `${r.gaps === 0 ? "perfectly snug" : plural(r.gaps, "hole")} in ${formatDuration(r.timeMs)}${hints === 1 ? " with a hint" : hints > 1 ? ` with ${hints} hints` : ""}`;
+  };
   const shareLine = recorded ? `Snug #${number}: ${describe(recorded)}` : "";
   const shareGrid = useMemo(
     () => (recorded ? quiltGrid(puzzle.board, puzzle.cols, puzzle.rows, recorded.pieces) : ""),
@@ -828,7 +832,8 @@ function SnugDay({
   ]
     .filter(Boolean)
     .join(" ");
-  const canHint = phase === "playing" && !paused && !hintId && clock.current.started && elapsed >= HINT_AFTER_MS;
+  const nextHintAt = HINT_AT[hintIds.length];
+  const canHint = phase === "playing" && !paused && nextHintAt !== undefined && clock.current.started && elapsed >= nextHintAt;
   const canNativeShare = coarsePointer && typeof navigator.share === "function";
   const copyShare = () => {
     if (canNativeShare) {
@@ -969,7 +974,7 @@ function SnugDay({
                 const { w, h } = bounds(p.cells);
                 const dragged = !!drag?.moved && drag.id === p.id;
                 const lifted = dragged || carry?.id === p.id;
-                const movable = phase === "playing" && !paused && p.id !== hintId;
+                const movable = phase === "playing" && !paused && !hintIds.includes(p.id);
                 return (
                   <div
                     key={p.id}
@@ -1001,7 +1006,7 @@ function SnugDay({
                       cell={cell}
                       interactive={phase === "playing"}
                       loose={p.loose && !lifted}
-                      hinted={p.id === hintId && phase === "playing"}
+                      hinted={hintIds.includes(p.id) && phase === "playing"}
                       onDown={(e, i) => onPieceDown(e, p, index, i)}
                     />
                   </div>
@@ -1079,7 +1084,7 @@ function SnugDay({
                 disabled={paused || covered === 0}
                 onClick={() => {
                   setCarry(null);
-                  commit(pieces.map((p) => (p.id === hintId ? p : { ...p, at: null, loose: false })));
+                  commit(pieces.map((p) => (hintIds.includes(p.id) ? p : { ...p, at: null, loose: false })));
                 }}
               >
                 {compact ? "Empty" : "Empty the quilt"}
@@ -1087,7 +1092,7 @@ function SnugDay({
               <span style={{ flex: 1 }} />
               {canHint && (
                 <Btn small={compact} onClick={applyHint}>
-                  {compact ? "Hint" : "Use your hint"}
+                  {hintIds.length === 0 ? (compact ? "Hint" : "Use a hint") : compact ? "Hint 2" : "Use a second hint"}
                 </Btn>
               )}
               {(isReplay || isArchive) && (
