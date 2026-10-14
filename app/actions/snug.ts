@@ -6,6 +6,7 @@ import { snugDays } from "@/lib/db/schema";
 import { requireEditorFor } from "@/lib/auth";
 import { getActiveProfile } from "@/lib/profile";
 import { listSnugDays } from "@/lib/queries/snug";
+import { isCurrent } from "@/components/games/snug/version";
 
 // Snug results belong to the ACTIVE person, like weigh-ins; the browser never names a profile, so it cannot write anyone else's.
 
@@ -43,6 +44,8 @@ export async function saveSnugDays(days: SnugUpload[]): Promise<void> {
 
   for (const day of days) {
     if (!DATE_RE.test(day?.dateKey ?? "") || JSON.stringify(day).length > MAX_DAY_BYTES) throw new Error("Bad Snug day.");
+    // A browser that has not yet cleared runs from older puzzles cannot write them back.
+    if (![day.attempt, day.best, day.progress].filter((r) => r != null).every(isCurrent)) continue;
     const run = day.best ?? day.attempt;
 
     if (run !== undefined && run !== null) {

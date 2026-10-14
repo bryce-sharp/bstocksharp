@@ -16,7 +16,7 @@ export interface Level {
 }
 
 /** Gentle on Monday, toughest on Sunday; indexed by day of the week (0 = Sunday). */
-const LEVELS: Level[] = [
+export const LEVELS: Level[] = [
   { name: "Tough", pieces: 10, spares: 3 },
   { name: "Gentle", pieces: 7, spares: 1 },
   { name: "Easy", pieces: 7, spares: 2 },
@@ -67,7 +67,7 @@ const SHAPE_WEIGHTS: [string, number][] = [
 ];
 
 
-function pickShape(rng: Rng, counts: Map<string, number>): string {
+export function pickShape(rng: Rng, counts: Map<string, number>): string {
   const pool = SHAPE_WEIGHTS.filter(([name]) => (counts.get(name) ?? 0) < (name === "I5" || name === "X5" ? 1 : 2));
   const total = pool.reduce((s, [, w]) => s + w, 0);
   let r = rng.next() * total;
@@ -141,7 +141,7 @@ function growBlob(rng: Rng, shapes: { name: string; cells: Cell[] }[]): { shape:
   return placed.map((p) => ({ shape: p.shape, cells: p.cells.map(([x, y]) => [x - minX, y - minY] as Cell) }));
 }
 
-function hasHoles(cells: Set<string>, cols: number, rows: number): boolean {
+export function hasHoles(cells: Set<string>, cols: number, rows: number): boolean {
   const outside = new Set<string>();
   const stack: Cell[] = [[-1, -1]];
   while (stack.length) {
@@ -155,14 +155,14 @@ function hasHoles(cells: Set<string>, cols: number, rows: number): boolean {
 }
 
 /** Picks a shape and a handedness; chiral shapes come mirrored half the time. */
-function handed(rng: Rng, name: string): { name: string; cells: Cell[] } {
+export function handed(rng: Rng, name: string): { name: string; cells: Cell[] } {
   const base = SHAPES[name]!;
   const mirrored = flipH(base);
   const isChiral = rotations(base).every((r) => shapeKey(r) !== shapeKey(mirrored));
   return isChiral && rng.next() < 0.5 ? { name: `${name}'`, cells: mirrored } : { name, cells: base };
 }
 
-function randomTurn(rng: Rng, cells: Cell[]): Cell[] {
+export function randomTurn(rng: Rng, cells: Cell[]): Cell[] {
   let out = normalize(cells);
   for (let r = rng.int(4); r > 0; r--) out = rotateCW(out);
   return out;

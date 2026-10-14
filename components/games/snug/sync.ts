@@ -4,6 +4,7 @@
 
 import { loadSnugDays, saveSnugDays, type SnugUpload } from "@/app/actions/snug";
 import { GAME, isBetter, type Progress } from "./records";
+import { isCurrent } from "./version";
 import type { Attempt } from "./parts";
 
 const OWNER_KEY = `${GAME}.owner`;
@@ -66,7 +67,9 @@ export async function syncSnug(profileId: number): Promise<void> {
 
   const uploads: SnugUpload[] = [];
   for (const dateKey of new Set([...remote.keys(), ...localDates()])) {
-    const r = remote.get(dateKey);
+    const raw = remote.get(dateKey);
+    // The account may still hold runs from older puzzles; only current ones are merged.
+    const r = raw && { attempt: isCurrent(raw.attempt) ? raw.attempt : null, best: isCurrent(raw.best) ? raw.best : null, progress: isCurrent(raw.progress) ? raw.progress : null };
     const up: SnugUpload = { dateKey };
 
     // The first scored run stands, so the account's copy wins; one only this browser has goes up.

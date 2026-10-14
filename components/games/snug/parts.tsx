@@ -33,6 +33,8 @@ export interface Attempt {
   /** Hints used; older runs saved only `hinted`, which counts as one. */
   hints?: number;
   hinted?: boolean;
+  /** The puzzle version it was played on (see version.ts). */
+  v?: number;
 }
 
 /** A finished run's score, as the result card and share line describe it. */

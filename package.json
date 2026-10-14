@@ -17,7 +17,8 @@
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio",
     "db:seed": "node scripts/seed-weight.mjs",
-    "db:migrate-plans": "node scripts/migrate-weight-plans.mjs"
+    "db:migrate-plans": "node scripts/migrate-weight-plans.mjs",
+    "snug:months": "node --experimental-strip-types --no-warnings --import ./scripts/node-hooks.mjs scripts/snug-months.mts"
   },
   "dependencies": {
     "@emotion/cache": "^11.14.0",

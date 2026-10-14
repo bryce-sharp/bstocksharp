@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { addDays, formatDuration, formatLongDate, formatShortDate, loadAttempt, puzzleNumber, saveAttempt, todayKey } from "../daily";
-import { generatePuzzle } from "./generator";
+import type { Puzzle } from "./generator";
+import { loadPuzzle } from "./puzzles";
+import { PUZZLE_VERSION } from "./version";
 import { bounds, cellKey, rotateCCW, rotateCW, shapeKey, type Cell } from "./pieces";
-import { BINDING, LINEN, YARNS } from "./quilt";
+import { BINDING, LINEN } from "./quilt";
 import { StitchBorder } from "./stitches";
 import { QuiltCalendar } from "./calendar";
-import { GAME, LAUNCH_DATE, loadBest, playerStats, saveBest, type Progress } from "./records";
+import { MonthReveal, revealDue } from "./monthQuilt";
+import { GAME, LAUNCH_DATE, clearStaleRecords, loadBest, playerStats, saveBest, type Progress } from "./records";
 import { quiltGrid } from "./share";
 import { SNUG_FONTS } from "./fonts";
 import { flushRemote, saveProgressRemote, saveRunRemote, syncSnug } from "./sync";
@@ -118,11 +121,17 @@ const visuallyHidden = { position: "absolute", width: 1, height: 1, overflow: "h
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const shift = (cells: readonly Cell[], s: Spot) => cells.map(([x, y]) => [x + s.x, y + s.y] as Cell);
 
-/** `shareUrl` is the link players share; it defaults to this site's Snug page. */
-/** `profileId` is the signed-in person; their account is merged in before the day opens, and saves go to it. */
+/**
+ * `shareUrl` is the link players share; it defaults to this site's Snug page. `profileId` is the signed-in person;
+ * their account is merged in before the day opens, and saves go to it.
+ */
 export function Snug({ shareUrl, profileId }: { shareUrl?: string; profileId?: number }) {
   const [today, setToday] = useState(() => todayKey());
-  const [synced, setSynced] = useState(profileId === undefined);
+  // Runs played on the boards from before the month quilts are cleared before anything reads them.
+  const [synced, setSynced] = useState(() => {
+    clearStaleRecords();
+    return profileId === undefined;
+  });
   useEffect(() => {
     if (profileId === undefined) return;
     // A slow or failed fetch never blocks play; the day opens on this device's copy.
@@ -136,6 +145,18 @@ export function Snug({ shareUrl, profileId }: { shareUrl?: string; profileId?: n
     return () => window.clearTimeout(giveUp);
   }, [profileId]);
   const [dateKey, setDateKey] = useState(today);
+  const [loaded, setLoaded] = useState<{ dateKey: string; puzzle: Puzzle } | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    let live = true;
+    loadPuzzle(dateKey)
+      .then((puzzle) => live && setLoaded({ dateKey, puzzle }))
+      .catch(() => live && setFailed(dateKey));
+    return () => {
+      live = false;
+    };
+  }, [dateKey, retry]);
   // A tab left open past midnight learns the new date within a minute, or as soon as it is looked at again.
   useEffect(() => {
     const check = () => setToday(todayKey());
@@ -152,18 +173,33 @@ export function Snug({ shareUrl, profileId }: { shareUrl?: string; profileId?: n
   );
   return (
     <div className={SNUG_FONTS}>
-      {synced ? (
+      {synced && loaded?.dateKey === dateKey ? (
         <SnugDay
           key={dateKey}
           dateKey={dateKey}
+          puzzle={loaded.puzzle}
           today={today}
           onPickDate={setDateKey}
           shareUrl={shareUrl ?? `${window.location.origin}/games/snug`}
           moreGames={moreGames}
         />
+      ) : failed === dateKey ? (
+        <div style={{ ...panelStyle, minHeight: "60vh", display: "grid", placeItems: "center", alignContent: "center", gap: 14, textAlign: "center" }}>
+          <div style={{ fontFamily: SCRIPT, fontSize: 30, color: BINDING }}>This quilt would not load</div>
+          <div style={{ fontSize: 14, opacity: 0.8 }}>Check your connection and try again.</div>
+          <Btn
+            primary
+            onClick={() => {
+              setFailed(null);
+              setRetry((n) => n + 1);
+            }}
+          >
+            Try again
+          </Btn>
+        </div>
       ) : (
         <div style={{ ...panelStyle, minHeight: "60vh", display: "grid", placeItems: "center", fontFamily: SCRIPT, fontSize: 30, color: BINDING }}>
-          Fetching your quilts…
+          {synced ? "Unrolling today's quilt…" : "Fetching your quilts…"}
         </div>
       )}
     </div>
@@ -173,12 +209,14 @@ export function Snug({ shareUrl, profileId }: { shareUrl?: string; profileId?: n
 /** One day's quilt. Only today's first finish is scored; every finish updates that day's best run. */
 function SnugDay({
   dateKey,
+  puzzle,
   today,
   onPickDate,
   shareUrl,
   moreGames,
 }: {
   dateKey: string;
+  puzzle: Puzzle;
   today: string;
   onPickDate: (key: string) => void;
   shareUrl: string;
@@ -188,7 +226,6 @@ function SnugDay({
   const [openedOn] = useState(today);
   const isArchive = dateKey < openedOn;
   const newQuilt = today > openedOn && dateKey === openedOn;
-  const puzzle = useMemo(() => generatePuzzle(dateKey, YARNS.length), [dateKey]);
   const number = puzzleNumber(dateKey, LAUNCH_DATE);
   const boardSet = useMemo(() => new Set(puzzle.board.map(([x, y]) => cellKey(x, y))), [puzzle]);
   // A finished first run is shown on any day, including past ones; only unplayed past days are fresh practice.
@@ -238,7 +275,10 @@ function SnugDay({
       // Private browsing can block storage; the guide just shows again next time.
     }
   }, []);
-  const modalOpen = showHowTo || showCalendar;
+  // Last month's quilt plays once per device, the first time Snug opens in the new month.
+  const [revealMonth, setRevealMonth] = useState<string | null>(() => revealDue(today, LAUNCH_DATE));
+  const closeReveal = useCallback(() => setRevealMonth(null), []);
+  const modalOpen = showHowTo || showCalendar || !!revealMonth;
   const modalRef = useRef(modalOpen);
   modalRef.current = modalOpen;
   // Ticks the visible clock; the value itself is read from `clock`.
@@ -666,6 +706,7 @@ function SnugDay({
     const c = clock.current;
     if (!isSaved || ph !== "playing" || !c.started) return;
     const progress: Progress = {
+      v: PUZZLE_VERSION,
       pieces: ps,
       elapsedMs: c.base + (c.since === null ? 0 : Date.now() - c.since),
       started: c.started,
@@ -737,7 +778,7 @@ function SnugDay({
     setPhase("done");
     setConfirming(false);
     setSelected(null);
-    const run: Attempt = { gaps: holes, timeMs, pieces: settledPieces, hints: hintIds.length };
+    const run: Attempt = { gaps: holes, timeMs, pieces: settledPieces, hints: hintIds.length, v: PUZZLE_VERSION };
     const best = saveBest(dateKey, run);
     setBestRun(best);
     let scoredRun: Attempt | null = null;
@@ -897,12 +938,17 @@ function SnugDay({
       <div aria-live="polite" style={visuallyHidden}>
         {said}
       </div>
+      {revealMonth && !showHowTo && <MonthReveal monthKey={revealMonth} onClose={closeReveal} />}
       {showCalendar && (
         <QuiltCalendar
           current={dateKey}
           today={today}
           launch={LAUNCH_DATE}
           onClose={() => setShowCalendar(false)}
+          onReveal={(month) => {
+            setShowCalendar(false);
+            setRevealMonth(month);
+          }}
           onPick={(key) => {
             setShowCalendar(false);
             onPickDate(key);
