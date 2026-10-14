@@ -2,7 +2,7 @@
 
 Daily piece-fitting puzzle with a yarn and patchwork look. Moved here from Val's aurp repo, which now frames `/embed/snug`.
 
-- **Routes**: `/games/snug` (play), `/games/snug/art` (art sheet, signed-in only because it draws solved quilts), `/embed/snug` (frameless, for iframes; `?share=<url>` sets the share link). All public. `SnugClient.tsx` loads the game browser-only, since it reads `window` and localStorage while rendering. Framing is allowed per site in `next.config.mjs`.
+- **Routes**: `/games/snug` (play), `/games/snug/art` (art sheet; every example comes from a pre-launch date, so it spoils nothing), `/embed/snug` (frameless, for iframes; `?share=<url>` sets the share link). All public. `SnugClient.tsx` loads the game browser-only, since it reads `window` and localStorage while rendering. Framing is allowed per site in `next.config.mjs`.
 
 - `../daily.ts` — shared daily helpers: local date key (`?date=YYYY-MM-DD` override, development only), seeded mulberry32 RNG, one-recorded-attempt store (`<game>.attempt.<date>` in localStorage).
 - `pieces.ts` — 19 polyominoes, `rotateCW` (keeps cell order so a held cell stays under the pointer), `outlinePath`.
@@ -15,7 +15,8 @@ Daily piece-fitting puzzle with a yarn and patchwork look. Moved here from Val's
 - **Share**: line, the `share.ts` silhouette (orange filled, brown holes, white outside so every square is the same width; never which patch went where, so it spoils nothing), plus the `shareUrl` prop (default `${origin}/games/snug`); touch devices with `navigator.share` open the share sheet.
 - `stitches.tsx` — hand-sewn running stitches (uneven, wobbly, shadowed, needle holes; no ply dots, by request). `stitchLoops` + `insetCellLoops` for SVG shapes (pieces, binding, basting grid, quilt patches); `StitchBorder` measures its positioned parent for HTML boxes. No CSS dashed outlines left.
 - `ArtSheet.tsx` — every visual on one page for art review.
-- `collection.tsx` — preview of a month as a sampler quilt of finished quilts (`QuiltThumb`, `QuiltCollection`); shown on the art sheet with this browser's quilts and a sample month, not yet in the game.
+- `collection.tsx` — `QuiltThumb` draws a finished quilt small; the calendar uses it for every played day (gold edge = perfect on the day, gold check = perfect later, red/faded count = scored/practice holes, dashed = in progress), and the art sheet shows a sample month.
+- **Home screen**: `/games/snug` has its own app setting (`manifest.webmanifest` route), icon (`app-icon` route: a nine-patch quilt with a sewn "Snug" label at 180px and up) and Apple title, so saving it makes a Snug app. `palette.ts` holds the colors without React, for those server routes.
 - **Stats**: `playerStats` in `records.ts` counts scored runs only: played, perfect, streak (days in a row finished on the day, ending today or yesterday), best streak. Shown on the result card.
 - **Credit**: `QuiltLabel` ("Sewn by Bryce") hangs off the panel's bottom edge and the result card links "More games by Bryce"; both open bstocksharp.dev/games in a new tab when framed.
 - **Fonts**: Caveat and Fredoka come from `next/font` in `fonts.ts`, as CSS variables on Snug's outer element.
@@ -28,6 +29,7 @@ Daily piece-fitting puzzle with a yarn and patchwork look. Moved here from Val's
 - **Saving**: nothing is saved for a day until its clock starts, so opening a day never marks it in progress (older empty saves are ignored by `dayRecord`).
 - **Clock**: starts on the first placement and counts active time only; it stops while How to play or the calendar is open (`clock` ref: `base` + running `since`). Every unfinished first run (today's scored game and past-day practice; not replays) saves `snug.progress.<date>` (pieces, elapsed, started, hintId) on every change, tab hide, page hide, and unmount. Today's scored game returns under a "Paused" cover until Resume; practice resumes directly. Finishing clears it.
 
+- **Spare**: at 3 minutes (`SPARE_AT`) one spare can be pulled: it fades in the basket and is locked (`pulledIds`, saved in progress). It is free: results do not count it.
 - **Hints**: after 5 and 10 minutes of active time (`HINT_AT`), each hint places a solution patch (moving anything in its way to the basket). Hinted patches are gold-stitched and locked; `hintIds` is saved in progress so a reload cannot earn more, and runs record `hints` (older runs saved `hinted`, which `hintsUsed` reads as one). Fewer hints rank better, and results and share lines say "with a hint" or "with 2 hints".
 - **After finishing**: the result card (with a close X) offers "Show a perfect fill" and "Look at my quilt"; the footer toggles between the two views. "My quilt" is `finalPieces`: the recorded first run when returning, or this session's latest replay (replays are never persisted).
 

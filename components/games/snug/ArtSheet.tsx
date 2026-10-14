@@ -1,13 +1,11 @@
 import { useEffect, useMemo, type ReactNode } from "react";
-import { todayKey } from "../daily";
 import { generatePuzzle } from "./generator";
 import { SHAPES, bounds, cellKey } from "./pieces";
 import { BINDING, FABRICS, FABRIC_STYLES, YARNS, fabricSwatch } from "./quilt";
 import { BoardSvg, Btn, FONT, INK, KnitDefs, PanelStitches, PatchSvg, QuiltBackdrop, ResultCard, SCRIPT, Stat, panelStyle, type PieceState } from "./parts";
 import { StitchBorder } from "./stitches";
 import { SNUG_FONTS } from "./fonts";
-import { QuiltCollection, playedDays, type CollectionDay } from "./collection";
-import { LAUNCH_DATE } from "./records";
+import { QuiltCollection, type CollectionDay } from "./collection";
 
 const CELL = 30;
 const BOARD_CELL = 28;
@@ -15,7 +13,7 @@ const PAD = 0.45;
 
 /** Every visual element of Snug on one page, for reviewing the art without playing. */
 export function SnugArtSheet() {
-  const dateKey = useMemo(() => todayKey(), []);
+  const dateKey = ART_DATE;
   const puzzle = useMemo(() => generatePuzzle(dateKey, YARNS.length), [dateKey]);
 
   const shapeNames = Object.keys(SHAPES);
@@ -167,17 +165,8 @@ export function SnugArtSheet() {
         </div>
       </Section>
 
-      <Section title="Quilt collection" note="Preview: each month as a sampler quilt of the quilts you finished. The first is this browser's real quilts; the second is sample data so every day is filled.">
-        <div style={{ display: "grid", gap: 22 }}>
-          <div>
-            <div style={{ fontWeight: 600, marginBottom: 8 }}>Your quilts, {monthName(dateKey)}</div>
-            <QuiltCollection month={dateKey.slice(0, 7)} days={playedDays(dateKey.slice(0, 7), LAUNCH_DATE, dateKey)} />
-          </div>
-          <div>
-            <div style={{ fontWeight: 600, marginBottom: 8 }}>Sample month</div>
-            <QuiltCollection month="2026-10" days={sampleDays} />
-          </div>
-        </div>
+      <Section title="Quilt collection" note="The calendar draws each finished day as a small quilt. Sample data from before launch, so no playable quilt is shown solved.">
+        <QuiltCollection month={ART_DATE.slice(0, 7)} days={sampleDays} />
       </Section>
     </div>
   );
@@ -232,11 +221,13 @@ function Placed({ piece }: { piece: PieceState }) {
   );
 }
 
-const monthName = (key: string) => new Date(Number(key.slice(0, 4)), Number(key.slice(5, 7)) - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
 
-/** October 2026 from each day's own solution: most perfect, some missing a patch, a few unplayed. */
-const sampleDays: CollectionDay[] = Array.from({ length: 31 }, (_, i) => {
-  const dateKey = `2026-10-${String(i + 1).padStart(2, "0")}`;
+/** Examples come from a day before launch, which can never be played, so nothing here spoils a real quilt. */
+const ART_DATE = "2026-09-15";
+
+/** September 2026 (before launch) from each day's own solution: most perfect, some missing a patch, a few unplayed. */
+const sampleDays: CollectionDay[] = Array.from({ length: 30 }, (_, i) => {
+  const dateKey = `2026-09-${String(i + 1).padStart(2, "0")}`;
   if (i % 9 === 4) return { dateKey };
   const puzzle = generatePuzzle(dateKey, YARNS.length);
   const solved = Object.entries(puzzle.solution);

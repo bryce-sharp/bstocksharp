@@ -656,7 +656,7 @@ export function HowToPlay({ onClose, touch, spares }: { onClose: () => void; tou
         {!touch &&
           section("Keyboard", "Press Tab to pick a patch, move it with the arrow keys, press Enter to stitch it down, and Esc to put it back.")}
         {section("Scoring", "Fewer holes is better, and time breaks ties. The clock starts with your first patch. A perfect fill finishes on its own; otherwise press Tie it off.")}
-        {section("Stuck?", "After 5 minutes you can use a hint, and after 10 minutes a second one. Each stitches a patch into its right spot in gold thread, and your result notes how many you used.")}
+        {section("Stuck?", "After 3 minutes you can pull a spare out of the basket for free. After 5 minutes you can use a hint, and after 10 minutes a second one. Each stitches a patch into its right spot in gold thread, and your result notes how many you used.")}
         {section(
           "One quilt a day",
           "Your first finish each day is your recorded result, and your best run on every day is kept too. Replays and past quilts are not scored. Tap the date to open the calendar and jump to any day. A new quilt arrives at midnight: gentle on Monday, trickier through the week, toughest on Sunday.",
