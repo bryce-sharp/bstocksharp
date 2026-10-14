@@ -31,7 +31,7 @@ vercel login
 ## 3. Get the code and the settings
 
 ```bash
-git clone https://github.com/bryce-sharp/nextjs-website && cd nextjs-website
+git clone https://github.com/bryce-sharp/bstocksharp && cd bstocksharp
 ```
 
 ```bash
@@ -57,7 +57,7 @@ into the file and keeps lines that exist only locally.
 npm run dev
 ```
 
-Open `http://localhost:3000` and sign in with your normal account.
+Open `http://localhost:4545` and sign in with your normal account.
 
 ## What the settings point at
 

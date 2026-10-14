@@ -63,7 +63,7 @@ export default async function GroupPage({
   // Invite and reset links need an absolute URL: derive the origin from Host
   // headers (same idiom as lib/webauthn), never an env var.
   const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:4545";
   const proto =
     h.get("x-forwarded-proto") ??
     (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");

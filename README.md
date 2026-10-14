@@ -39,7 +39,7 @@ New laptop? Follow [docs/setup.md](docs/setup.md): install the tools, `vercel li
 then `vercel env pull .env.local`.
 
 ```bash
-npm run dev            # dev server → http://localhost:3000
+npm run dev            # dev server → http://localhost:4545
 npm run build          # production build
 npm run lint
 
