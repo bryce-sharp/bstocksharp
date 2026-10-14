@@ -1,6 +1,7 @@
 import * as React from "react";
 import AppHeader from "@/components/shared/AppHeader";
 import ProfileControl from "@/components/shared/ProfileControl";
+import SlidingHeader from "@/components/shared/SlidingHeader";
 import { getActiveProfile } from "@/lib/profile";
 import { getApp } from "@/lib/apps";
 
@@ -20,14 +21,17 @@ export default async function AppShell({
   const app = getApp(current);
 
   return (
-    <>
-      <AppHeader
-        current={current}
-        nav={app?.nav ?? []}
-        hiddenApps={active?.hiddenApps ?? []}
-        profileControl={<ProfileControl />}
-      />
+    <SlidingHeader
+      header={
+        <AppHeader
+          current={current}
+          nav={app?.nav ?? []}
+          hiddenApps={active?.hiddenApps ?? []}
+          profileControl={<ProfileControl />}
+        />
+      }
+    >
       {children}
-    </>
+    </SlidingHeader>
   );
 }
