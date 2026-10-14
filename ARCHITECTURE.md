@@ -37,7 +37,8 @@ app/
   embed/**              PUBLIC: frameless games for other sites to iframe (allowed hosts in next.config.mjs)
 
 components/
-  shared/    app shell + generic primitives — AppShell (per-app chrome), AppHeader,
+  shared/    app shell + generic primitives — AppShell (per-app chrome), SlidingHeader
+             (the slide-away header every app sits under; games color it via GamesSkin), AppHeader,
              AppSwitcher, ProfileControl (account menu: switch/add people +
              appearance + editing lock), SubmitButton, DeleteIconButton,
              NumberField, SavedToast

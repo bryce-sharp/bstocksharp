@@ -5,26 +5,39 @@ import Toolbar from "@mui/material/Toolbar";
 import Button from "@mui/material/Button";
 import SportsEsportsIcon from "@mui/icons-material/SportsEsports";
 import AppShell from "@/components/shared/AppShell";
-import GamesChrome from "@/components/games/GamesChrome";
+import SlidingHeader from "@/components/shared/SlidingHeader";
+import GamesSkin from "@/components/games/GamesSkin";
 import { getSession } from "@/lib/session";
 
-// Games are public: signed-in visitors get the hub chrome, everyone else a bare header.
+// Games are public: signed-in visitors get the hub chrome, everyone else a bare header; both wear the game's colors.
 export default async function GamesLayout({ children }: { children: React.ReactNode }) {
-  const header = (await getSession()) ? (
-    <AppShell current="games">{null}</AppShell>
-  ) : (
-    <AppBar
-      position="static"
-      elevation={0}
-      sx={{ bgcolor: "background.paper", color: "text.primary", borderBottom: "1px solid", borderColor: "divider" }}
-    >
-      <Toolbar>
-        <Button component={Link} href="/games" color="inherit" startIcon={<SportsEsportsIcon />}>
-          Games
-        </Button>
-      </Toolbar>
-    </AppBar>
-  );
+  if (await getSession()) {
+    return (
+      <GamesSkin>
+        <AppShell current="games">{children}</AppShell>
+      </GamesSkin>
+    );
+  }
 
-  return <GamesChrome header={header}>{children}</GamesChrome>;
+  return (
+    <GamesSkin>
+      <SlidingHeader
+        header={
+          <AppBar
+            position="static"
+            elevation={0}
+            sx={{ bgcolor: "background.paper", color: "text.primary", borderBottom: "1px solid", borderColor: "divider" }}
+          >
+            <Toolbar>
+              <Button component={Link} href="/games" color="inherit" startIcon={<SportsEsportsIcon />}>
+                Games
+              </Button>
+            </Toolbar>
+          </AppBar>
+        }
+      >
+        {children}
+      </SlidingHeader>
+    </GamesSkin>
+  );
 }
