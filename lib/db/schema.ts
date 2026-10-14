@@ -1153,3 +1153,31 @@ export const eventLog = pgTable(
 );
 
 export type EventLogRow = typeof eventLog.$inferSelect;
+
+// ── Snug (the daily quilt puzzle) ──────────────────────────────────────────────
+// One row per person per day, so a signed-in player's results follow them across
+// devices. The browser stays the working copy (components/games/snug/sync.ts);
+// these rows are what it merges with. `attempt` is the scored first run and is
+// never replaced once set; `best` keeps the better run, ranked by the best_*
+// columns (fewer holes, then fewer hints, then faster); `progress` is the
+// unfinished game, cleared when a run is saved.
+export const snugDays = pgTable(
+  "snug_days",
+  {
+    id: serial("id").primaryKey(),
+    profileId: integer("profile_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    dateKey: date("date_key").notNull(),
+    attempt: jsonb("attempt").$type<Record<string, unknown>>(),
+    best: jsonb("best").$type<Record<string, unknown>>(),
+    bestGaps: integer("best_gaps"),
+    bestHints: integer("best_hints"),
+    bestTimeMs: integer("best_time_ms"),
+    progress: jsonb("progress").$type<Record<string, unknown>>(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("uniq_snug_day_profile_date").on(t.profileId, t.dateKey)],
+);
+
+export type SnugDayRow = typeof snugDays.$inferSelect;
