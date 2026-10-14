@@ -4,6 +4,7 @@ import GarageIcon from "@mui/icons-material/Garage";
 import FitnessCenterIcon from "@mui/icons-material/FitnessCenter";
 import MonitorWeightIcon from "@mui/icons-material/MonitorWeight";
 import SavingsIcon from "@mui/icons-material/Savings";
+import SportsEsportsIcon from "@mui/icons-material/SportsEsports";
 
 // The registry of sub-apps in the hub. Add an app here (plus its route folder)
 // and it shows up in the Hub launcher and the header app-switcher automatically.
@@ -69,6 +70,18 @@ export const APPS: AppDef[] = [
       { label: "Categories", href: "/finance/categories" },
       { label: "ATLAS", href: "/finance/atlas" },
       { label: "Net Worth", href: "/finance/net-worth" },
+    ],
+  },
+  {
+    slug: "games",
+    name: "Games",
+    tagline: "Little games, public to play",
+    href: "/games",
+    Icon: SportsEsportsIcon,
+    accent: "#c4703f",
+    nav: [
+      { label: "Gallery", href: "/games" },
+      { label: "Snug", href: "/games/snug" },
     ],
   },
 ];

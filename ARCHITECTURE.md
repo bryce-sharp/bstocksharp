@@ -33,6 +33,8 @@ app/
   actions/*.ts          "use server" mutations, one file per domain (session, auth, vehicles, …)
   garage/**             the Garage app (its own layout/error + CRUD routes)
   workout/**            the Workout app
+  games/**              PUBLIC: the games gallery (lib/games.ts registry) and each game
+  embed/**              PUBLIC: frameless games for other sites to iframe (allowed hosts in next.config.mjs)
 
 components/
   shared/    app shell + generic primitives — AppShell (per-app chrome), AppHeader,
@@ -41,6 +43,7 @@ components/
              NumberField, SavedToast
   garage/    car-specific (Vehicle*, Build*, Maintenance*, Fuel*, Parts*, Wishlist*, Journal*)
   workout/   workout-specific (WorkoutRunner, WeekSchedule, CatalogList, builder forms, …)
+  games/     one folder per game (snug/), plus daily.ts (date keys, seeded RNG, attempt store)
 
 proxy.ts                the login gate (session check + redirect, rolling renewal)
 

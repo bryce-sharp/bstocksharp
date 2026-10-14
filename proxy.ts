@@ -42,6 +42,10 @@ function isPublic(pathname: string): boolean {
     PUBLIC_PATHS.has(pathname) ||
     pathname.startsWith("/join/") ||
     pathname.startsWith("/reset/") ||
+    // Games are public to play, and /embed/* is framed by other sites.
+    pathname === "/games" ||
+    pathname.startsWith("/games/") ||
+    pathname.startsWith("/embed/") ||
     // Finance machine endpoints — token-authed themselves (Bearer fin_…), so
     // the session gate must let them through. Without this the Shortcut's POST
     // 307s to /login and the alert is silently lost.
