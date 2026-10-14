@@ -4,6 +4,8 @@ import { addDays, loadAttempt } from "../daily";
 import { hintsUsed, type Attempt } from "./parts";
 
 export const GAME = "snug";
+/** Backdated a week so there were past quilts to play from day one. */
+export const LAUNCH_DATE = "2026-10-01";
 
 const bestKey = (dateKey: string) => `${GAME}.best.${dateKey}`;
 const progressPrefix = `${GAME}.progress.`;
@@ -54,7 +56,9 @@ export function dayRecord(dateKey: string): DayRecord {
   if (scored) return { status: "holes", holes: scored.gaps };
   if (best) return { status: "tried", holes: best.gaps };
   try {
-    if (localStorage.getItem(progressPrefix + dateKey)) return { status: "inProgress" };
+    // Older versions saved a day as soon as it was opened; only a started game counts.
+    const raw = localStorage.getItem(progressPrefix + dateKey);
+    if (raw && (JSON.parse(raw) as { started?: boolean }).started) return { status: "inProgress" };
   } catch {
     // Unreadable storage just reads as unplayed.
   }
