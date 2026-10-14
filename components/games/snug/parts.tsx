@@ -1,6 +1,6 @@
 // Visual building blocks shared by the Snug game and its art sheet.
 
-import { useEffect, useMemo, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { GlobalStyles } from "@mui/material";
 import { formatDuration } from "../daily";
 import { makeRng } from "../daily";
@@ -248,12 +248,23 @@ export function ResultCard(props: {
 }) {
   const { result, recorded, isReplay, center, sheet = false } = props;
   const perfect = result.gaps === 0;
+  // Its own height, so a card centered on the basket never rises above the play area onto the header.
+  const ref = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setHeight(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   return (
     <div
+      ref={ref}
       style={{
         position: sheet ? "fixed" : "absolute",
         left: center ? center.x : "50%",
-        top: sheet ? "auto" : center ? center.y : "50%",
+        top: sheet ? "auto" : center ? Math.max(center.y, height / 2) : "50%",
         bottom: sheet ? 10 : "auto",
         transform: sheet ? "translate(-50%,0)" : "translate(-50%,-50%)",
         animation: `${sheet ? "snugPopTop" : "snugPop"} 260ms ease-out`,
@@ -286,7 +297,17 @@ export function ResultCard(props: {
           <span style={{ flex: 1, fontSize: 14, textAlign: "left" }}>
             {props.shareLine}
             {props.shareGrid && (
-              <span aria-hidden style={{ display: "block", whiteSpace: "pre", fontSize: sheet ? 11 : 13, lineHeight: 1.2, margin: "6px 0 2px" }}>
+              <span
+                aria-hidden
+                style={{
+                  display: "block",
+                  whiteSpace: "pre",
+                  fontFamily: "'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif",
+                  fontSize: sheet ? 10 : 12,
+                  lineHeight: 1.1,
+                  margin: "6px 0 2px",
+                }}
+              >
                 {props.shareGrid}
               </span>
             )}

@@ -1,13 +1,13 @@
-// The shared result: a silhouette of the quilt with holes marked, never which patch went where.
+// The shared result: a silhouette of the quilt (orange) with holes (brown), never which patch went where.
 
 import { cellKey, type Cell } from "./pieces";
 import type { PieceState } from "./parts";
 
 const FILLED = "\u{1F7E7}";
-const HOLE = "⬜";
-const OUTSIDE = "　";
+const HOLE = "\u{1F7EB}";
+const OUTSIDE = "⬜";
 
-/** One line per board row; squares outside the quilt are blank so the shape shows. */
+/** One line per board row; squares outside the quilt are white, so every square is the same width and the shape lines up. */
 export function quiltGrid(board: readonly Cell[], cols: number, rows: number, pieces: readonly PieceState[]): string {
   const inBoard = new Set(board.map(([x, y]) => cellKey(x, y)));
   const filled = new Set<string>();
@@ -22,7 +22,7 @@ export function quiltGrid(board: readonly Cell[], cols: number, rows: number, pi
       const k = cellKey(x, y);
       line += !inBoard.has(k) ? OUTSIDE : filled.has(k) ? FILLED : HOLE;
     }
-    lines.push(line.replace(new RegExp(`${OUTSIDE}+$`), ""));
+    lines.push(line);
   }
   return lines.join("\n");
 }

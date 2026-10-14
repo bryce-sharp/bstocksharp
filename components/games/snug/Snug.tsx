@@ -5,7 +5,7 @@ import { bounds, cellKey, rotateCCW, rotateCW, shapeKey, type Cell } from "./pie
 import { BINDING, LINEN, YARNS } from "./quilt";
 import { StitchBorder } from "./stitches";
 import { QuiltCalendar } from "./calendar";
-import { GAME, loadBest, playerStats, saveBest } from "./records";
+import { GAME, LAUNCH_DATE, loadBest, playerStats, saveBest } from "./records";
 import { quiltGrid } from "./share";
 import { SNUG_FONTS } from "./fonts";
 import { Basket } from "./basket";
@@ -13,8 +13,6 @@ import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined
 import { BoardSvg, Btn, FONT, HowToPlay, INK, KnitDefs, PanelStitches, PatchSvg, QuiltBackdrop, QuiltLabel, RUST_THREAD, ResultCard, SCRIPT, Stat, hintsUsed, panelStyle, plural, type Attempt, type MoreGamesLink, type PieceState, type RunSummary, type Spot } from "./parts";
 
 const HOW_TO_SEEN = "snug.howToSeen";
-/** Backdated a week so there are past quilts to play from day one. */
-const LAUNCH_DATE = "2026-10-01";
 const MAX_CELL = 54;
 const MIN_CELL = 18;
 /** Room below the play area for the buttons, the panel's bottom padding, and the maker's label. */
@@ -236,7 +234,9 @@ function SnugDay({
   /** The play area's distance from the top of the page, including any site header above the game. */
   const [topY, setTopY] = useState(200);
   const dragRef = useRef<Drag | null>(null);
-  const lastGrab = useRef(0);
+  /** The square last grabbed, so turns pivot on it; any other patch pivots on its first square. */
+  const lastGrab = useRef({ id: "", cell: 0 });
+  const anchorFor = (id: string) => (lastGrab.current.id === id ? lastGrab.current.cell : 0);
   // Active time only: `base` is time already played, `since` marks when the current running stretch began.
   const clock = useRef({ base: progress?.elapsedMs ?? 0, since: null as number | null, started: progress?.started ?? false });
   // Only today's scored game comes back covered; practice picks up where it left off.
@@ -372,7 +372,10 @@ function SnugDay({
     history.current = [];
     setUndoCount(0);
   };
-  const holesIn = (all: PieceState[]) => puzzle.board.length - all.reduce((n, p) => n + (p.at && !p.loose ? p.cells.length : 0), 0);
+  const holesIn = useCallback(
+    (all: PieceState[]) => puzzle.board.length - all.reduce((n, p) => n + (p.at && !p.loose ? p.cells.length : 0), 0),
+    [puzzle],
+  );
 
   const fits = useCallback(
     (cells: readonly Cell[], at: Spot, id: string, all: PieceState[]) => {
@@ -406,7 +409,9 @@ function SnugDay({
         latest.current.pieces.map((p) => {
           if (p.id !== id) return p;
           const cells = fn(p.cells);
-          if (!p.at || dragRef.current?.moved || carryRef.current?.id === id) return { ...p, cells };
+          if (!p.at || dragRef.current?.moved) return { ...p, cells };
+          // Carried by keyboard: it keeps its old spot until Enter, hovering loose if the turn no longer fits there.
+          if (carryRef.current?.id === id) return { ...p, cells, loose: !fits(cells, p.at, id, latest.current.pieces) };
           // A shape that looks the same after turning stays put instead of pivoting off its spot.
           const at =
             shapeKey(cells) === shapeKey(p.cells)
@@ -439,9 +444,7 @@ function SnugDay({
       commit(next);
       setSaid(spot ? `Stitched down. ${plural(holesIn(next), "hole")} left.` : "Back in the basket.");
     },
-    // holesIn only reads the puzzle, which never changes for this day.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [commit],
+    [commit, holesIn],
   );
 
   const undo = () => {
@@ -494,7 +497,7 @@ function SnugDay({
       moved: false,
     };
     dragRef.current = d;
-    lastGrab.current = grab;
+    lastGrab.current = { id: p.id, cell: grab };
     setCarry(null);
     setDrag(d);
     setSelected(p.id);
@@ -568,7 +571,7 @@ function SnugDay({
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const id = dragRef.current?.id ?? carryRef.current?.id ?? selected;
       if (!id || hintRef.current.includes(id)) return;
-      const anchor = dragRef.current?.grab ?? lastGrab.current;
+      const anchor = dragRef.current?.grab ?? anchorFor(id);
       const turn = key === "q" || (key === "r" && e.shiftKey) ? rotateCCW : key === " " || key === "r" || key === "e" ? rotateCW : null;
       if (turn) {
         // Stops Space from scrolling the page or clicking a focused button.
@@ -642,8 +645,8 @@ function SnugDay({
   live.current = { scored, saved, phase, pieces, hintIds };
   const persist = useCallback(() => {
     const { saved: isSaved, phase: ph, pieces: ps } = live.current;
-    if (!isSaved || ph !== "playing") return;
     const c = clock.current;
+    if (!isSaved || ph !== "playing" || !c.started) return;
     saveProgress(dateKey, {
       pieces: ps,
       elapsedMs: c.base + (c.since === null ? 0 : Date.now() - c.since),
@@ -699,23 +702,25 @@ function SnugDay({
     const timeMs = clock.current.base;
     if (saved) saveProgress(dateKey, null);
     const settledPieces = pieces.map((p) => (p.loose ? { ...p, at: null, loose: false } : p));
+    // Counted from the board that is saved, so a patch still being carried counts where it sits.
+    const holes = holesIn(settledPieces);
     setPieces(settledPieces);
     setCarry(null);
     history.current = [];
     setUndoCount(0);
-    setSaid(gaps === 0 ? "Perfectly snug!" : `Tied off with ${plural(gaps, "hole")}.`);
+    setSaid(holes === 0 ? "Perfectly snug!" : `Tied off with ${plural(holes, "hole")}.`);
     setFinalPieces(settledPieces);
-    setResult({ gaps, timeMs, hints: hintIds.length });
+    setResult({ gaps: holes, timeMs, hints: hintIds.length });
     setPhase("done");
     setConfirming(false);
     setSelected(null);
-    setBestRun(saveBest(dateKey, { gaps, timeMs, pieces: settledPieces, hints: hintIds.length }));
+    setBestRun(saveBest(dateKey, { gaps: holes, timeMs, pieces: settledPieces, hints: hintIds.length }));
     if (!isReplay && !isArchive) {
-      const attempt: Attempt = { gaps, timeMs, pieces: settledPieces, hints: hintIds.length };
+      const attempt: Attempt = { gaps: holes, timeMs, pieces: settledPieces, hints: hintIds.length };
       if (saveAttempt(GAME, dateKey, attempt)) setRecorded(attempt);
     }
-    window.setTimeout(() => setShowCard(true), gaps === 0 ? 1500 : 250);
-  }, [gaps, isReplay, isArchive, pieces, dateKey, saved, stopClock, hintIds]);
+    window.setTimeout(() => setShowCard(true), holes === 0 ? 1500 : 250);
+  }, [isReplay, isArchive, pieces, dateKey, saved, stopClock, hintIds, holesIn]);
 
   useEffect(() => {
     if (phase === "playing" && !dragging && gaps === 0) finish();
@@ -1073,15 +1078,15 @@ function SnugDay({
               <Btn small={compact} disabled={undoCount === 0 || paused} onClick={undo}>
                 Undo
               </Btn>
-              <Btn small={compact} label="Turn back" disabled={!selected || paused} onClick={() => selected && transformPiece(selected, rotateCCW, lastGrab.current)}>
+              <Btn small={compact} label="Turn back" disabled={!selected || paused} onClick={() => selected && transformPiece(selected, rotateCCW, anchorFor(selected))}>
                 <TurnIcon back />
               </Btn>
-              <Btn small={compact} label="Turn" disabled={!selected || paused} onClick={() => selected && transformPiece(selected, rotateCW, lastGrab.current)}>
+              <Btn small={compact} label="Turn" disabled={!selected || paused} onClick={() => selected && transformPiece(selected, rotateCW, anchorFor(selected))}>
                 <TurnIcon />
               </Btn>
               <Btn
                 small={compact}
-                disabled={paused || covered === 0}
+                disabled={paused || !pieces.some((p) => p.at && !hintIds.includes(p.id))}
                 onClick={() => {
                   setCarry(null);
                   commit(pieces.map((p) => (hintIds.includes(p.id) ? p : { ...p, at: null, loose: false })));
@@ -1102,10 +1107,22 @@ function SnugDay({
                 <>
                   <span style={{ fontSize: 14 }}>Tie it off with {plural(gaps, "hole")}?</span>
                   <Btn small={compact} onClick={() => setConfirming(false)}>Keep going</Btn>
-                  <Btn small={compact} primary onClick={finish}>Tie it off</Btn>
+                  <Btn small={compact} primary disabled={paused} onClick={finish}>
+                    Tie it off
+                  </Btn>
                 </>
               ) : (
-                <Btn small={compact} primary disabled={covered === 0 || paused} onClick={() => setConfirming(true)}>Tie it off</Btn>
+                <Btn
+                  small={compact}
+                  primary
+                  disabled={covered === 0 || paused}
+                  onClick={() => {
+                    setCarry(null);
+                    setConfirming(true);
+                  }}
+                >
+                  Tie it off
+                </Btn>
               )}
             </>
           ) : (
