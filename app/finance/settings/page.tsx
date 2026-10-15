@@ -6,7 +6,7 @@ import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
 import Alert from "@mui/material/Alert";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import { isEditor } from "@/lib/auth";
+import { canUseBanks, isEditor } from "@/lib/auth";
 import { getSession } from "@/lib/session";
 import { getMyGroup } from "@/lib/queries/groups";
 import { listApiTokens } from "@/lib/queries/finance-tokens";
@@ -22,7 +22,7 @@ export const metadata = { title: "Finance · Connections" };
 
 // Finance settings: the banks synced through Plaid, plus the API tokens the
 // phone automations use (ingest shortcut, widget reader). Household-shared;
-// only the owner manages banks, and the demo login never sees them.
+// only an owner who is a bank user manages banks, and the demo login never sees them.
 export default async function FinanceSettingsPage() {
   const session = await getSession();
   if (session === null) redirect("/login");
@@ -31,23 +31,25 @@ export default async function FinanceSettingsPage() {
   // Bank tables are only read where Plaid is set up, so a deployment whose
   // database has not received them yet (a preview build) still renders.
   const configured = plaidConfigured();
-  const [tokens, accounts, group, connections, activity] = await Promise.all([
+  const [tokens, accounts, group, connections, activity, bankUser] = await Promise.all([
     listApiTokens(),
     listFinancialAccounts(),
     getMyGroup(),
     configured ? listBankConnections() : Promise.resolve([]),
     configured ? listBankActivity() : Promise.resolve([]),
+    canUseBanks(),
   ]);
   const tz = group?.timezone ?? "America/Chicago";
   const openAccounts = accounts.filter((a) => !a.archivedAt);
   const owner = group?.ownerAccountId === session.accountId;
-  const showBanks = configured && !group?.isDemo;
   // Dev is reset from live, so it holds live's real logins; each deployment
   // lists only the logins of its own Plaid environment and leaves the rest be.
   const ownConnections = connections.filter((c) => c.environment === plaidEnv());
   const hiddenNote = hiddenLoginsNote(
     connections.filter((c) => c.environment !== plaidEnv()).map((c) => c.institutionName),
   );
+  // Households without a bank user see banks only once one has been connected for them.
+  const showBanks = configured && !group?.isDemo && (bankUser || ownConnections.length > 0);
 
   return (
     <Container maxWidth="sm" sx={{ py: { xs: 4, md: 6 } }}>
@@ -97,11 +99,11 @@ export default async function FinanceSettingsPage() {
               message: e.message ?? e.kind,
               problem: isProblem(e),
             }))}
-            canManage={owner && configured}
+            canManage={owner && bankUser && configured}
             sandbox={plaidEnv() === "sandbox"}
             hiddenNote={hiddenNote}
           />
-        ) : owner && !group?.isDemo ? (
+        ) : !configured && owner && bankUser && !group?.isDemo ? (
           <Alert severity="info">
             Bank sync is not set up on this deployment yet. It needs
             PLAID_CLIENT_KEY, PLAID_TOKEN_KEY, and the secret matching PLAID_ENV

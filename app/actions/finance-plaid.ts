@@ -13,7 +13,7 @@ import {
   transactions,
   type PlaidItem,
 } from "@/lib/db/schema";
-import { requireOwner } from "@/lib/auth";
+import { canUseBanks, requireOwner } from "@/lib/auth";
 import { getGroupTimezone } from "@/lib/queries/group";
 import { getPlaidItemForGroup } from "@/lib/queries/finance-plaid";
 import { currentMonthISO } from "@/lib/finance/parse";
@@ -29,8 +29,9 @@ import { decryptToken, encryptToken } from "@/lib/plaid/crypto";
 import { suggestAccount } from "@/lib/plaid/accounts";
 import { applyPlaidItemNow, syncPlaidItem, type SyncOutcome } from "@/lib/plaid/sync";
 
-// Bank connections (Plaid). Connecting a bank shares account access, so every
-// action here is the household OWNER's alone, and never the demo login's.
+// Bank connections (Plaid). Connecting a bank shares account access and spends
+// one of the site's few Plaid slots, so every action here needs the household
+// OWNER, who must also be a bank user (lib/auth BANK_USERS), never the demo login.
 
 const SETTINGS = "/finance/settings";
 
@@ -66,9 +67,10 @@ const HISTORY_DAYS = 730;
 
 type Result = { ok: true } | { error: string };
 
-/** The owner's group, refusing the demo login and unconfigured deployments. */
+/** The owner's group, refusing non-bank users, the demo login, and unconfigured deployments. */
 async function requireBankAdmin(): Promise<number> {
   const session = await requireOwner();
+  if (!(await canUseBanks())) throw new Error("Bank connections are not available for this login.");
   if (!plaidConfigured()) throw new Error("Bank sync is not set up on this deployment.");
   const [group] = await db
     .select({ isDemo: groups.isDemo })

@@ -119,6 +119,18 @@ export async function requireOwner(): Promise<Session> {
 // household's data; it adds only the events that belong to no household
 // (a webhook the site refused) to the Activity list on /group.
 
+/** The signed-in account's username, lowercase (signed out → null). */
+async function sessionUsername(): Promise<string | null> {
+  const session = await getSession();
+  if (!session) return null;
+  const [row] = await db
+    .select({ username: accounts.username })
+    .from(accounts)
+    .where(eq(accounts.id, session.accountId))
+    .limit(1);
+  return row ? row.username.toLowerCase() : null;
+}
+
 /** Is the signed-in account one of the site's admins? */
 export async function isSiteAdmin(): Promise<boolean> {
   const admins = (process.env.SITE_ADMINS ?? "")
@@ -126,14 +138,20 @@ export async function isSiteAdmin(): Promise<boolean> {
     .map((name) => name.trim().toLowerCase())
     .filter(Boolean);
   if (admins.length === 0) return false;
-  const session = await getSession();
-  if (!session) return false;
-  const [row] = await db
-    .select({ username: accounts.username })
-    .from(accounts)
-    .where(eq(accounts.id, session.accountId))
-    .limit(1);
-  return row !== undefined && admins.includes(row.username.toLowerCase());
+  const username = await sessionUsername();
+  return username !== null && admins.includes(username);
+}
+
+// ── Bank connections ──────────────────────────────────────────────────────────
+// Plaid's Trial allows 10 Production Items for the whole site, and removing one
+// does not free its slot, so only these logins may connect or manage banks.
+// Kept in code, not the environment, so a deployment setting cannot widen it.
+const BANK_USERS = ["bstocksharp"];
+
+/** May the signed-in account connect and manage banks through Plaid? */
+export async function canUseBanks(): Promise<boolean> {
+  const username = await sessionUsername();
+  return username !== null && BANK_USERS.includes(username);
 }
 
 // ── Guards (call from Server Actions) ─────────────────────────────────────────
