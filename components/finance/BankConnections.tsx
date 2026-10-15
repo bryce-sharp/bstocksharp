@@ -69,8 +69,8 @@ const SYNCABLE = new Set(["ok", "pending_disconnect", "new_accounts"]);
 type Notice = { severity: "error" | "info"; text: string };
 
 // Banks synced through Plaid, each bank account pointed at one app account.
-// Only the owner connects, repairs, maps, and disconnects; everyone else sees
-// the status read-only.
+// Only an owner who is a bank user (lib/auth canUseBanks) connects, repairs,
+// maps, and disconnects; everyone else sees the status read-only.
 export default function BankConnections({
   connections,
   accounts,
