@@ -922,12 +922,14 @@ function SnugDay({
   const canHint = phase === "playing" && !paused && nextHintAt !== undefined && clock.current.started && elapsed >= nextHintAt;
   const canPull = phase === "playing" && !paused && pulledIds.length === 0 && clock.current.started && elapsed >= SPARE_AT;
   const canNativeShare = coarsePointer && typeof navigator.share === "function";
+  const shareText = `${shareLine}\n${shareGrid}\n${shareUrl}`;
   const copyShare = () => {
     if (canNativeShare) {
-      navigator.share({ text: `${shareLine}\n${shareGrid}`, url: shareUrl }).catch(() => {});
+      // Text only: given a separate url, many iOS share targets (Copy, most chat apps) keep just the link.
+      navigator.share({ text: shareText }).catch(() => {});
       return;
     }
-    navigator.clipboard?.writeText(`${shareLine}\n${shareGrid}\n${shareUrl}`).then(() => setCopied(true), () => setCopied(false));
+    navigator.clipboard?.writeText(shareText).then(() => setCopied(true), () => setCopied(false));
   };
 
   return (
