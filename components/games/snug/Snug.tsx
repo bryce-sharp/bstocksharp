@@ -113,6 +113,8 @@ interface Carry {
 }
 
 const SITE = "https://www.bstocksharp.dev";
+/** The link in shared results, even from previews and localhost; the bare domain redirects to www. */
+const SHARE_URL = "https://bstocksharp.dev/games/snug";
 /** How long the day waits for a signed-in player's account before opening on this device's copy. */
 const SYNC_WAIT_MS = 4000;
 const UNDO_LIMIT = 100;
@@ -122,7 +124,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 const shift = (cells: readonly Cell[], s: Spot) => cells.map(([x, y]) => [x + s.x, y + s.y] as Cell);
 
 /**
- * `shareUrl` is the link players share; it defaults to this site's Snug page. `profileId` is the signed-in person;
+ * `shareUrl` is the link players share; it defaults to the live site's Snug page. `profileId` is the signed-in person;
  * their account is merged in before the day opens, and saves go to it.
  */
 export function Snug({ shareUrl, profileId }: { shareUrl?: string; profileId?: number }) {
@@ -180,7 +182,7 @@ export function Snug({ shareUrl, profileId }: { shareUrl?: string; profileId?: n
           puzzle={loaded.puzzle}
           today={today}
           onPickDate={setDateKey}
-          shareUrl={shareUrl ?? `${window.location.origin}/games/snug`}
+          shareUrl={shareUrl ?? SHARE_URL}
           moreGames={moreGames}
         />
       ) : failed === dateKey ? (
@@ -922,12 +924,14 @@ function SnugDay({
   const canHint = phase === "playing" && !paused && nextHintAt !== undefined && clock.current.started && elapsed >= nextHintAt;
   const canPull = phase === "playing" && !paused && pulledIds.length === 0 && clock.current.started && elapsed >= SPARE_AT;
   const canNativeShare = coarsePointer && typeof navigator.share === "function";
+  const shareText = `${shareLine}\n${shareGrid}\n${shareUrl}`;
   const copyShare = () => {
     if (canNativeShare) {
-      navigator.share({ text: `${shareLine}\n${shareGrid}`, url: shareUrl }).catch(() => {});
+      // Text only: given a separate url, many iOS share targets (Copy, most chat apps) keep just the link.
+      navigator.share({ text: shareText }).catch(() => {});
       return;
     }
-    navigator.clipboard?.writeText(`${shareLine}\n${shareGrid}\n${shareUrl}`).then(() => setCopied(true), () => setCopied(false));
+    navigator.clipboard?.writeText(shareText).then(() => setCopied(true), () => setCopied(false));
   };
 
   return (
