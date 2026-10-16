@@ -9,6 +9,7 @@ import { BINDING, LINEN, YARNS } from "./quilt";
 import { Btn, FONT, RED_THREAD, SCRIPT, StitchedModal, type Attempt, type PieceState } from "./parts";
 import { GAME, loadBest } from "./records";
 import { lastDayOf, loadMonth, type MonthDays, type MonthShape } from "./puzzles";
+import { canvasFile, canvasFonts } from "./share";
 
 export interface QuiltDay {
   dateKey: string;
@@ -300,13 +301,12 @@ export function drawMonthPicture(monthKey: string, days: QuiltDay[], shape: Mont
 
 /** Shares the picture through the phone's share sheet where it can take files; elsewhere downloads it. */
 export async function shareMonthPicture(canvas: HTMLCanvasElement, monthKey: string, text: string): Promise<"shared" | "downloaded"> {
-  const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("no picture"))), "image/png"));
-  const file = new File([blob], `snug-${monthKey}.png`, { type: "image/png" });
+  const file = await canvasFile(canvas, `snug-${monthKey}.png`);
   if (typeof navigator.canShare === "function" && navigator.canShare({ files: [file] })) {
     await navigator.share({ files: [file], text });
     return "shared";
   }
-  const url = URL.createObjectURL(blob);
+  const url = URL.createObjectURL(file);
   const a = document.createElement("a");
   a.href = url;
   a.download = file.name;
@@ -368,15 +368,6 @@ export function MonthScoreView({ score }: { score: MonthScore }) {
       </div>
     </div>
   );
-}
-
-/** The page's resolved Snug fonts, which a canvas cannot take as CSS variables, once they have loaded. */
-async function canvasFonts(el: HTMLElement): Promise<{ script: string; body: string }> {
-  const style = getComputedStyle(el);
-  const script = style.getPropertyValue("--snug-font-script").trim() || "cursive";
-  const body = style.getPropertyValue("--snug-font-body").trim() || "system-ui, sans-serif";
-  await Promise.all([document.fonts.load(`700 96px ${script}`), document.fonts.load(`600 44px ${body}`), document.fonts.load(`400 30px ${body}`)]).catch(() => {});
-  return { script, body };
 }
 
 /** How long the days sit in their calendar squares before they fly. */

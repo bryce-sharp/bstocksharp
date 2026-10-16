@@ -73,6 +73,9 @@ export function rotations(cells: readonly Cell[]): Cell[][] {
   return out;
 }
 
+/** The same key for every turn of a shape, so patches with equal keys are interchangeable. */
+export const shapeClass = (cells: readonly Cell[]) => rotations(cells).map(shapeKey).sort()[0]!;
+
 /** Boundary loops of a set of cells, as corner points in cell units. */
 export function outlineLoops(cells: readonly Cell[]): [number, number][][] {
   const has = new Set(cells.map(([x, y]) => cellKey(x, y)));

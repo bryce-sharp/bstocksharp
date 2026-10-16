@@ -3,13 +3,13 @@ import { addDays, formatDuration, formatLongDate, formatShortDate, loadAttempt, 
 import type { Puzzle } from "./generator";
 import { loadPuzzle } from "./puzzles";
 import { PUZZLE_VERSION } from "./version";
-import { bounds, cellKey, rotateCCW, rotateCW, shapeKey, type Cell } from "./pieces";
+import { bounds, cellKey, rotateCCW, rotateCW, shapeClass, shapeKey, type Cell } from "./pieces";
 import { BINDING, LINEN } from "./quilt";
 import { StitchBorder } from "./stitches";
 import { QuiltCalendar } from "./calendar";
 import { MonthReveal, revealDue } from "./monthQuilt";
 import { GAME, LAUNCH_DATE, clearStaleRecords, loadBest, playerStats, saveBest, type Progress } from "./records";
-import { quiltGrid } from "./share";
+import { canvasFile, canvasFonts, drawResultPicture, quiltGrid } from "./share";
 import { SNUG_FONTS } from "./fonts";
 import { flushRemote, saveProgressRemote, saveRunRemote, syncSnug } from "./sync";
 import { Basket } from "./basket";
@@ -68,7 +68,7 @@ function packTray(sizes: number[], widthCells: number): { slots: Slot[]; w: numb
 
 /** Active play time before each hint becomes available: one at 5 minutes, another at 10. */
 const HINT_AT = [5 * 60_000, 10 * 60_000];
-/** Active play time before a spare can be pulled out of the basket; it does not count as a hint. */
+/** Active play time before one spare can be marked; it does not count as a hint. */
 const SPARE_AT = 3 * 60_000;
 
 const progressKey = (dateKey: string) => `${GAME}.progress.${dateKey}`;
@@ -299,11 +299,8 @@ function SnugDay({
   // Only today's scored game comes back covered; practice picks up where it left off.
   const [paused, setPaused] = useState(!!progress?.started && !isArchive);
   const [hintIds, setHintIds] = useState<string[]>(() => progress?.hintIds ?? (progress?.hintId ? [progress.hintId] : []));
-  const [pulledIds, setPulledIds] = useState<string[]>(() => progress?.pulledIds ?? []);
-  /** Patches the player can no longer move: hinted ones on the quilt and pulled spares. */
-  const fixed = [...hintIds, ...pulledIds];
-  const hintRef = useRef(fixed);
-  hintRef.current = fixed;
+  /** Patches marked as left over in the intended fill; they stay usable. Saved as `pulledIds`. */
+  const [spareIds, setSpareIds] = useState<string[]>(() => progress?.pulledIds ?? []);
   const playRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
 
@@ -464,7 +461,6 @@ function SnugDay({
   /** Turns a piece; a placed piece pivots on `anchor` and hovers loose if it no longer fits. */
   const transformPiece = useCallback(
     (id: string, fn: (cells: readonly Cell[]) => Cell[], anchor: number) => {
-      if (hintRef.current.includes(id)) return;
       commit(
         latest.current.pieces.map((p) => {
           if (p.id !== id) return p;
@@ -539,7 +535,7 @@ function SnugDay({
   };
 
   const onPieceDown = (e: ReactPointerEvent, p: PieceState, index: number, grab: number) => {
-    if (phase !== "playing" || e.button !== 0 || fixed.includes(p.id)) return;
+    if (phase !== "playing" || e.button !== 0) return;
     e.preventDefault();
     const { px, py } = pointerIn(e);
     const pos = piecePos(p, index);
@@ -630,7 +626,7 @@ function SnugDay({
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const id = dragRef.current?.id ?? carryRef.current?.id ?? selected;
-      if (!id || hintRef.current.includes(id)) return;
+      if (!id) return;
       const anchor = dragRef.current?.grab ?? anchorFor(id);
       const turn = key === "q" || (key === "r" && e.shiftKey) ? rotateCCW : key === " " || key === "r" || key === "e" ? rotateCW : null;
       if (turn) {
@@ -701,8 +697,8 @@ function SnugDay({
     if (c.started && c.since === null) c.since = Date.now();
   }, []);
 
-  const live = useRef({ scored, saved, phase, pieces, hintIds, pulledIds });
-  live.current = { scored, saved, phase, pieces, hintIds, pulledIds };
+  const live = useRef({ scored, saved, phase, pieces, hintIds, spareIds });
+  live.current = { scored, saved, phase, pieces, hintIds, spareIds };
   const persist = useCallback(() => {
     const { saved: isSaved, phase: ph, pieces: ps } = live.current;
     const c = clock.current;
@@ -713,13 +709,13 @@ function SnugDay({
       elapsedMs: c.base + (c.since === null ? 0 : Date.now() - c.since),
       started: c.started,
       hintIds: live.current.hintIds,
-      pulledIds: live.current.pulledIds,
+      pulledIds: live.current.spareIds,
     };
     saveProgress(dateKey, progress);
     saveProgressRemote(dateKey, progress);
   }, [dateKey]);
 
-  useEffect(persist, [pieces, hintIds, pulledIds, persist]);
+  useEffect(persist, [pieces, hintIds, spareIds, persist]);
 
   // Leaving the tab, switching days, or closing the page stops the clock and saves; the scored game comes back covered.
   useEffect(() => {
@@ -816,22 +812,33 @@ function SnugDay({
     clock.current = { base: 0, since: null, started: false };
     setPaused(false);
     setHintIds([]);
-    setPulledIds([]);
+    setSpareIds([]);
+  };
+
+  /** True when a patch sits exactly where the intended fill puts it. */
+  const onSolutionSpot = (p: PieceState) => {
+    const s = puzzle.solution[p.id];
+    if (!s || !p.at || p.loose) return false;
+    const want = new Set(shift(s.cells, { x: s.x, y: s.y }).map(([x, y]) => cellKey(x, y)));
+    return shift(p.cells, p.at).every(([x, y]) => want.has(cellKey(x, y)));
+  };
+  /** "Empty the quilt" leaves hinted patches that are still where the hint put them. */
+  const keepOnEmpty = (p: PieceState) => hintIds.includes(p.id) && onSolutionSpot(p);
+
+  /**
+   * Marks one spare as left over in the intended fill, without moving or locking it, since other perfect fills may
+   * use it. Prefers a spare whose shape the intended fill does not use, since a twin of a real patch tells nothing.
+   */
+  const markSpare = () => {
+    const inFill = new Set(puzzle.pieces.filter((p) => puzzle.solution[p.id]).map((p) => shapeClass(p.cells)));
+    const spares = puzzle.pieces.filter((p) => !puzzle.solution[p.id] && !spareIds.includes(p.id));
+    const spare = spares.find((p) => !inFill.has(shapeClass(p.cells))) ?? spares[0];
+    if (!spare) return;
+    setSpareIds([...spareIds, spare.id]);
+    setSaid("One spare is marked in grey. The intended fill leaves it over, but you can still use it.");
   };
 
   /** Places one solution patch where it belongs, moving anything in its way back to the basket. */
-  /** Pulls one spare out of the basket (or off the quilt), faded and locked, so it cannot be used. */
-  const pullSpare = () => {
-    const spare = puzzle.pieces.find((p) => !puzzle.solution[p.id] && !pulledIds.includes(p.id));
-    if (!spare) return;
-    clearHistory();
-    setCarry(null);
-    setPieces((all) => all.map((p) => (p.id === spare.id ? { ...p, at: null, loose: false } : p)));
-    setPulledIds([...pulledIds, spare.id]);
-    setSelected(null);
-    setSaid("A spare was pulled out of the basket.");
-  };
-
   const applyHint = () => {
     if (hintIds.length >= HINT_AT.length) return;
     const placed = (p: PieceState) => (p.at && !p.loose ? new Set(shift(p.cells, p.at).map(([x, y]) => cellKey(x, y))) : null);
@@ -842,7 +849,9 @@ function SnugDay({
     const same = (a: Set<string>, b: Set<string>) => a.size === b.size && [...a].every((k) => b.has(k));
     const occupied = pieces.map(placed);
     const satisfied = (id: string) => occupied.some((o) => o && same(o, target(id)));
-    const ids = Object.keys(puzzle.solution).filter((id) => !satisfied(id));
+    const open = Object.keys(puzzle.solution).filter((id) => !satisfied(id));
+    // A hinted patch the player moved is not hinted again while another patch is still open.
+    const ids = open.some((id) => !hintIds.includes(id)) ? open.filter((id) => !hintIds.includes(id)) : open;
     // Prefer a patch still in the basket, then the one whose spot disturbs the fewest placed patches, then the biggest.
     const cost = (id: string) => {
       const t = target(id);
@@ -922,13 +931,35 @@ function SnugDay({
     .join(" ");
   const nextHintAt = HINT_AT[hintIds.length];
   const canHint = phase === "playing" && !paused && nextHintAt !== undefined && clock.current.started && elapsed >= nextHintAt;
-  const canPull = phase === "playing" && !paused && pulledIds.length === 0 && clock.current.started && elapsed >= SPARE_AT;
+  const canMarkSpare = phase === "playing" && !paused && spareIds.length === 0 && clock.current.started && elapsed >= SPARE_AT;
   const canNativeShare = coarsePointer && typeof navigator.share === "function";
   const shareText = `${shareLine}\n${shareGrid}\n${shareUrl}`;
+  // The picture is made ahead of the tap, so the share sheet still opens within the tap as Safari requires.
+  const [picture, setPicture] = useState<{ text: string; file: File } | null>(null);
+  const sharePicture = picture?.text === shareText ? picture.file : null;
+  const resultText = recorded ? describe(recorded) : "";
+  useEffect(() => {
+    const el = playRef.current;
+    if (!canNativeShare || !recorded || !el) return;
+    let live = true;
+    canvasFonts(el)
+      .then((fonts) =>
+        drawResultPicture(puzzle, recorded.pieces, { title: `No. ${number} · ${formatLongDate(dateKey)}`, result: resultText, link: shareUrl }, fonts),
+      )
+      .then((canvas) => canvasFile(canvas, `snug-${number}.png`))
+      .then((file) => live && setPicture({ text: shareText, file }))
+      // Without a picture the share still sends the text.
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [canNativeShare, recorded, puzzle, number, dateKey, resultText, shareUrl, shareText]);
   const copyShare = () => {
     if (canNativeShare) {
-      // Text only: given a separate url, many iOS share targets (Copy, most chat apps) keep just the link.
-      navigator.share({ text: shareText }).catch(() => {});
+      // The link stays inside the text, never a separate url: given one, many iOS targets (Copy, most chat apps) keep just the link.
+      const files = sharePicture ? [sharePicture] : [];
+      const withPicture = files.length > 0 && typeof navigator.canShare === "function" && navigator.canShare({ files, text: shareText });
+      navigator.share(withPicture ? { files, text: shareText } : { text: shareText }).catch(() => {});
       return;
     }
     navigator.clipboard?.writeText(shareText).then(() => setCopied(true), () => setCopied(false));
@@ -1055,7 +1086,7 @@ function SnugDay({
 
               {phase === "playing" &&
                 pieces.map((p, index) => {
-                  if (p.at || (drag?.moved && drag.id === p.id) || pulledIds.includes(p.id)) return null;
+                  if (p.at || (drag?.moved && drag.id === p.id)) return null;
                   const slot = layout.slots[index]!;
                   return (
                     <div
@@ -1070,15 +1101,15 @@ function SnugDay({
                 const { w, h } = bounds(p.cells);
                 const dragged = !!drag?.moved && drag.id === p.id;
                 const lifted = dragged || carry?.id === p.id;
-                const movable = phase === "playing" && !paused && !fixed.includes(p.id);
-                const pulled = pulledIds.includes(p.id);
+                const movable = phase === "playing" && !paused;
+                const spare = spareIds.includes(p.id) && phase === "playing";
                 return (
                   <div
                     key={p.id}
                     data-piece={p.id}
                     tabIndex={movable ? 0 : -1}
                     role={movable ? "button" : undefined}
-                    aria-label={`Patch ${index + 1} of ${pieces.length}, ${p.cells.length} squares, ${p.at && !p.loose ? "on the quilt" : "in the basket"}`}
+                    aria-label={`Patch ${index + 1} of ${pieces.length}, ${p.cells.length} squares, ${p.at && !p.loose ? "on the quilt" : "in the basket"}${spare ? ", marked spare" : ""}`}
                     onFocus={() => movable && setSelected(p.id)}
                     style={{
                       outline: "none",
@@ -1090,13 +1121,18 @@ function SnugDay({
                       transformOrigin: "0 0",
                       transform: `translate(${pos.x}px, ${pos.y}px) scale(${pos.s})`,
                       transition: dragged ? "none" : "transform 220ms cubic-bezier(.2,.9,.3,1.15), opacity 400ms ease",
-                      opacity: pulled && phase === "playing" ? 0.25 : 1,
+                      opacity: spare && !p.at && !lifted ? 0.6 : 1,
                       zIndex: lifted ? 50 : p.loose ? 30 : p.at ? 10 : 5,
                       pointerEvents: "none",
-                      filter: [
-                        selected === p.id && phase === "playing" && !dragged ? "drop-shadow(0 0 2px #fff) drop-shadow(0 0 1.5px #fff)" : "",
-                        lifted || p.loose ? "drop-shadow(0 12px 10px rgba(40,20,10,.4))" : "drop-shadow(0 2px 2px rgba(40,20,10,.35))",
-                      ].join(" "),
+                      filter:
+                        [
+                          spare ? "grayscale(.85)" : "",
+                          selected === p.id && phase === "playing" && !dragged ? "drop-shadow(0 0 2px #fff) drop-shadow(0 0 1.5px #fff)" : "",
+                          // Stitched-down patches cast no shadow, so neighbors meet at a clean seam.
+                          lifted || p.loose ? "drop-shadow(0 12px 10px rgba(40,20,10,.4))" : p.at ? "" : "drop-shadow(0 2px 2px rgba(40,20,10,.35))",
+                        ]
+                          .filter(Boolean)
+                          .join(" ") || "none",
                     }}
                   >
                     <PatchSvg
@@ -1104,7 +1140,7 @@ function SnugDay({
                       cell={cell}
                       interactive={phase === "playing"}
                       loose={p.loose && !lifted}
-                      hinted={hintIds.includes(p.id) && phase === "playing"}
+                      hinted={hintIds.includes(p.id) && phase === "playing" && onSolutionSpot(p)}
                       onDown={(e, i) => onPieceDown(e, p, index, i)}
                     />
                   </div>
@@ -1165,64 +1201,81 @@ function SnugDay({
           )}
         </div>
 
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 20, alignItems: "center" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: compact ? 6 : 8, marginTop: 20, alignItems: "center" }}>
           {phase === "playing" ? (
-            <>
-              <Btn small={compact} disabled={undoCount === 0 || paused} onClick={undo}>
-                Undo
-              </Btn>
-              <Btn small={compact} label="Turn back" disabled={!selected || paused} onClick={() => selected && transformPiece(selected, rotateCCW, anchorFor(selected))}>
-                <TurnIcon back />
-              </Btn>
-              <Btn small={compact} label="Turn" disabled={!selected || paused} onClick={() => selected && transformPiece(selected, rotateCW, anchorFor(selected))}>
-                <TurnIcon />
-              </Btn>
-              <Btn
-                small={compact}
-                disabled={paused || !pieces.some((p) => p.at && !fixed.includes(p.id))}
-                onClick={() => {
-                  setCarry(null);
-                  commit(pieces.map((p) => (fixed.includes(p.id) ? p : { ...p, at: null, loose: false })));
-                }}
-              >
-                {compact ? "Empty" : "Empty the quilt"}
-              </Btn>
-              <span style={{ flex: 1 }} />
-              {canPull && (
-                <Btn small={compact} onClick={pullSpare}>
-                  {compact ? "Spare" : "Pull a spare"}
+            confirming && compact ? (
+              // Phones show only the question while it is asked, so it fits on one line.
+              <>
+                <span style={{ fontSize: 14, flex: 1 }}>Tie it off with {plural(gaps, "hole")}?</span>
+                <Btn small tight onClick={() => setConfirming(false)}>
+                  Keep going
                 </Btn>
-              )}
-              {canHint && (
-                <Btn small={compact} onClick={applyHint}>
-                  {hintIds.length === 0 ? (compact ? "Hint" : "Use a hint") : compact ? "Hint 2" : "Use a second hint"}
-                </Btn>
-              )}
-              {(isReplay || isArchive) && (
-                <span style={{ fontSize: 13, opacity: 0.7 }}>{isArchive ? "Past quilt, not scored" : "Replay, not scored"}</span>
-              )}
-              {confirming ? (
-                <>
-                  <span style={{ fontSize: 14 }}>Tie it off with {plural(gaps, "hole")}?</span>
-                  <Btn small={compact} onClick={() => setConfirming(false)}>Keep going</Btn>
-                  <Btn small={compact} primary disabled={paused} onClick={finish}>
-                    Tie it off
-                  </Btn>
-                </>
-              ) : (
-                <Btn
-                  small={compact}
-                  primary
-                  disabled={covered === 0 || paused}
-                  onClick={() => {
-                    setCarry(null);
-                    setConfirming(true);
-                  }}
-                >
+                <Btn small tight primary disabled={paused} onClick={finish}>
                   Tie it off
                 </Btn>
-              )}
-            </>
+              </>
+            ) : (
+              <>
+                <Btn small={compact} tight={compact} label={compact ? "Undo" : undefined} disabled={undoCount === 0 || paused} onClick={undo}>
+                  {compact ? <UndoIcon /> : "Undo"}
+                </Btn>
+                <Btn small={compact} tight={compact} label="Turn back" disabled={!selected || paused} onClick={() => selected && transformPiece(selected, rotateCCW, anchorFor(selected))}>
+                  <TurnIcon back />
+                </Btn>
+                <Btn small={compact} tight={compact} label="Turn" disabled={!selected || paused} onClick={() => selected && transformPiece(selected, rotateCW, anchorFor(selected))}>
+                  <TurnIcon />
+                </Btn>
+                <Btn
+                  small={compact}
+                  tight={compact}
+                  disabled={paused || !pieces.some((p) => p.at && !keepOnEmpty(p))}
+                  onClick={() => {
+                    setCarry(null);
+                    commit(pieces.map((p) => (keepOnEmpty(p) ? p : { ...p, at: null, loose: false })));
+                  }}
+                >
+                  {compact ? "Empty" : "Empty the quilt"}
+                </Btn>
+                <span style={{ flex: 1 }} />
+                {/* Phones offer one help at a time, the free spare first, so the row stays on one line. */}
+                {canMarkSpare && (
+                  <Btn small={compact} tight={compact} onClick={markSpare}>
+                    {compact ? "Spare" : "Mark a spare"}
+                  </Btn>
+                )}
+                {canHint && !(compact && canMarkSpare) && (
+                  <Btn small={compact} tight={compact} onClick={applyHint}>
+                    {hintIds.length === 0 ? (compact ? "Hint" : "Use a hint") : compact ? "Hint 2" : "Use a second hint"}
+                  </Btn>
+                )}
+                {/* On phones the result card says a past quilt or replay is not scored. */}
+                {(isReplay || isArchive) && !compact && (
+                  <span style={{ fontSize: 13, opacity: 0.7 }}>{isArchive ? "Past quilt, not scored" : "Replay, not scored"}</span>
+                )}
+                {confirming ? (
+                  <>
+                    <span style={{ fontSize: 14 }}>Tie it off with {plural(gaps, "hole")}?</span>
+                    <Btn small={compact} onClick={() => setConfirming(false)}>Keep going</Btn>
+                    <Btn small={compact} primary disabled={paused} onClick={finish}>
+                      Tie it off
+                    </Btn>
+                  </>
+                ) : (
+                  <Btn
+                    small={compact}
+                    tight={compact}
+                    primary
+                    disabled={covered === 0 || paused}
+                    onClick={() => {
+                      setCarry(null);
+                      setConfirming(true);
+                    }}
+                  >
+                    Tie it off
+                  </Btn>
+                )}
+              </>
+            )
           ) : (
             <>
               {!compact && <span style={{ fontSize: 14, opacity: 0.8 }}>{revealing ? "Showing one perfect fill." : "Showing your quilt."}</span>}
@@ -1257,6 +1310,15 @@ function SnugDay({
 }
 
 /** A circular arrow for the turn buttons; `back` mirrors it to turn the other way. */
+function UndoIcon() {
+  return (
+    <svg width={16} height={16} viewBox="0 0 16 16" aria-hidden style={{ display: "block" }}>
+      <path d="M5.5 2.8L2.3 6L5.5 9.2" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M2.8 6H10a3.6 3.6 0 0 1 0 7.2H7" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function TurnIcon({ back = false }: { back?: boolean }) {
   return (
     <svg width={16} height={16} viewBox="0 0 16 16" aria-hidden style={{ display: "block", transform: back ? "scaleX(-1)" : undefined }}>

@@ -102,7 +102,7 @@ export interface Progress {
   started: boolean;
   /** The pieces the hints placed, so a reload cannot earn extra hints. */
   hintIds?: string[];
-  /** Spares pulled out of the basket, which stay out after a reload. */
+  /** Spares marked as left over in the intended fill, which stay marked after a reload. */
   pulledIds?: string[];
   /** Saved by games from before the second hint. */
   hintId?: string | null;
