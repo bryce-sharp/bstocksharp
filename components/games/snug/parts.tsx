@@ -100,7 +100,7 @@ export function PatchSvg({
   cell: number;
   interactive: boolean;
   loose?: boolean;
-  /** The patch the hint placed: stitched in gold and fixed in place. */
+  /** A hinted patch still in the spot the hint gave it: stitched in gold. */
   hinted?: boolean;
   onDown: (e: ReactPointerEvent, cellIndex: number) => void;
 }) {
@@ -127,11 +127,11 @@ export function PatchSvg({
         </clipPath>
       </defs>
       <path d={path} fill={`url(#snug-knit-${piece.color})`} />
+      {/* The edge stays inside the patch's own squares, so neighbors meet at a clean seam. */}
       <g clipPath={`url(#${clip})`}>
         {loose && <path d={path} fill={RED_THREAD} opacity={0.3} />}
         <path d={path} fill="none" stroke={yarn.dark} strokeWidth={2.2} />
       </g>
-      <path d={path} fill="none" stroke={yarn.dark} strokeWidth={0.8} strokeLinejoin="round" />
       <Stitching paths={stitches} width={0.88} color={loose ? RED_THREAD : hinted ? GOLD_THREAD : THREAD} />
       {piece.cells.map(([x, y], i) => (
         <rect
@@ -141,7 +141,7 @@ export function PatchSvg({
           width={U}
           height={U}
           fill="transparent"
-          style={{ pointerEvents: interactive ? "all" : "none", cursor: hinted ? "default" : "grab", touchAction: "none" }}
+          style={{ pointerEvents: interactive ? "all" : "none", cursor: "grab", touchAction: "none" }}
           onPointerDown={(e) => onDown(e, i)}
           onContextMenu={(e) => e.preventDefault()}
         />
@@ -175,6 +175,7 @@ export function Btn({
   primary,
   disabled,
   small,
+  tight,
   label,
 }: {
   children: ReactNode;
@@ -182,6 +183,8 @@ export function Btn({
   primary?: boolean;
   disabled?: boolean;
   small?: boolean;
+  /** Less side padding, for rows that must fit a phone's width. */
+  tight?: boolean;
   /** Accessible name and tooltip, for buttons that show only an icon. */
   label?: string;
 }) {
@@ -197,7 +200,7 @@ export function Btn({
         fontFamily: FONT,
         fontSize: small ? 14 : 15,
         fontWeight: 500,
-        padding: small ? "8px 13px" : "9px 18px",
+        padding: small ? (tight ? "8px 10px" : "8px 13px") : "9px 18px",
         borderRadius: 999,
         border: "none",
         cursor: disabled ? "default" : "pointer",
@@ -640,9 +643,7 @@ export function HowToPlay({ onClose, touch, spares }: { onClose: () => void; tou
         {section("Fill the quilt", "Every square of today's quilt can be filled exactly with patches from the basket.")}
         {section(
           "Watch for spares",
-          spares === 1
-            ? "1 patch in the basket is a spare that does not belong anywhere. Part of the puzzle is working out which."
-            : `${spares} patches in the basket are spares that do not belong anywhere. Part of the puzzle is working out which.`,
+          `You will not need every patch: ${spares === 1 ? "1 is a spare" : `${spares} are spares`} left over in the intended fill. Working out which is part of the puzzle, but any fill with no holes is perfect, even one that uses a spare.`,
         )}
         {section(
           "Move and turn",
@@ -658,7 +659,7 @@ export function HowToPlay({ onClose, touch, spares }: { onClose: () => void; tou
         {!touch &&
           section("Keyboard", "Press Tab to pick a patch, move it with the arrow keys, press Enter to stitch it down, and Esc to put it back.")}
         {section("Scoring", "Fewer holes is better, and time breaks ties. The clock starts with your first patch. A perfect fill finishes on its own; otherwise press Tie it off.")}
-        {section("Stuck?", "After 3 minutes you can pull a spare out of the basket for free. After 5 minutes you can use a hint, and after 10 minutes a second one. Each stitches a patch into its right spot in gold thread, and your result notes how many you used.")}
+        {section("Stuck?", "After 3 minutes you can mark a spare for free: it turns grey, and you can still use it. After 5 minutes you can use a hint, and after 10 minutes a second one. Each stitches a patch into its spot in the intended fill in gold thread; you can still move it, and your result notes how many hints you used.")}
         {section(
           "One quilt a day",
           "Your first finish each day is your recorded result, and your best run on every day is kept too. Replays and past quilts are not scored. Tap the date to open the calendar and jump to any day. A new quilt arrives at midnight: gentle on Monday, trickier through the week, toughest on Sunday.",

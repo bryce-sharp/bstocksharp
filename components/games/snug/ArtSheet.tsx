@@ -213,7 +213,6 @@ function Placed({ piece }: { piece: PieceState }) {
         top: (PAD + piece.at!.y) * BOARD_CELL,
         width: w * BOARD_CELL,
         height: h * BOARD_CELL,
-        filter: "drop-shadow(0 2px 2px rgba(40,20,10,.35))",
       }}
     >
       <PatchSvg piece={piece} cell={BOARD_CELL} interactive={false} onDown={() => {}} />
