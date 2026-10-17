@@ -956,10 +956,11 @@ function SnugDay({
   }, [canNativeShare, recorded, puzzle, number, dateKey, resultText, shareUrl, shareText]);
   const copyShare = () => {
     if (canNativeShare) {
-      // The link stays inside the text, never a separate url: given one, many iOS targets (Copy, most chat apps) keep just the link.
+      // The picture already shows the result, so only the link goes with it; without a picture the whole text goes.
+      // The link is sent as text, never a separate url: given one, many iOS targets (Copy, most chat apps) keep just the link.
       const files = sharePicture ? [sharePicture] : [];
-      const withPicture = files.length > 0 && typeof navigator.canShare === "function" && navigator.canShare({ files, text: shareText });
-      navigator.share(withPicture ? { files, text: shareText } : { text: shareText }).catch(() => {});
+      const withPicture = files.length > 0 && typeof navigator.canShare === "function" && navigator.canShare({ files, text: shareUrl });
+      navigator.share(withPicture ? { files, text: shareUrl } : { text: shareText }).catch(() => {});
       return;
     }
     navigator.clipboard?.writeText(shareText).then(() => setCopied(true), () => setCopied(false));
