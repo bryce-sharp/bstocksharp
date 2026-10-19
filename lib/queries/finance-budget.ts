@@ -91,21 +91,23 @@ export async function getBudgetMonthForGroup(
       ),
     );
 
+  // Keyed by the bill's series, so a new price version still sees the payments
+  // made under the old one.
   const priorPaid = await db
     .select({
-      recurringExpenseId: transactions.recurringExpenseId,
+      series: sql<number>`coalesce(${recurringExpenses.seriesId}, ${recurringExpenses.id})`,
       postedOn: transactions.postedOn,
     })
     .from(transactions)
+    .innerJoin(recurringExpenses, eq(recurringExpenses.id, transactions.recurringExpenseId))
     .where(
       and(eq(transactions.groupId, groupId), lt(transactions.postedOn, start)),
     )
     .orderBy(desc(transactions.postedOn));
   const lastPaidBy = new Map<number, string>();
   for (const p of priorPaid) {
-    if (p.recurringExpenseId != null && !lastPaidBy.has(p.recurringExpenseId)) {
-      lastPaidBy.set(p.recurringExpenseId, p.postedOn);
-    }
+    const series = Number(p.series);
+    if (!lastPaidBy.has(series)) lastPaidBy.set(series, p.postedOn);
   }
   const viewedMonthNum = Number(month.slice(5, 7));
 
@@ -121,7 +123,7 @@ export async function getBudgetMonthForGroup(
       dueThisMonth:
         b.paymentsPerYear === 12 ||
         (b.dueMonths?.includes(viewedMonthNum) ?? false),
-      lastActualOn: lastPaidBy.get(b.id) ?? null,
+      lastActualOn: lastPaidBy.get(b.seriesId ?? b.id) ?? null,
       startDate: b.startDate,
     };
   });

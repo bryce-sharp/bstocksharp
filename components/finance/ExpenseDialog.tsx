@@ -20,6 +20,8 @@ import Checkbox from "@mui/material/Checkbox";
 import Divider from "@mui/material/Divider";
 import Typography from "@mui/material/Typography";
 import Autocomplete, { createFilterOptions } from "@mui/material/Autocomplete";
+import Tabs from "@mui/material/Tabs";
+import Tab from "@mui/material/Tab";
 import SubmitButton from "@/components/shared/SubmitButton";
 import NumberField from "@/components/shared/NumberField";
 import MonthYearField from "@/components/shared/MonthYearField";
@@ -30,6 +32,7 @@ import {
   endExpenseAction,
   deleteExpenseAction,
 } from "@/app/actions/finance-atlas";
+import BillHistory from "./BillHistory";
 
 export type ExpenseValues = {
   id: number;
@@ -83,11 +86,12 @@ const STARTER_CATEGORIES = [
   "Financial Commitment",
 ];
 
-// Add or edit one recurring bill. amount is the REAL per-occurrence price at
-// its cadence (WoW = $77.94 every 6 months, not the divided $12.99) — the
-// monthly figure is derived. Editing offers the effective-dating flavors +
-// the danger zone (end vs delete). merchantPatterns feed the future budget
-// tab's SMS auto-categorization.
+// Add or open one recurring bill. An existing bill opens on its History tab
+// (price over time, and the offer to update a changed price), with Edit beside
+// it. amount is the REAL per-occurrence price at its cadence (WoW = $77.94
+// every 6 months, not the divided $12.99) — the monthly figure is derived.
+// Editing offers the effective-dating flavors + the danger zone (end vs
+// delete). merchantPatterns feed the budget's auto-categorization.
 export default function ExpenseDialog({
   open,
   onClose,
@@ -96,6 +100,7 @@ export default function ExpenseDialog({
   accounts,
   yearOptions,
   defaultMonth,
+  canEdit = true,
 }: {
   open: boolean;
   onClose: () => void;
@@ -104,9 +109,13 @@ export default function ExpenseDialog({
   accounts: PayAccount[];
   yearOptions: number[];
   defaultMonth: string;
+  /** False on a past month: the bill opens on its history alone. */
+  canEdit?: boolean;
 }) {
   // Phones get the whole screen: room for the fields and the keyboard.
   const fullScreen = useMediaQuery(useTheme().breakpoints.down("sm"));
+  const [tab, setTab] = React.useState<"history" | "edit">(expense ? "history" : "edit");
+  const showHistory = expense !== null && (tab === "history" || !canEdit);
   const [flavor, setFlavor] = React.useState<"fix" | "asof">("fix");
   const [startMonth, setStartMonth] = React.useState(defaultMonth);
   const [category, setCategory] = React.useState<string>(
@@ -152,285 +161,304 @@ export default function ExpenseDialog({
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" fullScreen={fullScreen}>
-      <DialogTitle>
-        {expense ? `Edit ${expense.name}` : "Add a recurring expense"}
+      <DialogTitle sx={{ pb: expense && canEdit ? 0 : undefined }}>
+        {expense ? expense.name : "Add a recurring expense"}
       </DialogTitle>
-      <form action={handle}>
-        <DialogContent sx={{ pt: 1 }}>
-          <Stack spacing={2.5}>
-            {error ? <Alert severity="error">{error}</Alert> : null}
-            {expense ? (
-              <RadioGroup
-                value={flavor}
-                onChange={(e) => setFlavor(e.target.value as "fix" | "asof")}
-              >
-                <FormControlLabel
-                  value="fix"
-                  control={<Radio size="small" />}
-                  label="Fix in place (typo — recalculates everywhere)"
+      {expense && canEdit ? (
+        <Tabs value={tab} onChange={(_e, v: "history" | "edit") => setTab(v)} sx={{ px: 3, borderBottom: 1, borderColor: "divider" }}>
+          <Tab value="history" label="History" />
+          <Tab value="edit" label="Edit" />
+        </Tabs>
+      ) : null}
+      {showHistory ? (
+        <>
+          <DialogContent sx={{ pt: 2.5 }}>
+            <BillHistory billId={expense.id} canEdit={canEdit} onApplied={onClose} />
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={onClose} color="inherit">
+              Close
+            </Button>
+          </DialogActions>
+        </>
+      ) : (
+        <form action={handle}>
+          <DialogContent sx={{ pt: 1 }}>
+            <Stack spacing={2.5}>
+              {error ? <Alert severity="error">{error}</Alert> : null}
+              {expense ? (
+                <RadioGroup
+                  value={flavor}
+                  onChange={(e) => setFlavor(e.target.value as "fix" | "asof")}
+                >
+                  <FormControlLabel
+                    value="fix"
+                    control={<Radio size="small" />}
+                    label="Fix in place (typo — recalculates everywhere)"
+                  />
+                  <FormControlLabel
+                    value="asof"
+                    control={<Radio size="small" />}
+                    label="Price changed as of a month (history keeps the old amount)"
+                  />
+                </RadioGroup>
+              ) : null}
+              {!expense || flavor === "asof" ? (
+                <MonthYearField
+                  name="startMonth"
+                  value={startMonth}
+                  onChange={setStartMonth}
+                  years={yearOptions}
+                  monthLabel={expense ? "Effective month" : "Starting month"}
+                  yearLabel="Year"
                 />
-                <FormControlLabel
-                  value="asof"
-                  control={<Radio size="small" />}
-                  label="Price changed as of a month (history keeps the old amount)"
-                />
-              </RadioGroup>
-            ) : null}
-            {!expense || flavor === "asof" ? (
-              <MonthYearField
-                name="startMonth"
-                value={startMonth}
-                onChange={setStartMonth}
-                years={yearOptions}
-                monthLabel={expense ? "Effective month" : "Starting month"}
-                yearLabel="Year"
-              />
-            ) : null}
+              ) : null}
 
-            <Box
-              sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", sm: "2fr 1fr" } }}
-            >
-              <TextField
-                name="name"
-                label="Name"
-                required
-                autoFocus={!expense}
-                defaultValue={expense?.name ?? ""}
-                placeholder="e.g. Netflix, Electric, Rent"
-              />
-              <TextField
-                name="necessity"
-                label="Necessity"
-                select
-                defaultValue={expense?.necessity ?? "essential"}
+              <Box
+                sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", sm: "2fr 1fr" } }}
               >
-                <MenuItem value="essential">Essential</MenuItem>
-                <MenuItem value="lifestyle">Lifestyle</MenuItem>
-                <MenuItem value="commitment">Commitment</MenuItem>
-              </TextField>
-            </Box>
+                <TextField
+                  name="name"
+                  label="Name"
+                  required
+                  autoFocus={!expense}
+                  defaultValue={expense?.name ?? ""}
+                  placeholder="e.g. Netflix, Electric, Rent"
+                />
+                <TextField
+                  name="necessity"
+                  label="Necessity"
+                  select
+                  defaultValue={expense?.necessity ?? "essential"}
+                >
+                  <MenuItem value="essential">Essential</MenuItem>
+                  <MenuItem value="lifestyle">Lifestyle</MenuItem>
+                  <MenuItem value="commitment">Commitment</MenuItem>
+                </TextField>
+              </Box>
 
-            <Box
-              sx={{ display: "grid", gap: 2, gridTemplateColumns: "1fr 1fr" }}
-            >
+              <Box
+                sx={{ display: "grid", gap: 2, gridTemplateColumns: "1fr 1fr" }}
+              >
+                <Autocomplete
+                  freeSolo
+                  selectOnFocus
+                  clearOnBlur
+                  handleHomeEndKeys
+                  options={options}
+                  value={category || null}
+                  onChange={(_, v) => {
+                    if (typeof v !== "string" || !v) {
+                      setCategory("");
+                      return;
+                    }
+                    const added = ADD_RE.exec(v)?.[1] ?? v;
+                    // Reuse an existing category's casing when it matches.
+                    const existing = options.find(
+                      (o) => o.toLowerCase() === added.toLowerCase(),
+                    );
+                    setCategory(existing ?? added);
+                  }}
+                  filterOptions={(opts, params) => {
+                    const filtered = categoryFilter(opts, params);
+                    const input = params.inputValue.trim();
+                    if (
+                      input &&
+                      !opts.some((o) => o.toLowerCase() === input.toLowerCase())
+                    ) {
+                      filtered.push(`Add "${input}"`);
+                    }
+                    return filtered;
+                  }}
+                  getOptionLabel={(o) => ADD_RE.exec(o)?.[1] ?? o}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Category"
+                      placeholder="Subscriptions, Utilities…"
+                    />
+                  )}
+                />
+                <TextField
+                  name="paidFromAccountId"
+                  label="Paid from"
+                  select
+                  defaultValue={expense?.paidFromAccountId ?? ""}
+                >
+                  <MenuItem value="">
+                    <em>Unassigned</em>
+                  </MenuItem>
+                  {accounts.map((a) => (
+                    <MenuItem key={a.id} value={a.id}>
+                      {a.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Box>
+              <input type="hidden" name="category" value={category} readOnly />
+
+              <Box
+                sx={{
+                  display: "grid",
+                  gap: 2,
+                  gridTemplateColumns: { xs: "1fr 1fr", sm: "1fr 1fr 1fr" },
+                }}
+              >
+                <NumberField
+                  name="amount"
+                  label="Amount per payment"
+                  prefix="$"
+                  decimalScale={2}
+                  defaultValue={expense?.amount ?? null}
+                />
+                <NumberField
+                  name="paymentsPerYear"
+                  label="Payments / year"
+                  defaultValue={expense?.paymentsPerYear ?? 12}
+                />
+                <TextField
+                  name="dueDay"
+                  label="Due"
+                  defaultValue={expense?.dueDay ?? ""}
+                  placeholder="15th, EOM, ???"
+                />
+              </Box>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ mt: -1 }}
+              >
+                The real price at its real cadence — 12/yr = monthly, 2 = every
+                six months, 1 = yearly. The monthly figure is derived.
+              </Typography>
+
               <Autocomplete
-                freeSolo
-                selectOnFocus
-                clearOnBlur
-                handleHomeEndKeys
-                options={options}
-                value={category || null}
-                onChange={(_, v) => {
-                  if (typeof v !== "string" || !v) {
-                    setCategory("");
-                    return;
-                  }
-                  const added = ADD_RE.exec(v)?.[1] ?? v;
-                  // Reuse an existing category's casing when it matches.
-                  const existing = options.find(
-                    (o) => o.toLowerCase() === added.toLowerCase(),
-                  );
-                  setCategory(existing ?? added);
-                }}
-                filterOptions={(opts, params) => {
-                  const filtered = categoryFilter(opts, params);
-                  const input = params.inputValue.trim();
-                  if (
-                    input &&
-                    !opts.some((o) => o.toLowerCase() === input.toLowerCase())
-                  ) {
-                    filtered.push(`Add "${input}"`);
-                  }
-                  return filtered;
-                }}
-                getOptionLabel={(o) => ADD_RE.exec(o)?.[1] ?? o}
+                multiple
+                options={MONTH_NAMES.map((_, i) => i + 1)}
+                getOptionLabel={(m) => MONTH_NAMES[(m as number) - 1]}
+                value={dueMonths}
+                onChange={(_, v) =>
+                  setDueMonths((v as number[]).sort((a, b) => a - b))
+                }
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label="Category"
-                    placeholder="Subscriptions, Utilities…"
+                    label="Due months (optional)"
+                    placeholder="For uneven cadences: Jan, Apr…"
                   />
                 )}
               />
+              <input
+                type="hidden"
+                name="dueMonths"
+                value={JSON.stringify(dueMonths)}
+                readOnly
+              />
+
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    name="isEstimate"
+                    defaultChecked={expense?.isEstimate ?? false}
+                  />
+                }
+                label={
+                  <>
+                    Amount is an estimate
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      display="block"
+                    >
+                      Label for variable bills (electric, water).
+                    </Typography>
+                  </>
+                }
+              />
+
               <TextField
-                name="paidFromAccountId"
-                label="Paid from"
-                select
-                defaultValue={expense?.paidFromAccountId ?? ""}
-              >
-                <MenuItem value="">
-                  <em>Unassigned</em>
-                </MenuItem>
-                {accounts.map((a) => (
-                  <MenuItem key={a.id} value={a.id}>
-                    {a.name}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Box>
-            <input type="hidden" name="category" value={category} readOnly />
-
-            <Box
-              sx={{
-                display: "grid",
-                gap: 2,
-                gridTemplateColumns: { xs: "1fr 1fr", sm: "1fr 1fr 1fr" },
-              }}
-            >
-              <NumberField
-                name="amount"
-                label="Amount per payment"
-                prefix="$"
-                decimalScale={2}
-                defaultValue={expense?.amount ?? null}
-              />
-              <NumberField
-                name="paymentsPerYear"
-                label="Payments / year"
-                defaultValue={expense?.paymentsPerYear ?? 12}
+                name="merchantPatterns"
+                label="Merchant matches (optional, one per line)"
+                fullWidth
+                multiline
+                minRows={1}
+                defaultValue={expense?.merchantPatterns.join("\n") ?? ""}
+                helperText="How this bill appears in card alerts — lets the Budget tab auto-file its transactions."
               />
               <TextField
-                name="dueDay"
-                label="Due"
-                defaultValue={expense?.dueDay ?? ""}
-                placeholder="15th, EOM, ???"
+                name="notes"
+                label="Notes (optional)"
+                fullWidth
+                multiline
+                minRows={1}
+                defaultValue={expense?.notes ?? ""}
               />
-            </Box>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ mt: -1 }}
-            >
-              The real price at its real cadence — 12/yr = monthly, 2 = every
-              six months, 1 = yearly. The monthly figure is derived.
-            </Typography>
 
-            <Autocomplete
-              multiple
-              options={MONTH_NAMES.map((_, i) => i + 1)}
-              getOptionLabel={(m) => MONTH_NAMES[(m as number) - 1]}
-              value={dueMonths}
-              onChange={(_, v) =>
-                setDueMonths((v as number[]).sort((a, b) => a - b))
-              }
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Due months (optional)"
-                  placeholder="For uneven cadences: Jan, Apr…"
-                />
-              )}
-            />
-            <input
-              type="hidden"
-              name="dueMonths"
-              value={JSON.stringify(dueMonths)}
-              readOnly
-            />
-
-            <FormControlLabel
-              control={
-                <Checkbox
-                  name="isEstimate"
-                  defaultChecked={expense?.isEstimate ?? false}
-                />
-              }
-              label={
+              {expense ? (
                 <>
-                  Amount is an estimate
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    display="block"
+                  <Divider />
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    alignItems="center"
+                    flexWrap="wrap"
+                    useFlexGap
                   >
-                    Label for variable bills (electric, water).
-                  </Typography>
+                    <Typography
+                      variant="overline"
+                      sx={{ color: "error.main", mr: 1 }}
+                    >
+                      Danger zone
+                    </Typography>
+                    <Button
+                      size="small"
+                      color="inherit"
+                      disabled={pending}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `End ${expense.name} as of today (canceled it)? Past months keep it.`,
+                          )
+                        )
+                          runDanger(endExpenseAction);
+                      }}
+                    >
+                      End as of today
+                    </Button>
+                    <Button
+                      size="small"
+                      color="error"
+                      disabled={pending}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `Delete ${expense.name} entirely? It disappears from every month it ever touched.`,
+                          )
+                        )
+                          runDanger(deleteExpenseAction);
+                      }}
+                    >
+                      Delete forever
+                    </Button>
+                  </Stack>
                 </>
-              }
-            />
-
-            <TextField
-              name="merchantPatterns"
-              label="Merchant matches (optional, one per line)"
-              fullWidth
-              multiline
-              minRows={1}
-              defaultValue={expense?.merchantPatterns.join("\n") ?? ""}
-              helperText="How this bill appears in card alerts — lets the Budget tab auto-file its transactions."
-            />
-            <TextField
-              name="notes"
-              label="Notes (optional)"
-              fullWidth
-              multiline
-              minRows={1}
-              defaultValue={expense?.notes ?? ""}
-            />
-
-            {expense ? (
-              <>
-                <Divider />
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  alignItems="center"
-                  flexWrap="wrap"
-                  useFlexGap
-                >
-                  <Typography
-                    variant="overline"
-                    sx={{ color: "error.main", mr: 1 }}
-                  >
-                    Danger zone
-                  </Typography>
-                  <Button
-                    size="small"
-                    color="inherit"
-                    disabled={pending}
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          `End ${expense.name} as of today (canceled it)? Past months keep it.`,
-                        )
-                      )
-                        runDanger(endExpenseAction);
-                    }}
-                  >
-                    End as of today
-                  </Button>
-                  <Button
-                    size="small"
-                    color="error"
-                    disabled={pending}
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          `Delete ${expense.name} entirely? It disappears from every month it ever touched.`,
-                        )
-                      )
-                        runDanger(deleteExpenseAction);
-                    }}
-                  >
-                    Delete forever
-                  </Button>
-                </Stack>
-              </>
-            ) : null}
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={onClose} color="inherit">
-            Cancel
-          </Button>
-          <SubmitButton
-            variant="contained"
-            pendingLabel="Saving…"
-            disabled={pending}
-          >
-            Save
-          </SubmitButton>
-        </DialogActions>
-      </form>
+              ) : null}
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={onClose} color="inherit">
+              Cancel
+            </Button>
+            <SubmitButton
+              variant="contained"
+              pendingLabel="Saving…"
+              disabled={pending}
+            >
+              Save
+            </SubmitButton>
+          </DialogActions>
+        </form>
+      )}
     </Dialog>
   );
 }
