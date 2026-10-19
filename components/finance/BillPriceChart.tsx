@@ -61,7 +61,8 @@ export default function BillPriceChart({ months }: { months: PriceMonth[] }) {
         },
       ]}
       yAxis={[{ valueFormatter: (v: number) => formatMoneyCompact(v), width: 56 }]}
-      margin={{ top: 10, right: 12, bottom: 4, left: 4 }}
+      // Room on the right for half of the last month's label, centered on the edge point.
+      margin={{ top: 10, right: 24, bottom: 4, left: 4 }}
       slotProps={{ tooltip: { trigger: "axis" } }}
       sx={{
         [`& .${lineClasses.line}[data-series="atlas"]`]: { strokeDasharray: "5 4", strokeWidth: 1.5 },
