@@ -1,17 +1,21 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, gte, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   compensationPlans,
   incomeDeductions,
   recurringExpenses,
   financialAccounts,
+  transactions,
+  type RecurringExpense,
 } from "@/lib/db/schema";
 import { requireEditor, requireEditorFor } from "@/lib/auth";
 import { requireGroupId } from "@/lib/session";
 import { profileInGroup } from "@/lib/queries/scope";
+import { getGroupTimezone } from "@/lib/queries/group";
+import { getBillHistory, type BillHistoryView } from "@/lib/queries/finance-bills";
 import {
   normalizeMonth,
   parseMoney,
@@ -28,6 +32,7 @@ import {
 // harmless overlap (latest-starting wins) instead of a hole.
 
 const ATLAS = "/finance/atlas";
+const BUDGET = "/finance";
 
 /** The day before an ISO date (segment chaining: old ends where new begins). */
 function dayBefore(iso: string): string {
@@ -406,6 +411,34 @@ export async function updateExpenseAction(
   revalidatePath(ATLAS);
 }
 
+type ExpenseFields = Awaited<ReturnType<typeof parseExpense>>;
+
+/**
+ * A new version of a bill from a month: it joins the bill's series, the old
+ * version ends the day before, and payments already filed from that month on
+ * move to the new version so the budget counts them against it.
+ */
+async function startNewVersion(row: RecurringExpense, data: ExpenseFields, startDate: string): Promise<void> {
+  const [created] = await db
+    .insert(recurringExpenses)
+    .values({ ...data, groupId: row.groupId, startDate, seriesId: row.seriesId ?? row.id })
+    .returning({ id: recurringExpenses.id });
+  await db
+    .update(recurringExpenses)
+    .set({ endDate: row.startDate < startDate ? dayBefore(startDate) : row.startDate })
+    .where(eq(recurringExpenses.id, row.id));
+  await db
+    .update(transactions)
+    .set({ recurringExpenseId: created.id })
+    .where(
+      and(
+        eq(transactions.groupId, row.groupId),
+        eq(transactions.recurringExpenseId, row.id),
+        gte(transactions.postedOn, startDate),
+      ),
+    );
+}
+
 /** "Price changed as of month M": new segment; past months keep the old. */
 export async function replaceExpenseAction(
   id: number,
@@ -416,15 +449,68 @@ export async function replaceExpenseAction(
   const data = await parseExpense(formData);
   const startDate = normalizeMonth(formData.get("startMonth"));
   if (!startDate) throw new Error("Pick the month the change takes effect.");
-
-  await db
-    .insert(recurringExpenses)
-    .values({ ...data, groupId: row.groupId, startDate });
-  await db
-    .update(recurringExpenses)
-    .set({ endDate: row.startDate < startDate ? dayBefore(startDate) : row.startDate })
-    .where(eq(recurringExpenses.id, row.id));
+  await startNewVersion(row, data, startDate);
   revalidatePath(ATLAS);
+  revalidatePath(BUDGET);
+}
+
+/** A bill's price history (every version, every payment) for its History tab. */
+export async function getBillHistoryAction(id: number): Promise<BillHistoryView | { error: string }> {
+  const groupId = await requireGroupId();
+  const view = await getBillHistory(groupId, id, currentMonthISO(await getGroupTimezone(groupId)));
+  return view ?? { error: "That bill no longer exists." };
+}
+
+/**
+ * Apply a suggested price from the month it was paid: a new version from that
+ * month, or a corrected price when the current version starts that month.
+ */
+export async function acceptBillPriceAction(
+  id: number,
+  amount: number,
+  month: string,
+): Promise<{ ok: true } | { error: string }> {
+  await requireEditor();
+  const row = await scopedExpense(id);
+  const startDate = normalizeMonth(month);
+  if (row.endDate) return { error: "This bill has ended, so its price stays as it was." };
+  if (!startDate || !Number.isFinite(amount) || amount <= 0) return { error: "That price could not be applied." };
+  const price = amount.toFixed(2);
+  if (startDate <= row.startDate) {
+    await db.update(recurringExpenses).set({ amount: price, ignoredPrice: null }).where(eq(recurringExpenses.id, row.id));
+  } else {
+    await startNewVersion(
+      row,
+      {
+        name: row.name,
+        category: row.category,
+        necessity: row.necessity,
+        amount: price,
+        paymentsPerYear: row.paymentsPerYear,
+        dueMonths: row.dueMonths,
+        dueDay: row.dueDay,
+        paidFromAccountId: row.paidFromAccountId,
+        isEstimate: row.isEstimate,
+        merchantPatterns: row.merchantPatterns,
+        notes: row.notes,
+      },
+      startDate,
+    );
+  }
+  revalidatePath(ATLAS);
+  revalidatePath(BUDGET);
+  return { ok: true };
+}
+
+/** Keep the bill's price as it is; the suggestion stays quiet until the price moves again. */
+export async function ignoreBillPriceAction(id: number, amount: number): Promise<{ ok: true } | { error: string }> {
+  await requireEditor();
+  const row = await scopedExpense(id);
+  if (!Number.isFinite(amount) || amount <= 0) return { error: "That price could not be ignored." };
+  await db.update(recurringExpenses).set({ ignoredPrice: amount.toFixed(2) }).where(eq(recurringExpenses.id, row.id));
+  revalidatePath(ATLAS);
+  revalidatePath(BUDGET);
+  return { ok: true };
 }
 
 /** The bill ended in real life (canceled Netflix) — history intact. */

@@ -17,10 +17,11 @@ import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
-import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import AddIcon from "@mui/icons-material/Add";
 import LabelOutlinedIcon from "@mui/icons-material/LabelOutlined";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, formatMonth } from "@/lib/format";
+import type { PriceSuggestion } from "@/lib/finance/bill-history";
 import ExpenseDialog, {
   type ExpenseValues,
   type PayAccount,
@@ -113,9 +114,22 @@ function Tile({
   );
 }
 
+/** "New price?" beside a bill whose latest payment differs from its ATLAS price. */
+function NewPriceChip({ suggestion }: { suggestion: PriceSuggestion | undefined }) {
+  if (!suggestion) return null;
+  return (
+    <Tooltip
+      title={`Paid ${formatMoney(suggestion.amount)} in ${formatMonth(suggestion.month)}; ATLAS expects ${formatMoney(suggestion.expected)}`}
+    >
+      <Chip label="New price?" size="small" color="warning" variant="outlined" />
+    </Tooltip>
+  );
+}
+
 // The household's recurring-spend registry: summary tiles (fixed total, split
 // by paying account; discretion left; the Budget tab's envelope), a where-does-
-// it-go necessity breakdown, and the bills table grouped by category.
+// it-go necessity breakdown, and the bills table grouped by category. A bill
+// opens on its price history; editing is offered on the current month.
 export default function ExpensesSection({
   expenses,
   totals,
@@ -125,6 +139,8 @@ export default function ExpensesSection({
   editable,
   yearOptions,
   defaultMonth,
+  suggestions = {},
+  openBillId = null,
 }: {
   expenses: ExpenseValues[];
   totals: ExpenseTotals;
@@ -134,9 +150,13 @@ export default function ExpensesSection({
   editable: boolean;
   yearOptions: number[];
   defaultMonth: string;
+  /** Bills whose latest payment suggests a new price, by bill id. */
+  suggestions?: Record<number, PriceSuggestion>;
+  /** A bill to open on arrival (a link from the Budget's notice). */
+  openBillId?: number | null;
 }) {
   const [editing, setEditing] = React.useState<ExpenseValues | "new" | null>(
-    null,
+    () => expenses.find((e) => e.id === openBillId) ?? null,
   );
   const [categoriesOpen, setCategoriesOpen] = React.useState(false);
   // For "bills actually hitting this month" awareness on non-monthly rows.
@@ -334,6 +354,7 @@ export default function ExpensesSection({
                             {e.name}
                           </Typography>
                           {e.isEstimate ? <Chip label="estimate" size="small" variant="outlined" /> : null}
+                          <NewPriceChip suggestion={suggestions[e.id]} />
                         </Stack>
                         <Typography variant="caption" color="text.secondary" component="div" noWrap>
                           <Box component="span" sx={{ color: NECESSITY_TEXT[meta.color] }}>
@@ -363,14 +384,10 @@ export default function ExpensesSection({
                       </Box>
                     </>
                   );
-                  return editable ? (
-                    <ButtonBase key={e.id} onClick={() => setEditing(e)} aria-label={`Edit ${e.name}`} sx={phoneRowSx}>
+                  return (
+                    <ButtonBase key={e.id} onClick={() => setEditing(e)} aria-label={`Open ${e.name}`} sx={phoneRowSx}>
                       {row}
                     </ButtonBase>
-                  ) : (
-                    <Box key={e.id} sx={phoneRowSx}>
-                      {row}
-                    </Box>
                   );
                 })}
               </React.Fragment>
@@ -390,7 +407,7 @@ export default function ExpensesSection({
                   <TableCell align="right">Monthly</TableCell>
                   <TableCell>Paid from</TableCell>
                   <TableCell>Due</TableCell>
-                  {editable ? <TableCell align="right" /> : null}
+                  <TableCell align="right" />
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -403,7 +420,7 @@ export default function ExpensesSection({
                       <TableCell align="right" sx={{ fontWeight: 700 }}>
                         {formatMoney(categorySubtotal.get(cat) ?? 0)}
                       </TableCell>
-                      <TableCell colSpan={editable ? 3 : 2} />
+                      <TableCell colSpan={3} />
                     </TableRow>
                     {(byCategory.get(cat) ?? []).map((e) => {
                       const meta = NECESSITY_META[e.necessity] ?? {
@@ -411,7 +428,7 @@ export default function ExpensesSection({
                         color: "default" as const,
                       };
                       return (
-                        <TableRow key={e.id} hover>
+                        <TableRow key={e.id} hover onClick={() => setEditing(e)} sx={{ cursor: "pointer" }}>
                           <TableCell sx={{ pl: 3, whiteSpace: "nowrap" }}>
                             {e.name}
                             {e.isEstimate ? (
@@ -421,6 +438,11 @@ export default function ExpensesSection({
                                 variant="outlined"
                                 sx={{ ml: 1 }}
                               />
+                            ) : null}
+                            {suggestions[e.id] ? (
+                              <Box component="span" sx={{ ml: 1 }}>
+                                <NewPriceChip suggestion={suggestions[e.id]} />
+                              </Box>
                             ) : null}
                           </TableCell>
                           <TableCell>
@@ -468,19 +490,11 @@ export default function ExpensesSection({
                               (e.dueDay ?? "—")
                             )}
                           </TableCell>
-                          {editable ? (
-                            <TableCell align="right">
-                              <Tooltip title={`Edit ${e.name}`}>
-                                <IconButton
-                                  size="small"
-                                  onClick={() => setEditing(e)}
-                                  aria-label={`Edit ${e.name}`}
-                                >
-                                  <EditOutlinedIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                            </TableCell>
-                          ) : null}
+                          <TableCell align="right">
+                            <IconButton size="small" aria-label={`Open ${e.name}`}>
+                              <ChevronRightIcon fontSize="small" />
+                            </IconButton>
+                          </TableCell>
                         </TableRow>
                       );
                     })}
@@ -501,6 +515,7 @@ export default function ExpensesSection({
           accounts={accounts}
           yearOptions={yearOptions}
           defaultMonth={defaultMonth}
+          canEdit={editable}
         />
       ) : null}
 

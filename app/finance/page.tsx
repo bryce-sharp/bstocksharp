@@ -31,12 +31,13 @@ import {
 } from "@/lib/queries/finance-cashflow";
 import { listProfiles } from "@/lib/queries/profiles";
 import { listBankAlerts } from "@/lib/queries/finance-plaid";
+import { listPriceSuggestions } from "@/lib/queries/finance-bills";
 import { plaidConfigured } from "@/lib/plaid/client";
 import { staleBanks, syncBanks } from "@/lib/plaid/sync";
 import { currentMonthISO, lastDayOfMonth } from "@/lib/finance/parse";
 import { OUT_CATEGORIES, REIMBURSEMENT, isMoneyOut, isUnlinkedBillPayment } from "@/lib/finance/cashflow";
 import { getGroupTimezone } from "@/lib/queries/group";
-import { formatMonth } from "@/lib/format";
+import { formatMoney, formatMonth } from "@/lib/format";
 import AtlasMonthSwitcher from "@/components/finance/AtlasMonthSwitcher";
 import BudgetSummary from "@/components/finance/BudgetSummary";
 import BudgetInsights from "@/components/finance/BudgetInsights";
@@ -70,7 +71,7 @@ export default async function BudgetPage({
   const groupId = session.groupId;
   const [
     [view, txns, accounts, monthsWithData, bills, groupProfiles, recentMonths, trend, suggest, categories, editor],
-    [flow, allTrend, tagSpend, lanes, sources, incomeCategories, bankAlerts, stale],
+    [flow, allTrend, tagSpend, lanes, sources, incomeCategories, bankAlerts, stale, priceSuggestions],
   ] = await Promise.all([
     Promise.all([
       getBudgetMonth(month),
@@ -94,6 +95,7 @@ export default async function BudgetPage({
       listIncomeCategories(),
       plaidConfigured() ? listBankAlerts() : Promise.resolve([]),
       staleBanks(groupId),
+      month === currentMonth ? listPriceSuggestions(groupId, currentMonth) : Promise.resolve([]),
     ]),
   ]);
   // Bank data a few hours old (a webhook that never came): sync once this page
@@ -240,6 +242,27 @@ export default async function BudgetPage({
           {bankAlerts
             .map((b) => `${b.institutionName}: ${b.lastError ?? "The bank connection needs attention."}`)
             .join(" ")}
+        </Alert>
+      ) : null}
+
+      {editor && priceSuggestions.length > 0 ? (
+        <Alert
+          severity="info"
+          sx={{ mb: 3 }}
+          action={
+            <Button
+              component={Link}
+              href={priceSuggestions.length === 1 ? `/finance/atlas?bill=${priceSuggestions[0].billId}#spending` : "/finance/atlas#spending"}
+              color="inherit"
+              size="small"
+            >
+              Review
+            </Button>
+          }
+        >
+          {priceSuggestions.length === 1
+            ? `${priceSuggestions[0].name} was paid ${formatMoney(priceSuggestions[0].suggestion.amount)} in ${formatMonth(priceSuggestions[0].suggestion.month)}; ATLAS expects ${formatMoney(priceSuggestions[0].suggestion.expected)}.`
+            : `${priceSuggestions.length} bills were paid at a new price: ${priceSuggestions.map((s) => s.name).join(", ")}.`}
         </Alert>
       ) : null}
 

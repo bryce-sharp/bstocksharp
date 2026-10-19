@@ -7,6 +7,7 @@ import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
 import { isEditor } from "@/lib/auth";
 import { getAtlasView } from "@/lib/queries/finance-atlas";
+import { listPriceSuggestions } from "@/lib/queries/finance-bills";
 import { listFinancialAccounts } from "@/lib/queries/finance-networth";
 import { listProfiles } from "@/lib/queries/profiles";
 import { currentMonthISO } from "@/lib/finance/parse";
@@ -32,9 +33,9 @@ export const metadata = { title: "ATLAS" };
 export default async function AtlasPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ month?: string; bill?: string }>;
 }) {
-  const { month } = await searchParams;
+  const { month, bill } = await searchParams;
   const [view, profiles, allAccounts, editor] = await Promise.all([
     getAtlasView(month),
     listProfiles(),
@@ -43,7 +44,13 @@ export default async function AtlasPage({
   ]);
 
   const editable = editor && view.isCurrentMonth;
-  const currentMonth = currentMonthISO(await getGroupTimezone(await requireGroupId()));
+  const groupId = await requireGroupId();
+  const currentMonth = currentMonthISO(await getGroupTimezone(groupId));
+  // Bills whose latest payment differs from their price: offered on the current month only.
+  const suggestions = editable
+    ? Object.fromEntries((await listPriceSuggestions(groupId, currentMonth)).map((s) => [s.billId, s.suggestion]))
+    : {};
+  const openBillId = bill && /^\d+$/.test(bill) ? Number(bill) : null;
   const defaultMonth = currentMonth.slice(0, 7);
 
   const cy = Number(currentMonth.slice(0, 4));
@@ -265,6 +272,8 @@ export default async function AtlasPage({
           editable={editable}
           yearOptions={yearOptions}
           defaultMonth={defaultMonth}
+          suggestions={suggestions}
+          openBillId={openBillId}
         />
       </Box>
     </Container>

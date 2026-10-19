@@ -790,6 +790,11 @@ export const recurringExpenses = pgTable(
     notes: text("notes"),
     startDate: date("start_date").notNull(),
     endDate: date("end_date"),
+    // Versions of one bill ("price changed as of a month") share the id of the
+    // first version here; null = this row is its own first version.
+    seriesId: integer("series_id"),
+    // A price the household declined to apply; the price suggestion skips it.
+    ignoredPrice: numeric("ignored_price", { precision: 10, scale: 2 }),
     createdAt: createdAt(),
   },
   (t) => [index("idx_recurring_group").on(t.groupId, t.startDate)],
