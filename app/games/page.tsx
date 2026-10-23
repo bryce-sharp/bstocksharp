@@ -41,6 +41,25 @@ export default function GamesPage() {
             </CardActionArea>
           </Card>
         ))}
+        <Card variant="outlined" sx={{ borderStyle: "dashed" }}>
+          <Box
+            sx={{ aspectRatio: "1200 / 630", display: "grid", placeItems: "center", bgcolor: "action.hover" }}
+          >
+            <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: "0.2em" }}>
+              Coming soon
+            </Typography>
+          </Box>
+          <CardContent>
+            <Stack spacing={1}>
+              <Typography variant="h5" component="h2">
+                A new game
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                A new daily puzzle is in the works. Check back soon.
+              </Typography>
+            </Stack>
+          </CardContent>
+        </Card>
       </Box>
     </Container>
   );

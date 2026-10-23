@@ -1,0 +1,1460 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Return to Sender</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Courier+Prime:wght@400;700&family=Libre+Franklin:wght@400;500;600&display=swap">
+<style>
+  /* Layout: a dark sorting desk; a strip of game tabs, then one paper counter with the building station on the left and the submission log on the right. */
+  :root {
+    --desk: #222932;
+    --desk-glow: #2c3440;
+    --paper: #f3eee3;
+    --paper-2: #e6dfcf;
+    --envelope: #efe4cc;
+    --stamp-paper: #fbf8f1;
+    --house: #d8ccb2;
+    --kraft: #c9a274;
+    --kraft-edge: #9c774c;
+    --kraft-tape: #e3c79d;
+    --ink: #1d2638;
+    --muted: #5d6270;
+    --rule: #d2c8b4;
+    --dash: #b6aa92;
+    --postal: #2a4f9e;
+    --postal-soft: rgba(42, 79, 158, 0.16);
+    --approved: #1f6e57;
+    --approved-soft: rgba(31, 110, 87, 0.12);
+    --returned: #b5322a;
+    --returned-soft: rgba(181, 50, 42, 0.1);
+    --belt: #3a3f48;
+    --belt-slot: #4a505a;
+    --slot-line: rgba(233, 228, 216, 0.32);
+    --tape: rgba(255, 255, 255, 0.22);
+    --perf: rgba(243, 238, 227, 0.8);
+    --stamp-wash: rgba(243, 238, 227, 0.6);
+    --glass: #8fb3cf;
+    --on-dark: #ece7dc;
+    --on-dark-muted: #a8adb6;
+    --red: #c0412f;
+    --k1: #c4501f;
+    --k2: #2363a8;
+    --k3: #e3c23a;
+    --k4: #6cb5e0;
+    --on-color: #ffffff;
+    --display: "Oswald", "Arial Narrow", Impact, sans-serif;
+    --type: "Courier Prime", "Courier New", ui-monospace, monospace;
+    --body: "Libre Franklin", system-ui, -apple-system, "Segoe UI", sans-serif;
+    color-scheme: light;
+  }
+
+  [hidden] { display: none !important; }
+  body {
+    background: radial-gradient(ellipse 120% 60% at 50% 0%, var(--desk-glow), var(--desk) 70%) var(--desk);
+    color: var(--on-dark);
+    font: 15px/1.55 var(--body);
+    padding-block: 32px 56px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    min-height: 100%;
+  }
+  h1, h2, h3, p { margin: 0; }
+  .defs { position: absolute; width: 0; height: 0; }
+  .page { max-width: 1040px; margin: 0 auto; display: grid; gap: 22px; }
+
+  .top { display: grid; gap: 8px; }
+  .eyebrow { font: 700 12px/1.2 var(--type); letter-spacing: 0.12em; text-transform: uppercase; color: var(--on-dark-muted); }
+  .top h1 { font: 700 clamp(40px, 8vw, 72px)/0.95 var(--display); text-transform: uppercase; letter-spacing: 0.02em; color: var(--on-dark); text-wrap: balance; }
+  .lede { max-width: 66ch; color: var(--on-dark-muted); }
+
+  .games { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+  @media (max-width: 760px) { .games { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  @media (max-width: 420px) { .games { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .tab { display: grid; gap: 3px; justify-items: start; align-content: start; text-align: left; padding: 10px 10px 9px; border-radius: 6px 6px 3px 3px; border: 1px solid var(--rule); background: var(--paper-2); color: var(--ink); cursor: pointer; font: inherit; min-width: 0; }
+  .tab .b { font: 600 14px/1.2 var(--body); overflow-wrap: anywhere; }
+  .tab .s { font: 11px/1.2 var(--type); color: var(--muted); }
+  .tab[aria-pressed="true"] { background: var(--paper); border-color: var(--postal); box-shadow: inset 0 -4px 0 var(--postal); }
+  .tab.super .b { color: var(--returned); }
+  .tab:focus-visible { outline-color: var(--on-dark); }
+
+  .counter { background: var(--paper); color: var(--ink); border-radius: 6px; overflow: hidden; box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35); }
+  .airmail { height: 10px; background: repeating-linear-gradient(-45deg, var(--red) 0 14px, var(--paper) 14px 22px, var(--postal) 22px 36px, var(--paper) 36px 44px); }
+  .counter-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 340px); gap: 28px; padding: clamp(16px, 3vw, 28px); }
+  @media (max-width: 860px) { .counter-body { grid-template-columns: minmax(0, 1fr); } }
+  .desk-left, .desk-right { display: grid; gap: 16px; align-content: start; min-width: 0; }
+  .counter-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px; }
+  .head-text { display: grid; gap: 6px; max-width: 52ch; min-width: 0; }
+  .head-side { display: grid; gap: 8px; justify-items: end; }
+  .kicker { font: 700 12px/1.2 var(--type); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  .counter h2 { font: 700 34px/1 var(--display); text-transform: uppercase; letter-spacing: 0.02em; }
+  .small { font-size: 13px; line-height: 1.5; color: var(--muted); }
+  .board-msg { color: var(--returned); min-height: 1.2em; }
+  .tally { font: 13px/1.2 var(--type); color: var(--muted); }
+  .tally b { font: 700 22px/1 var(--type); color: var(--ink); font-variant-numeric: tabular-nums; margin-left: 4px; }
+  .seg { display: inline-flex; border: 1px solid var(--dash); border-radius: 5px; overflow: hidden; }
+  .seg button { font: 700 12px/1 var(--type); letter-spacing: 0.06em; text-transform: uppercase; padding: 9px 12px; background: transparent; color: var(--muted); border: 0; border-right: 1px solid var(--dash); cursor: pointer; }
+  .seg button:last-child { border-right: 0; }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+
+  .btn { font: 600 14px/1 var(--body); padding: 10px 14px; border-radius: 5px; border: 1px solid var(--dash); background: var(--paper); color: var(--ink); cursor: pointer; }
+  .btn:hover { border-color: var(--ink); }
+  .btn.primary { background: var(--postal); border-color: var(--postal); color: var(--on-color); }
+  .btn.ghost { background: transparent; color: var(--muted); }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  :focus-visible { outline: 2px solid var(--postal); outline-offset: 2px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  .stations { display: grid; gap: 22px; }
+  .station { display: grid; gap: 10px; }
+  .station-label { font: 700 12px/1.2 var(--type); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); display: none; }
+  .stations.multi .station-label { display: block; }
+  .stations.multi .station:not([hidden]) ~ .station:not([hidden]) { border-top: 1px dashed var(--rule); padding-top: 18px; }
+  .board-wrap { position: relative; width: 100%; max-width: 280px; }
+  .board-wrap.wide { max-width: 430px; }
+  .board-wrap.truck-wrap { max-width: 220px; }
+  .no-touch { touch-action: none; user-select: none; -webkit-user-select: none; }
+
+  /* Stamp sheet */
+  .sheet { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; aspect-ratio: 1; padding: 10px; background: var(--paper-2); border-radius: 3px; }
+  .sc { position: relative; border: 1.5px dashed var(--dash); border-radius: 2px; background: var(--paper); padding: 0; cursor: pointer; min-width: 0; min-height: 0; }
+  .sc.on { background: var(--postal); border: 1.5px solid var(--postal); }
+  .sc.on::after { content: ""; position: absolute; inset: 4px; border: 2px dotted var(--perf); border-radius: 1px; }
+
+  /* Parcel row */
+  .palette { display: flex; flex-wrap: wrap; gap: 6px; }
+  .palette button { display: inline-flex; align-items: center; gap: 6px; font: 600 13px/1 var(--body); padding: 7px 10px 7px 7px; border-radius: 5px; border: 1px solid var(--rule); background: var(--paper); color: var(--ink); cursor: pointer; }
+  .palette button[aria-pressed="true"] { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+  .swatch { width: 18px; height: 18px; border-radius: 3px; display: grid; place-items: center; font: 700 10px/1 var(--body); color: var(--on-color); border: 1.5px dashed var(--dash); }
+  .belt { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; padding: 10px; background: repeating-linear-gradient(90deg, var(--belt) 0 10px, var(--belt-slot) 10px 12px); border-radius: 5px; }
+  .slot { position: relative; aspect-ratio: 1; border: 1.5px dashed var(--slot-line); border-radius: 4px; background: transparent; cursor: pointer; padding: 0; display: grid; place-items: center; color: var(--on-color); font: 700 clamp(13px, 3vw, 18px)/1 var(--body); min-width: 0; }
+  .slot.c1, .slot.c2, .slot.c3, .slot.c4 { border: 0; }
+  .slot.c1::before, .slot.c2::before, .slot.c3::before, .slot.c4::before { content: ""; position: absolute; left: 0; right: 0; top: 40%; height: 18%; background: var(--tape); }
+  .c1 { background: var(--k1); } .c2 { background: var(--k2); } .c3 { background: var(--k3); color: var(--ink); } .c4 { background: var(--k4); color: var(--ink); }
+  .swatch.c1, .swatch.c2, .swatch.c3, .swatch.c4 { border: 0; }
+
+  /* Envelope */
+  .p0 { background: var(--k1); color: var(--on-color); } .p1 { background: var(--k2); color: var(--on-color); } .p2 { background: var(--k3); color: var(--ink); }
+  .tray { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 5px; max-width: 430px; }
+  @media (max-width: 480px) { .tray { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+  .tray button { padding: 3px; border-radius: 4px; border: 1px solid var(--rule); background: var(--paper); cursor: pointer; display: grid; min-width: 0; }
+  .tray button[aria-pressed="true"] { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+  .pstamp { position: relative; display: grid; aspect-ratio: 4 / 5; width: 100%; background: var(--stamp-paper); border: 2px dotted var(--dash); padding: 3px; box-sizing: border-box; }
+  .pstamp .art { display: grid; place-items: center; font: 700 15px/1 var(--body); border-radius: 1px; }
+  .spot .pstamp .art { font-size: 28px; }
+  .pstamp .v { position: absolute; right: 4px; bottom: 3px; font: 700 12px/1 var(--type); color: var(--ink); background: var(--stamp-paper); padding: 1px 2px; }
+  .flap { background-image: linear-gradient(to top right, transparent calc(50% - 1px), var(--rule) 50%, transparent calc(50% + 1px)), linear-gradient(to top left, transparent calc(50% - 1px), var(--rule) 50%, transparent calc(50% + 1px)); background-size: 50% 55%; background-position: left top, right top; background-repeat: no-repeat; }
+  .envelope { position: relative; aspect-ratio: 16 / 10; display: grid; grid-template-rows: auto 1fr; padding: 12px; border: 1px solid var(--rule); border-radius: 3px; background-color: var(--envelope); }
+  .spots { justify-self: end; display: grid; grid-template-columns: repeat(3, minmax(48px, 64px)); gap: 8px; }
+  .spot { aspect-ratio: 4 / 5; border: 1.5px dashed var(--dash); border-radius: 2px; background: var(--envelope); padding: 0; cursor: pointer; display: grid; min-width: 0; }
+  .spot.has { border: 0; background: transparent; }
+  .address { align-self: end; font: 13px/1.6 var(--type); color: var(--muted); }
+
+  /* House numbers */
+  .street { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); grid-template-rows: auto 26px auto; gap: 8px 10px; padding: 12px; background: var(--paper-2); border-radius: 3px; }
+  .road { grid-row: 2; grid-column: 1 / -1; border-radius: 2px; background: linear-gradient(90deg, var(--perf) 50%, transparent 50%) center / 22px 2px repeat-x, var(--belt); }
+  .house { position: relative; border: 0; padding: 0; background: transparent; cursor: pointer; display: grid; min-width: 0; }
+  .house .shape { display: grid; place-items: end center; aspect-ratio: 1 / 1.05; padding-bottom: 16%; background: var(--house); clip-path: polygon(50% 0, 100% 40%, 100% 100%, 0 100%, 0 40%); font: 700 clamp(14px, 3.4vw, 20px)/1 var(--type); color: var(--ink); }
+  .house.mail .shape { background: var(--postal); color: var(--on-color); }
+  .house.mail::after { content: ""; position: absolute; top: 30%; right: -6%; width: 40%; aspect-ratio: 3 / 2; border: 1.5px solid var(--ink); border-radius: 1px; background-color: var(--stamp-paper); background-image: linear-gradient(to top right, transparent calc(50% - 1px), var(--ink) 50%, transparent calc(50% + 1px)), linear-gradient(to top left, transparent calc(50% - 1px), var(--ink) 50%, transparent calc(50% + 1px)); background-size: 50% 60%; background-position: left top, right top; background-repeat: no-repeat; }
+  .street-side { font: 11px/1.2 var(--type); color: var(--muted); display: flex; justify-content: space-between; max-width: 430px; }
+
+  /* Delivery route */
+  .map { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(4, minmax(0, 1fr)); aspect-ratio: 1; padding: 10px; background: var(--paper-2); border-radius: 3px; }
+  .streets { position: absolute; left: 10px; top: 10px; width: calc(100% - 20px); height: calc(100% - 20px); pointer-events: none; }
+  .corner { position: relative; z-index: 1; border: 0; background: transparent; padding: 0; cursor: pointer; display: grid; place-items: center; min-width: 0; min-height: 0; }
+  .corner::after { content: ""; width: 26%; aspect-ratio: 1; border-radius: 50%; background: var(--paper); border: 2px solid var(--dash); box-sizing: border-box; }
+  .corner.next::after { width: 32%; background: var(--postal-soft); border: 2px dashed var(--postal); }
+  .corner.on::after { background: var(--postal); border-color: var(--postal); }
+  .corner.end::after { width: 36%; background: var(--paper); border: 4px solid var(--postal); }
+  .corner.start::after { content: "PO"; width: 46%; border-radius: 4px; background: var(--ink); border: 0; display: grid; place-items: center; font: 700 11px/1 var(--type); color: var(--paper); }
+  .corner.start.home::after { box-shadow: 0 0 0 3px var(--postal); }
+  .corner.start.next::after { outline: 2px dashed var(--postal); outline-offset: 3px; }
+  .rt-street { stroke: var(--rule); stroke-width: 0.06; }
+  .rt-line { fill: none; stroke: var(--postal); stroke-width: 0.16; stroke-linecap: round; stroke-linejoin: round; }
+  .rt-line.thin { stroke-width: 0.22; }
+  .rt-dot { fill: var(--dash); }
+  .rt-start { fill: var(--ink); }
+  .rt-end { fill: var(--paper); stroke: var(--postal); stroke-width: 0.12; }
+
+  /* Truck load */
+  .truck { display: grid; }
+  .cab { position: relative; height: 48px; margin: 0 14px; border-radius: 24px 24px 3px 3px; background: var(--belt); display: grid; place-items: end center; padding-bottom: 4px; font: 700 10px/1 var(--type); letter-spacing: 0.12em; color: var(--on-dark-muted); }
+  .cab::before { content: ""; position: absolute; left: 16px; right: 16px; top: 9px; height: 15px; border-radius: 7px 7px 2px 2px; background: var(--glass); }
+  .bed { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 22px; padding: 12px; background: var(--paper-2); border: 4px solid var(--belt); border-top-width: 2px; border-radius: 2px 2px 8px 8px; }
+  .bed::before { content: ""; position: absolute; top: 10px; bottom: 10px; left: 50%; border-left: 2px dashed var(--dash); }
+  .bay { position: relative; z-index: 1; aspect-ratio: 1; border: 1.5px dashed var(--dash); border-radius: 3px; background: var(--paper); padding: 0; display: grid; place-items: center; cursor: pointer; min-width: 0; }
+  .bay.has { border-style: solid; border-color: var(--rule); }
+  .doors { font: 10px/1 var(--type); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); text-align: center; margin-top: 6px; }
+  .box { position: relative; display: grid; place-items: center; background: var(--kraft); border: 2px solid var(--kraft-edge); border-radius: 2px; font: 700 15px/1 var(--type); color: var(--ink); box-sizing: border-box; }
+  .box::before { content: ""; position: absolute; left: 42%; right: 42%; top: 0; bottom: 0; background: var(--kraft-tape); }
+  .box span { position: relative; background: var(--kraft); padding: 0 2px; border-radius: 2px; }
+  .box.w1 { width: 46%; height: 46%; font-size: 12px; } .box.w2 { width: 68%; height: 68%; } .box.w3 { width: 90%; height: 90%; font-size: 18px; }
+  .sizes button { gap: 8px; }
+  .sizes .box { width: 18px; height: 18px; font-size: 9px; border-width: 1.5px; }
+  .sizes .box.w1 { width: 12px; height: 12px; } .sizes .box.w3 { width: 22px; height: 22px; }
+
+  /* Stamps and results */
+  .overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; pointer-events: none; z-index: 3; }
+  .rstamp { display: inline-block; font: 700 15px/1 var(--display); letter-spacing: 0.08em; text-transform: uppercase; padding: 5px 9px 4px; border: 3px solid currentColor; border-radius: 4px; transform: rotate(-7deg); filter: url(#ink); white-space: nowrap; }
+  .rstamp.ok { color: var(--approved); }
+  .rstamp.no { color: var(--returned); }
+  .rstamp.sm { font-size: 11px; border-width: 2px; padding: 3px 5px 2px; }
+  .rstamp.lg { font-size: clamp(22px, 5vw, 30px); border-width: 5px; padding: 8px 14px 6px; background: var(--stamp-wash); animation: thunk 0.24s cubic-bezier(0.2, 0.9, 0.3, 1.3); }
+  .wide .rstamp.lg, .truck-wrap .rstamp.lg { font-size: clamp(18px, 4vw, 22px); border-width: 4px; }
+  .again { font: 12px/1 var(--type); background: var(--paper); color: var(--ink); padding: 3px 6px; border-radius: 3px; }
+  @keyframes thunk { from { transform: rotate(-7deg) scale(1.6); opacity: 0; } to { transform: rotate(-7deg) scale(1); opacity: 1; } }
+
+  /* Thumbnails */
+  .t-sheet { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; width: 54px; aspect-ratio: 1; padding: 3px; background: var(--paper-2); border: 1px solid var(--rule); }
+  .t-sheet i { background: var(--paper); }
+  .t-sheet i.on { background: var(--postal); }
+  .t-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; width: 116px; padding: 3px; background: var(--belt); border-radius: 3px; }
+  .t-row i { aspect-ratio: 1; border-radius: 2px; background: var(--belt-slot); display: grid; place-items: center; font: normal 700 9px/1 var(--body); color: var(--on-color); }
+  .t-row i.c1 { background: var(--k1); } .t-row i.c2 { background: var(--k2); } .t-row i.c3 { background: var(--k3); color: var(--ink); } .t-row i.c4 { background: var(--k4); color: var(--ink); }
+  .t-env { display: grid; grid-template-columns: repeat(3, 24px); gap: 3px; padding: 5px; background: var(--envelope); border: 1px solid var(--rule); border-radius: 2px; }
+  .t-env i { position: relative; height: 28px; display: grid; place-items: center; font: normal 700 12px/1 var(--body); outline: 1px dotted var(--dash); outline-offset: 1px; }
+  .t-env i b { position: absolute; right: 1px; bottom: 1px; font: 700 9px/1 var(--type); color: var(--ink); background: var(--stamp-paper); padding: 0 1px; }
+  .t-route { width: 60px; height: 60px; background: var(--paper-2); border: 1px solid var(--rule); border-radius: 2px; }
+  .t-houses { display: grid; grid-template-columns: repeat(5, 14px); gap: 3px; padding: 4px; background: var(--paper-2); border: 1px solid var(--rule); border-radius: 2px; }
+  .t-houses i { height: 14px; background: var(--house); clip-path: polygon(50% 0, 100% 40%, 100% 100%, 0 100%, 0 40%); }
+  .t-houses i.on { background: var(--postal); }
+  .t-houses i.rd { grid-column: 1 / -1; height: 4px; background: var(--belt); clip-path: none; }
+  .t-truck { display: grid; grid-template-columns: repeat(2, 16px); gap: 2px 6px; padding: 3px 4px 4px; background: var(--paper-2); border: 2px solid var(--belt); border-top-width: 6px; border-radius: 6px 6px 2px 2px; }
+  .t-truck i { height: 16px; display: grid; place-items: center; background: var(--paper); }
+  .t-truck b { background: var(--kraft); border: 1px solid var(--kraft-edge); box-sizing: border-box; }
+  .t-truck b.w1 { width: 7px; height: 7px; } .t-truck b.w2 { width: 11px; height: 11px; } .t-truck b.w3 { width: 15px; height: 15px; }
+
+  /* Log, inspection and memo */
+  .log-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+  .desk-right h3 { font: 700 13px/1.2 var(--type); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  .log { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 8px; max-height: 380px; overflow: auto; }
+  .doc { width: 100%; display: grid; gap: 8px; justify-items: center; align-content: start; padding: 10px 6px 8px; background: var(--paper); border: 1px solid var(--rule); border-radius: 3px; color: inherit; font: inherit; }
+  button.doc { cursor: pointer; }
+  button.doc:hover { border-color: var(--dash); }
+  .doc.flash { border-color: var(--postal); box-shadow: 0 0 0 1px var(--postal); }
+  .tag { font: 10px/1 var(--type); color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .how { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; color: var(--ink); }
+  .peek { font: 14px/1.45 var(--type); padding: 10px 12px; border: 1px dashed var(--dash); border-radius: 4px; }
+  .inspection { display: grid; gap: 14px; }
+  .bag { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  @media (max-width: 560px) { .bag { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .sort { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; width: 100%; }
+  .sort button { font: 700 10px/1 var(--type); letter-spacing: 0.04em; text-transform: uppercase; padding: 7px 2px; border-radius: 3px; border: 1px solid var(--rule); background: transparent; color: var(--muted); cursor: pointer; }
+  .sort button[aria-pressed="true"][data-v="1"] { background: var(--approved-soft); color: var(--approved); border-color: var(--approved); }
+  .sort button[aria-pressed="true"][data-v="0"] { background: var(--returned-soft); color: var(--returned); border-color: var(--returned); }
+  .sort button:disabled { cursor: default; }
+  .exam-msg { color: var(--returned); font-weight: 500; min-height: 1.5em; }
+  .memo { border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; background: var(--paper); }
+  .memo-body { display: grid; gap: 10px; padding: 16px 18px; }
+  .memo-head { font: 700 12px/1.2 var(--type); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+  .memo-no { font: 700 26px/1 var(--display); text-transform: uppercase; }
+  .memo-text { font: 700 17px/1.45 var(--type); }
+  .share { display: grid; gap: 8px; padding: 10px 12px; border: 1px dashed var(--dash); border-radius: 4px; font: 13px/1.4 var(--type); }
+  .hist { display: flex; flex-wrap: wrap; gap: 3px; }
+  .hist i { width: 12px; height: 12px; border-radius: 2px; box-sizing: border-box; }
+  .hist i.ok { background: var(--approved); }
+  .hist i.no { background: transparent; border: 2px solid var(--returned); }
+
+  .notes { display: grid; gap: 10px; padding: 16px 18px; border: 1px dashed var(--on-dark-muted); border-radius: 6px; }
+  .notes h3 { font: 700 12px/1.2 var(--type); letter-spacing: 0.12em; text-transform: uppercase; color: var(--on-dark-muted); }
+  .notes ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; color: var(--on-dark-muted); }
+  @media (prefers-reduced-motion: reduce) { .rstamp.lg { animation: none; } }
+</style>
+
+<svg class="defs" aria-hidden="true" focusable="false">
+  <filter id="ink"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="4" result="noise"/><feDisplacementMap in="SourceGraphic" in2="noise" scale="2.2"/></filter>
+</svg>
+
+<div class="page">
+  <header class="top">
+    <p class="eyebrow">Working title · rough mockup</p>
+    <h1>Return to Sender</h1>
+    <p class="lede">A post office version of The Rule. Six kinds of mail, one for each day from Monday to Saturday, and a Super Sunday that puts one secret regulation on two kinds of mail at once. Each game here has two sample puzzles.</p>
+  </header>
+
+  <nav class="games" data-games aria-label="Games"></nav>
+
+  <main class="counter">
+    <div class="airmail" aria-hidden="true"></div>
+    <div class="counter-body">
+      <div class="desk-left">
+        <div class="counter-head">
+          <div class="head-text">
+            <p class="kicker" data-kicker></p>
+            <h2 data-title></h2>
+            <p class="small" data-sub></p>
+          </div>
+          <div class="head-side">
+            <div class="seg" data-puzzles role="group" aria-label="Sample puzzle"></div>
+            <p class="tally">Submissions<b data-tests>0</b></p>
+          </div>
+        </div>
+
+        <div class="stations" data-build>
+          <section class="station" data-station="sheet" aria-label="Stamp sheet">
+            <p class="station-label">Stamp sheet</p>
+            <div class="board-wrap">
+              <div class="sheet no-touch" data-board="sheet" aria-label="Stamp sheet squares"></div>
+              <div class="overlay" data-overlay="sheet" aria-live="polite"></div>
+            </div>
+            <div class="actions">
+              <button type="button" class="btn primary" data-submit-board="sheet">Submit sheet</button>
+              <button type="button" class="btn ghost" data-clear-board="sheet">Clear</button>
+            </div>
+          </section>
+
+          <section class="station" data-station="row" aria-label="Parcel row">
+            <p class="station-label">Parcel row</p>
+            <div class="palette" data-palette role="group" aria-label="Parcel to place"></div>
+            <div class="board-wrap wide">
+              <div class="belt no-touch" data-board="row" aria-label="Parcel slots"></div>
+              <div class="overlay" data-overlay="row" aria-live="polite"></div>
+            </div>
+            <div class="actions">
+              <button type="button" class="btn primary" data-submit-board="row">Submit row</button>
+              <button type="button" class="btn ghost" data-clear-board="row">Clear</button>
+            </div>
+          </section>
+
+          <section class="station" data-station="env" aria-label="Envelope">
+            <p class="station-label">Envelope</p>
+            <div class="tray" data-tray role="group" aria-label="Stamp to place"></div>
+            <div class="board-wrap wide">
+              <div class="envelope flap">
+                <div class="spots" data-board="env" aria-label="Stamp spots"></div>
+                <p class="address" aria-hidden="true">To: Head Office<br>Regulations Desk</p>
+              </div>
+              <div class="overlay" data-overlay="env" aria-live="polite"></div>
+            </div>
+            <p class="small board-msg" data-msg="env" aria-live="polite"></p>
+            <div class="actions">
+              <button type="button" class="btn primary" data-submit-board="env">Submit envelope</button>
+              <button type="button" class="btn ghost" data-clear-board="env">Clear</button>
+            </div>
+          </section>
+
+          <section class="station" data-station="houses" aria-label="House numbers">
+            <p class="station-label">House numbers</p>
+            <div class="board-wrap wide">
+              <div class="street no-touch" data-board="houses" aria-label="Houses on the street"><div class="road" aria-hidden="true"></div></div>
+              <div class="overlay" data-overlay="houses" aria-live="polite"></div>
+            </div>
+            <p class="small board-msg" data-msg="houses" aria-live="polite"></p>
+            <div class="actions">
+              <button type="button" class="btn primary" data-submit-board="houses">Submit street</button>
+              <button type="button" class="btn ghost" data-clear-board="houses">Clear</button>
+            </div>
+          </section>
+
+          <section class="station" data-station="route" aria-label="Delivery route">
+            <p class="station-label">Delivery route</p>
+            <div class="board-wrap">
+              <div class="map no-touch" data-board="route" aria-label="Street corners">
+                <svg class="streets" viewBox="0 0 4 4" preserveAspectRatio="none" aria-hidden="true" data-route-svg></svg>
+              </div>
+              <div class="overlay" data-overlay="route" aria-live="polite"></div>
+            </div>
+            <p class="small board-msg" data-msg="route" aria-live="polite"></p>
+            <div class="actions">
+              <button type="button" class="btn primary" data-submit-board="route">Submit route</button>
+              <button type="button" class="btn ghost" data-clear-board="route">Clear</button>
+            </div>
+          </section>
+
+          <section class="station" data-station="truck" aria-label="Truck load">
+            <p class="station-label">Truck load</p>
+            <div class="palette sizes" data-truck-palette role="group" aria-label="Box to load"></div>
+            <div class="board-wrap truck-wrap">
+              <div class="truck">
+                <div class="cab" aria-hidden="true">Cab</div>
+                <div class="bed no-touch" data-board="truck" aria-label="Truck floor spots"></div>
+                <p class="doors" aria-hidden="true">Back doors</p>
+              </div>
+              <div class="overlay" data-overlay="truck" aria-live="polite"></div>
+            </div>
+            <p class="small board-msg" data-msg="truck" aria-live="polite"></p>
+            <div class="actions">
+              <button type="button" class="btn primary" data-submit-board="truck">Submit load</button>
+              <button type="button" class="btn ghost" data-clear-board="truck">Clear</button>
+            </div>
+          </section>
+        </div>
+
+        <div class="inspection" data-exam hidden>
+          <p class="small">Inspection: approve or return each item in this mail bag. All 8 right closes the puzzle.</p>
+          <div class="bag" data-bag></div>
+          <p class="exam-msg" data-exam-msg aria-live="polite"></p>
+          <div class="actions">
+            <button type="button" class="btn primary" data-file disabled>File the inspection</button>
+            <button type="button" class="btn ghost" data-back>Back to the counter</button>
+          </div>
+        </div>
+
+        <div class="memo" data-memo hidden></div>
+      </div>
+
+      <aside class="desk-right">
+        <div class="log-head">
+          <h3>Submission log</h3>
+          <button type="button" class="btn primary" data-inspect>Request inspection</button>
+        </div>
+        <ol class="log" data-log></ol>
+        <p class="small">Newest first. Tap an item to bring it back to the counter.</p>
+        <ul class="how">
+          <li>Build an item at the counter and press Submit. The clerk stamps it Approved or Return to sender, based on the puzzle's secret regulation.</li>
+          <li>When you think you know the regulation, request an inspection: approve or return 8 new items. All 8 right closes the puzzle.</li>
+          <li>A wrong inspection sends you back to the counter. Your score is how many items you submitted.</li>
+        </ul>
+        <div class="actions">
+          <button type="button" class="btn" data-restart>Restart puzzle</button>
+          <button type="button" class="btn ghost" data-peek>Peek at the regulation</button>
+        </div>
+        <p class="peek" data-peek-text hidden></p>
+      </aside>
+    </div>
+  </main>
+
+  <section class="notes" aria-labelledby="notes-title">
+    <h3 id="notes-title">What this mockup leaves out</h3>
+    <ul>
+      <li>Each game shows two sample puzzles. The real game would draw a new puzzle every day from a much bigger list of regulations.</li>
+      <li>Super Sunday pairs two kinds of mail under one regulation, and the pair changes from week to week. The two samples pair the stamp sheet with the parcel row, and the envelope with the house numbers.</li>
+      <li>The regulations come from short sample lists: 8 for stamp sheets, 10 for parcel rows, and 9 each for envelopes, house numbers, routes and truck loads.</li>
+      <li>Nothing depends on color. Parcels and stamp pictures are told apart by shape, boxes by size and weight, and the four colors are picked to stay distinct for red-green colorblindness.</li>
+      <li>Each inspection approves 3, 4 or 5 of its 8 items, so splitting the bag in half is not a safe guess.</li>
+      <li>No sound, hints, monthly stamp album or real share sheet. The closing memo shows a text preview of the share. The peek button exists only so you can check the mockup quickly.</li>
+    </ul>
+  </section>
+</div>
+
+<script id="logic">
+const Lab = (() => {
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function shuffle(arr, rng) {
+    for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; }
+    return arr;
+  }
+  const pick = (rng, n) => Math.floor(rng() * n);
+  const count = (a) => a.filter(Boolean).length;
+  const sum = (a) => a.reduce((s, v) => s + v, 0);
+  function until(rng, make, test) {
+    for (let t = 0; t < 300; t++) { const x = make(rng); if (test(x)) return x; }
+    return null;
+  }
+
+  // Stamp sheet: 25 squares, 1 means a stamp.
+  const G = 5, S = G * G;
+  const at = (r, c) => r * G + c;
+  const NB = Array.from({ length: S }, (_, i) => {
+    const r = Math.floor(i / G), c = i % G, out = [];
+    if (r > 0) out.push(i - G);
+    if (r < G - 1) out.push(i + G);
+    if (c > 0) out.push(i - 1);
+    if (c < G - 1) out.push(i + 1);
+    return out;
+  });
+  const LINE = [0, 1, 2, 3, 4];
+  function reach(g, starts) {
+    const seen = new Set(starts), q = [...starts];
+    while (q.length) { const i = q.pop(); for (const j of NB[i]) if (g[j] && !seen.has(j)) { seen.add(j); q.push(j); } }
+    return seen;
+  }
+  function grow(rng, k, allowed, start) {
+    const g = new Array(S).fill(0), cells = [start];
+    g[start] = 1;
+    for (let tries = 0; cells.length < k && tries < 400; tries++) {
+      const from = cells[pick(rng, cells.length)];
+      const opts = NB[from].filter((j) => !g[j] && allowed(j));
+      if (!opts.length) continue;
+      const j = opts[pick(rng, opts.length)];
+      g[j] = 1; cells.push(j);
+    }
+    return g;
+  }
+  const randomSheet = (rng, p) => Array.from({ length: S }, () => (rng() < p ? 1 : 0));
+  const mirrorSheet = (g) => g.map((_, i) => g[at(Math.floor(i / G), Math.min(i % G, G - 1 - (i % G)))]);
+  const blockFull = (g, r, c) => !!(g[at(r, c)] && g[at(r, c + 1)] && g[at(r + 1, c)] && g[at(r + 1, c + 1)]);
+
+  const SHEET = {
+    noTouch: {
+      text: "No two stamps touch side to side.",
+      test: (g) => g.every((v, i) => !v || NB[i].every((j) => !g[j])),
+      make: (rng) => {
+        const g = new Array(S).fill(0);
+        for (const i of shuffle([...Array(S).keys()], rng)) if (rng() < 0.55 && NB[i].every((j) => !g[j])) g[i] = 1;
+        return g;
+      },
+    },
+    mirror: {
+      text: "The sheet is a mirror image, left to right.",
+      test: (g) => g.every((v, i) => v === g[at(Math.floor(i / G), G - 1 - (i % G))]),
+      make: (rng) => mirrorSheet(randomSheet(rng, 0.3 + rng() * 0.25)),
+    },
+    connected: {
+      text: "All the stamps join into one piece.",
+      test: (g) => { const f = g.flatMap((v, i) => (v ? [i] : [])); return f.length > 0 && reach(g, [f[0]]).size === f.length; },
+      make: (rng) => grow(rng, 4 + pick(rng, 9), () => true, pick(rng, S)),
+    },
+    odd: {
+      text: "The sheet holds an odd number of stamps.",
+      test: (g) => count(g) % 2 === 1,
+      make: (rng) => { const g = randomSheet(rng, 0.25 + rng() * 0.3); if (count(g) % 2 === 0) { const i = pick(rng, S); g[i] = g[i] ? 0 : 1; } return g; },
+    },
+    everyRow: {
+      text: "Every row has at least one stamp.",
+      test: (g) => LINE.every((r) => LINE.some((c) => g[at(r, c)] === 1)),
+      make: (rng) => { const g = randomSheet(rng, 0.2); for (const r of LINE) if (!LINE.some((c) => g[at(r, c)])) g[at(r, pick(rng, G))] = 1; return g; },
+    },
+    noBlock: {
+      text: "No 2 by 2 block is fully stamped.",
+      test: (g) => { for (let r = 0; r < G - 1; r++) for (let c = 0; c < G - 1; c++) if (blockFull(g, r, c)) return false; return true; },
+      make: (rng) => {
+        const g = randomSheet(rng, 0.5 + rng() * 0.15);
+        for (let r = 0; r < G - 1; r++) for (let c = 0; c < G - 1; c++) if (blockFull(g, r, c)) g[at(r + pick(rng, 2), c + pick(rng, 2))] = 0;
+        return g;
+      },
+    },
+    center: {
+      text: "The center square has a stamp.",
+      test: (g) => g[12] === 1,
+      make: (rng) => { const g = randomSheet(rng, 0.3); g[12] = 1; return g; },
+    },
+    topBottom: {
+      text: "Stamps link the top row to the bottom row.",
+      test: (g) => { const top = LINE.filter((c) => g[c]); return top.length > 0 && [...reach(g, top)].some((i) => i >= S - G); },
+      make: (rng) => {
+        const g = randomSheet(rng, 0.1);
+        let r = 0, c = pick(rng, G);
+        g[at(r, c)] = 1;
+        while (r < G - 1) {
+          if (rng() < 0.6) r++;
+          else c = Math.max(0, Math.min(G - 1, c + (rng() < 0.5 ? -1 : 1)));
+          g[at(r, c)] = 1;
+        }
+        return g;
+      },
+    },
+  };
+
+  // Parcel row: 7 slots, 0 is empty and 1 to 4 are circle, square, triangle and diamond parcels.
+  const R = 7;
+  const color = (rng) => 1 + pick(rng, 4);
+  const randomRow = (rng, p) => Array.from({ length: R }, () => (rng() < p ? color(rng) : 0));
+  const tally = (a, c) => a.filter((v) => v === c).length;
+
+  const ROW = {
+    differ: {
+      text: "No two parcels side by side are the same shape.",
+      test: (a) => a.every((v, i) => i === R - 1 || !v || v !== a[i + 1]),
+      make: (rng) => {
+        const a = [];
+        for (let i = 0; i < R; i++) {
+          if (rng() < 0.85) { let c; do c = color(rng); while (i > 0 && c === a[i - 1]); a.push(c); }
+          else a.push(0);
+        }
+        return a;
+      },
+    },
+    circleSquare: {
+      text: "Every circle has a square right after it.",
+      test: (a) => a.every((v, i) => v !== 1 || a[i + 1] === 2),
+      make: (rng) => {
+        const a = randomRow(rng, 0.85);
+        if (!a.includes(1)) a[pick(rng, R - 1)] = 1;
+        if (a[R - 1] === 1) a[R - 1] = 2 + pick(rng, 3);
+        for (let i = 0; i < R - 1; i++) if (a[i] === 1) a[i + 1] = 2;
+        return a;
+      },
+    },
+    mirror: {
+      text: "The row reads the same from both ends.",
+      test: (a) => a.every((v, i) => v === a[R - 1 - i]),
+      make: (rng) => { const a = randomRow(rng, 0.75); for (let i = 0; i < 3; i++) a[R - 1 - i] = a[i]; return a; },
+    },
+    onePiece: {
+      text: "All the parcels sit together in one unbroken run.",
+      test: (a) => { const f = a.flatMap((v, i) => (v ? [i] : [])); return f.length > 0 && f[f.length - 1] - f[0] + 1 === f.length; },
+      make: (rng) => { const len = 2 + pick(rng, 4), s = pick(rng, R - len + 1); return Array.from({ length: R }, (_, i) => (i >= s && i < s + len ? color(rng) : 0)); },
+    },
+    apart: {
+      text: "No two parcels sit side by side.",
+      test: (a) => a.every((v, i) => i === R - 1 || !(v && a[i + 1])),
+      make: (rng) => { const a = new Array(R).fill(0); for (let i = 0; i < R; i++) if (rng() < 0.65 && !(i > 0 && a[i - 1])) a[i] = color(rng); return a; },
+    },
+    odd: {
+      text: "An odd number of slots hold a parcel.",
+      test: (a) => count(a) % 2 === 1,
+      make: (rng) => { const a = randomRow(rng, 0.6); if (count(a) % 2 === 0) { const i = pick(rng, R); a[i] = a[i] ? 0 : color(rng); } return a; },
+    },
+    allShapes: {
+      text: "All four shapes appear in the row.",
+      test: (a) => [1, 2, 3, 4].every((c) => a.includes(c)),
+      make: (rng) => { const a = randomRow(rng, 0.6); shuffle([...Array(R).keys()], rng).slice(0, 4).forEach((i, k) => (a[i] = k + 1)); return a; },
+    },
+    noCircleEnds: {
+      text: "Neither end of the row holds a circle.",
+      test: (a) => a[0] !== 1 && a[R - 1] !== 1,
+      make: (rng) => {
+        const a = randomRow(rng, 0.85);
+        for (const i of [0, R - 1]) if (a[i] === 1) a[i] = 2 + pick(rng, 3);
+        if (!a.includes(1)) a[1 + pick(rng, R - 2)] = 1;
+        return a;
+      },
+    },
+    moreSquares: {
+      text: "There are more squares than circles.",
+      test: (a) => tally(a, 2) > tally(a, 1),
+      make: (rng) => { const a = randomRow(rng, 0.85); while (tally(a, 2) <= tally(a, 1)) a[pick(rng, R)] = 2; return a; },
+    },
+    sameEnds: {
+      text: "The first and last slots hold the same thing.",
+      test: (a) => a[0] === a[R - 1],
+      make: (rng) => { const a = randomRow(rng, 0.8); a[R - 1] = a[0]; return a; },
+    },
+  };
+
+  // Envelope: 3 stamps, each 1 to 9 for a picture (sun, star, mountain) and a value (1 to 3).
+  const E = 3;
+  const pic = (v) => Math.floor((v - 1) / 3);
+  const val = (v) => ((v - 1) % 3) + 1;
+  const stamp = (p, n) => p * 3 + n;
+  const randomStamp = (rng) => 1 + pick(rng, 9);
+  const randomEnv = (rng) => Array.from({ length: E }, () => randomStamp(rng));
+  const postage = (a) => a.reduce((s, v) => s + val(v), 0);
+
+  const ENV = {
+    evenTotal: {
+      text: "The total postage is an even number.",
+      test: (a) => postage(a) % 2 === 0,
+      make: (rng) => { const a = randomEnv(rng); if (postage(a) % 2) { const i = pick(rng, E), n = val(a[i]); a[i] = stamp(pic(a[i]), n === 3 ? 2 : n + 1); } return a; },
+    },
+    differentPictures: {
+      text: "All three stamps show different pictures.",
+      test: (a) => new Set(a.map(pic)).size === 3,
+      make: (rng) => shuffle([0, 1, 2], rng).map((p) => stamp(p, 1 + pick(rng, 3))),
+    },
+    neverDown: {
+      text: "The values never go down from left to right.",
+      test: (a) => val(a[0]) <= val(a[1]) && val(a[1]) <= val(a[2]),
+      make: (rng) => [1 + pick(rng, 3), 1 + pick(rng, 3), 1 + pick(rng, 3)].sort().map((n) => stamp(pick(rng, 3), n)),
+    },
+    middleTop: {
+      text: "The middle stamp is worth more than both others.",
+      test: (a) => val(a[1]) > val(a[0]) && val(a[1]) > val(a[2]),
+      make: (rng) => { const m = 2 + pick(rng, 2); return [stamp(pick(rng, 3), 1 + pick(rng, m - 1)), stamp(pick(rng, 3), m), stamp(pick(rng, 3), 1 + pick(rng, m - 1))]; },
+    },
+    sharePicture: {
+      text: "At least two stamps show the same picture.",
+      test: (a) => new Set(a.map(pic)).size < 3,
+      make: (rng) => { const a = randomEnv(rng), [i, j] = shuffle([0, 1, 2], rng); a[j] = stamp(pic(a[i]), val(a[j])); return a; },
+    },
+    oneStar: {
+      text: "Exactly one stamp shows a star.",
+      test: (a) => a.filter((v) => pic(v) === 1).length === 1,
+      make: (rng) => { const k = pick(rng, 3); return [0, 1, 2].map((i) => stamp(i === k ? 1 : [0, 2][pick(rng, 2)], 1 + pick(rng, 3))); },
+    },
+    valuesDiffer: {
+      text: "No two stamps side by side have the same value.",
+      test: (a) => val(a[0]) !== val(a[1]) && val(a[1]) !== val(a[2]),
+      make: (rng) => { const a = [randomStamp(rng)]; while (a.length < E) { const v = randomStamp(rng); if (val(v) !== val(a[a.length - 1])) a.push(v); } return a; },
+    },
+    bigPostage: {
+      text: "The total postage is 6 or more.",
+      test: (a) => postage(a) >= 6,
+      make: (rng) => { const a = randomEnv(rng); while (postage(a) < 6) { const i = pick(rng, E); a[i] = stamp(pic(a[i]), Math.min(3, val(a[i]) + 1)); } return a; },
+    },
+    sameEnds: {
+      text: "The first and last stamps are identical.",
+      test: (a) => a[0] === a[2],
+      make: (rng) => { const a = randomEnv(rng); a[2] = a[0]; return a; },
+    },
+  };
+
+  // House numbers: houses 1 to 10, odd numbers on the top side and even on the bottom, house h facing h + 1 or h - 1; 1 means the house gets mail.
+  const HN = 10;
+  const mailed = (a) => a.flatMap((v, i) => (v ? [i + 1] : []));
+  const sameSide = (h) => [h - 2, h + 2].filter((x) => x >= 1 && x <= HN);
+  const facingOf = (h) => (h % 2 ? h + 1 : h - 1);
+  const randomStreet = (rng, p) => Array.from({ length: HN }, () => (rng() < p ? 1 : 0));
+  const fromHouses = (hs) => Array.from({ length: HN }, (_, i) => (hs.includes(i + 1) ? 1 : 0));
+  const houseTotal = (a) => sum(mailed(a));
+
+  const HOUSES = {
+    onlyEven: {
+      text: "Only even-numbered houses get mail.",
+      test: (a) => mailed(a).every((h) => h % 2 === 0),
+      make: (rng) => { const a = fromHouses([2, 4, 6, 8, 10].filter(() => rng() < 0.55)); if (!count(a)) a[2 * pick(rng, 5) + 1] = 1; return a; },
+    },
+    total15: {
+      text: "The house numbers that get mail add up to 15 or more.",
+      test: (a) => houseTotal(a) >= 15,
+      make: (rng) => { const a = randomStreet(rng, 0.25); while (houseTotal(a) < 15) a[pick(rng, HN)] = 1; return a; },
+    },
+    noNeighbors: {
+      text: "No two houses side by side on the same side of the street both get mail.",
+      test: (a) => mailed(a).every((h) => sameSide(h).every((x) => !a[x - 1])),
+      make: (rng) => {
+        const a = new Array(HN).fill(0);
+        for (const i of shuffle([...Array(HN).keys()], rng)) if (rng() < 0.6 && sameSide(i + 1).every((x) => !a[x - 1])) a[i] = 1;
+        return a;
+      },
+    },
+    facing: {
+      text: "Every house that gets mail faces a house that also gets mail.",
+      test: (a) => mailed(a).every((h) => a[facingOf(h) - 1] === 1),
+      make: (rng) => {
+        const a = new Array(HN).fill(0);
+        for (let c = 0; c < 5; c++) if (rng() < 0.5) { a[2 * c] = 1; a[2 * c + 1] = 1; }
+        if (!count(a)) { const c = pick(rng, 5); a[2 * c] = 1; a[2 * c + 1] = 1; }
+        return a;
+      },
+    },
+    exactlyThree: {
+      text: "Exactly three houses get mail.",
+      test: (a) => count(a) === 3,
+      make: (rng) => fromHouses(shuffle([...Array(HN).keys()], rng).slice(0, 3).map((i) => i + 1)),
+    },
+    moreOdd: {
+      text: "More odd-numbered houses than even-numbered houses get mail.",
+      test: (a) => { const m = mailed(a); return m.filter((h) => h % 2).length > m.filter((h) => h % 2 === 0).length; },
+      make: (rng) => {
+        const a = randomStreet(rng, 0.4);
+        while (!HOUSES.moreOdd.test(a)) { if (rng() < 0.5) a[2 * pick(rng, 5)] = 1; else a[2 * pick(rng, 5) + 1] = 0; }
+        return a;
+      },
+    },
+    highHouse: {
+      text: "At least one house numbered 7 or higher gets mail.",
+      test: (a) => mailed(a).some((h) => h >= 7),
+      make: (rng) => { const a = randomStreet(rng, 0.3); a[6 + pick(rng, 4)] = 1; return a; },
+    },
+    evenSum: {
+      text: "The house numbers that get mail add up to an even number.",
+      test: (a) => houseTotal(a) % 2 === 0,
+      make: (rng) => {
+        const a = randomStreet(rng, 0.4);
+        if (houseTotal(a) % 2) { const i = 2 * pick(rng, 5); a[i] = a[i] ? 0 : 1; }
+        if (!count(a)) a[1] = 1;
+        return a;
+      },
+    },
+    threes: {
+      text: "Every house that gets mail has a number in the 3 times table.",
+      test: (a) => mailed(a).every((h) => h % 3 === 0),
+      make: (rng) => { const a = fromHouses([3, 6, 9].filter(() => rng() < 0.6)); if (!count(a)) a[[2, 5, 8][pick(rng, 3)]] = 1; return a; },
+    },
+  };
+
+  // Delivery route: corners of a 4 by 4 street map in travel order, always starting at the post office; a closed route ends back there.
+  const RG = 4, RN = RG * RG;
+  const rx = (d) => d % RG, ry = (d) => Math.floor(d / RG);
+  const near = (d) => [d - RG, d + RG, rx(d) > 0 ? d - 1 : -1, rx(d) < RG - 1 ? d + 1 : -1].filter((x) => x >= 0 && x < RN);
+  const moves = (p) => p.slice(1).map((d, i) => [rx(d) - rx(p[i]), ry(d) - ry(p[i])]);
+  // Each turn as a cross product on screen: 0 is straight, positive is a right turn, negative a left turn.
+  const turns = (p) => { const m = moves(p), out = []; for (let i = 1; i < m.length; i++) out.push(m[i - 1][0] * m[i][1] - m[i - 1][1] * m[i][0]); return out; };
+  const nextTurn = (p, d) => {
+    if (p.length < 2) return null;
+    const a = p[p.length - 2], b = p[p.length - 1];
+    return (rx(b) - rx(a)) * (ry(d) - ry(b)) - (ry(b) - ry(a)) * (rx(d) - rx(b));
+  };
+  const closedRoute = (p) => p.length > 4 && p[0] === p[p.length - 1];
+  const onEdge = (d) => rx(d) === 0 || ry(d) === 0 || rx(d) === RG - 1 || ry(d) === RG - 1;
+  const OFFICE = 5;
+  const SNAKE = [5, 4, 0, 1, 2, 3, 7, 11, 15, 14, 13, 12];
+  const anyStep = () => true;
+  function walk(rng, len, ok, prefix) {
+    const p = prefix ? prefix.slice() : [OFFICE];
+    while (p.length < len) {
+      const opts = near(p[p.length - 1]).filter((d) => !p.includes(d) && ok(p, d));
+      if (!opts.length) break;
+      p.push(opts[pick(rng, opts.length)]);
+    }
+    return p;
+  }
+  const randomRoute = (rng) => walk(rng, 2 + pick(rng, 10), anyStep);
+  // A loop around a rectangle of blocks that passes the post office, starting and ending there.
+  function loop(rng) {
+    for (;;) {
+      const x0 = pick(rng, 3), y0 = pick(rng, 3), w = 1 + pick(rng, 3 - x0), h = 1 + pick(rng, 3 - y0), ring = [];
+      for (let x = x0; x <= x0 + w; x++) ring.push(y0 * RG + x);
+      for (let y = y0 + 1; y <= y0 + h; y++) ring.push(y * RG + x0 + w);
+      for (let x = x0 + w - 1; x >= x0; x--) ring.push((y0 + h) * RG + x);
+      for (let y = y0 + h - 1; y > y0; y--) ring.push(y * RG + x0);
+      const k = ring.indexOf(OFFICE);
+      if (k < 0) continue;
+      let order = ring.slice(k).concat(ring.slice(0, k));
+      if (rng() < 0.5) order = [order[0], ...order.slice(1).reverse()];
+      return [...order, OFFICE];
+    }
+  }
+
+  const ROUTE = {
+    noLeft: {
+      text: "The route never turns left.",
+      test: (p) => turns(p).every((t) => t >= 0),
+      make: (rng) => walk(rng, 3 + pick(rng, 7), (p, d) => { const t = nextTurn(p, d); return t === null || t >= 0; }),
+    },
+    alwaysTurn: {
+      text: "The route turns at every corner it passes.",
+      test: (p) => turns(p).every((t) => t !== 0),
+      make: (rng) => walk(rng, 3 + pick(rng, 6), (p, d) => { const t = nextTurn(p, d); return t === null || t !== 0; }),
+    },
+    closed: { text: "The route ends back at the post office.", test: closedRoute, make: loop },
+    allSides: {
+      text: "The route touches all four edges of the map.",
+      test: (p) => [p.some((d) => ry(d) === 0), p.some((d) => ry(d) === RG - 1), p.some((d) => rx(d) === 0), p.some((d) => rx(d) === RG - 1)].every(Boolean),
+      make: (rng) => until(rng, (r) => walk(r, 8 + pick(r, 8), anyStep), ROUTE.allSides.test) || SNAKE.slice(),
+    },
+    long: {
+      text: "The route passes at least 8 corners.",
+      test: (p) => new Set(p).size >= 8,
+      make: (rng) => until(rng, (r) => walk(r, 8 + pick(r, 8), anyStep), ROUTE.long.test) || SNAKE.slice(),
+    },
+    endsFar: {
+      text: "The route ends at least 3 blocks from the post office.",
+      test: (p) => Math.abs(rx(p[p.length - 1]) - rx(OFFICE)) + Math.abs(ry(p[p.length - 1]) - ry(OFFICE)) >= 3,
+      make: (rng) => until(rng, (r) => walk(r, 4 + pick(r, 7), anyStep), ROUTE.endsFar.test) || [5, 6, 7, 11],
+    },
+    neverUp: {
+      text: "The route never heads up the map.",
+      test: (p) => moves(p).every(([, dy]) => dy >= 0),
+      make: (rng) => walk(rng, 3 + pick(rng, 7), (p, d) => ry(d) >= ry(p[p.length - 1])),
+    },
+    evenTurns: {
+      text: "The route makes an even number of turns.",
+      test: (p) => turns(p).filter((t) => t !== 0).length % 2 === 0,
+      make: (rng) => until(rng, (r) => walk(r, 3 + pick(r, 8), anyStep), ROUTE.evenTurns.test) || [5, 6, 7],
+    },
+    endsEdge: {
+      text: "The route ends on the edge of the map.",
+      test: (p) => onEdge(p[p.length - 1]),
+      make: (rng) => until(rng, randomRoute, ROUTE.endsEdge.test) || [5, 1],
+    },
+  };
+
+  // Truck load: 8 floor spots in rows from the cab (row 0) to the back doors (row 3), left lane then right lane; 0 is empty and 1 to 3 are box weights.
+  const TN = 8, ROWS4 = [0, 1, 2, 3];
+  const bay = (r, l) => r * 2 + l;
+  const laneOf = (a, l) => ROWS4.map((r) => a[bay(r, l)]);
+  const box = (rng) => 1 + pick(rng, 3);
+  const randomTruck = (rng, p) => Array.from({ length: TN }, () => (rng() < p ? box(rng) : 0));
+  const truckNear = (i) => { const r = Math.floor(i / 2), l = i % 2, out = [bay(r, 1 - l)]; if (r > 0) out.push(bay(r - 1, l)); if (r < 3) out.push(bay(r + 1, l)); return out; };
+  const fromLanes = (left, right) => { const a = new Array(TN).fill(0); for (const r of ROWS4) { a[bay(r, 0)] = left[r]; a[bay(r, 1)] = right[r]; } return a; };
+  const notEmpty = (rng, a) => { if (!count(a)) a[pick(rng, TN)] = box(rng); return a; };
+
+  const TRUCK = {
+    balanced: {
+      text: "The left and right lanes weigh the same.",
+      test: (a) => sum(laneOf(a, 0)) === sum(laneOf(a, 1)),
+      make: (rng) => {
+        for (;;) {
+          const left = ROWS4.map(() => (rng() < 0.6 ? box(rng) : 0)), right = [0, 0, 0, 0];
+          let rest = sum(left);
+          if (!rest) continue;
+          for (const r of shuffle(ROWS4.slice(), rng)) { if (!rest) break; const w = Math.min(rest, box(rng)); right[r] = w; rest -= w; }
+          if (!rest) return rng() < 0.5 ? fromLanes(left, right) : fromLanes(right, left);
+        }
+      },
+    },
+    lighterBack: {
+      text: "Boxes never get heavier toward the back of the truck.",
+      test: (a) => [0, 1].every((l) => { const w = laneOf(a, l).filter(Boolean); return w.every((v, i) => i === 0 || v <= w[i - 1]); }),
+      make: (rng) => {
+        const lanes = [0, 1].map(() => {
+          const k = pick(rng, 5), ws = Array.from({ length: k }, () => box(rng)).sort((x, y) => y - x);
+          const rows = shuffle(ROWS4.slice(), rng).slice(0, k).sort(), lane = [0, 0, 0, 0];
+          rows.forEach((r, n) => (lane[r] = ws[n]));
+          return lane;
+        });
+        const a = fromLanes(lanes[0], lanes[1]);
+        if (!count(a)) a[0] = box(rng);
+        return a;
+      },
+    },
+    frontHeavy: {
+      text: "The front half of the truck weighs more than the back half.",
+      test: (a) => sum(a.slice(0, 4)) > sum(a.slice(4)),
+      make: (rng) => until(rng, (r) => randomTruck(r, 0.55), TRUCK.frontHeavy.test) || [3, 3, 0, 0, 0, 0, 0, 0],
+    },
+    light: {
+      text: "The whole load weighs 10 or less.",
+      test: (a) => sum(a) <= 10,
+      make: (rng) => { const a = randomTruck(rng, 0.5); while (sum(a) > 10) a[pick(rng, TN)] = 0; return notEmpty(rng, a); },
+    },
+    noGaps: {
+      text: "No empty spot sits in front of a box in the same lane.",
+      test: (a) => [0, 1].every((l) => laneOf(a, l).every((v, i, w) => i === 0 || !v || w[i - 1] > 0)),
+      make: (rng) => {
+        const lanes = [0, 1].map(() => { const k = pick(rng, 5); return ROWS4.map((r) => (r < k ? box(rng) : 0)); });
+        const a = fromLanes(lanes[0], lanes[1]);
+        if (!count(a)) a[0] = box(rng);
+        return a;
+      },
+    },
+    paired: {
+      text: "Every box has another box beside it across the aisle.",
+      test: (a) => ROWS4.every((r) => !a[bay(r, 0)] === !a[bay(r, 1)]),
+      make: (rng) => {
+        const a = new Array(TN).fill(0);
+        for (const r of ROWS4) if (rng() < 0.55) { a[bay(r, 0)] = box(rng); a[bay(r, 1)] = box(rng); }
+        if (!count(a)) { const r = pick(rng, 4); a[bay(r, 0)] = box(rng); a[bay(r, 1)] = box(rng); }
+        return a;
+      },
+    },
+    bigApart: {
+      text: "No two large boxes sit next to each other.",
+      test: (a) => a.every((v, i) => v !== 3 || truckNear(i).every((j) => a[j] !== 3)),
+      make: (rng) => {
+        const a = randomTruck(rng, 0.7);
+        for (let i = 0; i < TN; i++) if (a[i] === 3 && truckNear(i).some((j) => a[j] === 3)) a[i] = 2;
+        if (!a.includes(3)) a[pick(rng, TN)] = 3;
+        for (let i = 0; i < TN; i++) if (a[i] === 3 && truckNear(i).some((j) => a[j] === 3)) a[i] = 2;
+        return a;
+      },
+    },
+    mirrorLanes: {
+      text: "The left lane matches the right lane, row by row.",
+      test: (a) => ROWS4.every((r) => a[bay(r, 0)] === a[bay(r, 1)]),
+      make: (rng) => { const lane = ROWS4.map(() => (rng() < 0.65 ? box(rng) : 0)); return notEmpty(rng, fromLanes(lane, lane)).map((v, i, arr) => arr[bay(Math.floor(i / 2), 0)] || arr[bay(Math.floor(i / 2), 1)]); },
+    },
+    exactlyFour: {
+      text: "The truck carries exactly four boxes.",
+      test: (a) => count(a) === 4,
+      make: (rng) => { const a = new Array(TN).fill(0); shuffle([...Array(TN).keys()], rng).slice(0, 4).forEach((i) => (a[i] = box(rng))); return a; },
+    },
+  };
+
+  const flip = (m, rng, size, values) => {
+    const n = rng() < 0.3 ? 2 : 1;
+    for (let k = 0; k < n; k++) { const i = pick(rng, size); let v; do v = values(rng); while (v === m[i]); m[i] = v; }
+    return m;
+  };
+  const BOARDS = {
+    sheet: { name: "Stamp sheet", size: S, rules: SHEET, filled: count, random: (rng) => randomSheet(rng, 0.2 + rng() * 0.4), mutate: (g, rng) => flip(g.slice(), rng, S, (r) => pick(r, 2)) },
+    row: { name: "Parcel row", size: R, rules: ROW, filled: count, random: (rng) => randomRow(rng, 0.4 + rng() * 0.5), mutate: (a, rng) => flip(a.slice(), rng, R, (r) => pick(r, 5)) },
+    env: { name: "Envelope", size: E, rules: ENV, filled: count, random: randomEnv, mutate: (a, rng) => flip(a.slice(), rng, E, randomStamp) },
+    houses: { name: "House numbers", size: HN, rules: HOUSES, filled: count, random: (rng) => randomStreet(rng, 0.2 + rng() * 0.4), mutate: (a, rng) => flip(a.slice(), rng, HN, (r) => pick(r, 2)) },
+    route: {
+      name: "Delivery route", size: RN, rules: ROUTE, filled: (p) => (p.length >= 2 ? p.length : 0), random: randomRoute,
+      mutate: (p, rng) => {
+        const r = rng();
+        if (r < 0.3 && p.length > 2) return p.slice(0, -1);
+        if (r < 0.6 && !closedRoute(p)) { const q = walk(rng, p.length + 1, anyStep, p); if (q.length > p.length) return q; }
+        return walk(rng, 2 + pick(rng, 9), anyStep, p.slice(0, 1 + pick(rng, Math.max(1, p.length - 1))));
+      },
+    },
+    truck: { name: "Truck load", size: TN, rules: TRUCK, filled: count, random: (rng) => randomTruck(rng, 0.3 + rng() * 0.5), mutate: (a, rng) => flip(a.slice(), rng, TN, (r) => pick(r, 4)) },
+  };
+
+  const single = (board, rule, no, seed) => ({ id: `${board}-${no}`, boards: [board], rules: { [board]: rule }, no, seed });
+  const GAMES = [
+    { id: "sheet", name: "Stamp sheet", when: "Mondays", puzzles: [single("sheet", "noTouch", 101, 11), single("sheet", "connected", 102, 12)] },
+    { id: "row", name: "Parcel row", when: "Tuesdays", puzzles: [single("row", "differ", 201, 21), single("row", "circleSquare", 202, 22)] },
+    { id: "env", name: "Envelope", when: "Wednesdays", puzzles: [single("env", "differentPictures", 301, 31), single("env", "neverDown", 302, 32)] },
+    { id: "houses", name: "House numbers", when: "Thursdays", puzzles: [single("houses", "onlyEven", 401, 41), single("houses", "total15", 402, 42)] },
+    { id: "route", name: "Delivery route", when: "Fridays", puzzles: [single("route", "neverUp", 501, 51), single("route", "noLeft", 502, 52)] },
+    { id: "truck", name: "Truck load", when: "Saturdays", puzzles: [single("truck", "balanced", 601, 61), single("truck", "lighterBack", 602, 62)] },
+    {
+      id: "super", name: "Super Sunday", when: "Sundays · two boards", super: true,
+      puzzles: [
+        { id: "super-701", boards: ["sheet", "row"], rules: { sheet: "mirror", row: "mirror" }, no: 701, seed: 71, regulation: "Every item must be a mirror image of itself.", note: "Stamp sheets mirror left to right, and parcel rows read the same from both ends." },
+        { id: "super-702", boards: ["env", "houses"], rules: { env: "evenTotal", houses: "evenSum" }, no: 702, seed: 72, regulation: "The numbers on every item must add up to an even total.", note: "On an envelope, add the stamp values. On the street, add the numbers of the houses that get mail." },
+      ],
+    },
+  ];
+
+  const key = (item) => `${item.board}:${item.cells.join(",")}`;
+  const passes = (rule, cells) => !!rule.test(cells);
+
+  // For each board of the puzzle: one item that is approved and a near copy that is returned.
+  function examples(puzzle) {
+    const rng = mulberry32(puzzle.seed), out = [];
+    for (const b of puzzle.boards) {
+      const B = BOARDS[b], rule = B.rules[puzzle.rules[b]];
+      let yes = null, no = null;
+      for (let t = 0; t < 300 && !yes; t++) { const g = rule.make(rng); if (passes(rule, g) && B.filled(g) >= 3) yes = g; }
+      for (let t = 0; t < 300 && !no; t++) { const g = B.mutate(yes, rng); if (B.filled(g) && !passes(rule, g)) no = g; }
+      for (let t = 0; t < 300 && !no; t++) { const g = B.random(rng); if (B.filled(g) && !passes(rule, g)) no = g; }
+      out.push({ board: b, cells: yes, follows: true, example: true }, { board: b, cells: no, follows: false, example: true });
+    }
+    return out;
+  }
+
+  // Eight items split across the puzzle's boards, 3 to 5 of them approved, picked to tell the real regulation apart from the others.
+  function buildExam(puzzle, attempt, exclude) {
+    const rng = mulberry32(puzzle.seed * 131 + attempt * 7 + 1), per = 8 / puzzle.boards.length, out = [];
+    const total = 3 + pick(rng, 3), quota = {};
+    if (puzzle.boards.length === 1) quota[puzzle.boards[0]] = total;
+    else {
+      const lo = Math.max(1, total - 3), hi = Math.min(3, total - 1), first = lo + pick(rng, hi - lo + 1);
+      quota[puzzle.boards[0]] = first;
+      quota[puzzle.boards[1]] = total - first;
+    }
+    for (const b of puzzle.boards) {
+      const B = BOARDS[b], rule = B.rules[puzzle.rules[b]];
+      const decoys = Object.keys(B.rules).filter((k) => k !== puzzle.rules[b]).map((k) => B.rules[k]);
+      const pool = new Map();
+      const add = (g) => { const k = key({ board: b, cells: g }); if (B.filled(g) > 0 && !exclude.has(k) && !pool.has(k)) pool.set(k, g); };
+      for (let i = 0; i < 60; i++) { const g = rule.make(rng); add(g); add(B.mutate(g, rng)); }
+      for (const d of decoys) for (let i = 0; i < 10; i++) { const g = d.make(rng); add(g); add(B.mutate(g, rng)); }
+      for (let i = 0; i < 60; i++) add(B.random(rng));
+      const items = shuffle([...pool.values()], rng).map((g) => ({ g, truth: passes(rule, g) }));
+      const open = new Set(decoys), chosen = [], wants = [];
+      for (let t = quota[b], f = per - quota[b]; t || f; ) {
+        if (t) { wants.push(true); t--; }
+        if (f) { wants.push(false); f--; }
+      }
+      for (const want of wants) {
+        let best = null, bestScore = -1;
+        for (const it of items) {
+          if (it.truth !== want || chosen.includes(it)) continue;
+          let score = 0;
+          for (const d of open) if (passes(d, it.g) !== it.truth) score++;
+          if (score > bestScore) { best = it; bestScore = score; }
+        }
+        if (!best) break;
+        chosen.push(best);
+        for (const d of [...open]) if (passes(d, best.g) !== best.truth) open.delete(d);
+      }
+      out.push(...chosen.map((it) => ({ board: b, cells: it.g, truth: it.truth, answer: null })));
+    }
+    return shuffle(out, rng);
+  }
+
+  return { BOARDS, GAMES, examples, buildExam, key, pic, val, closedRoute, OFFICE, mailed };
+})();
+</script>
+
+<script>
+(() => {
+  const { BOARDS, GAMES, examples, buildExam, key, pic, val, closedRoute, OFFICE, mailed } = Lab;
+  const $ = (sel) => document.querySelector(sel);
+  const ALL = ["sheet", "row", "env", "houses", "route", "truck"];
+  const KINDS = ["Empty", "Circle", "Square", "Triangle", "Diamond"];
+  const GLYPH = ["", "●", "■", "▲", "◆"];
+  const PICS = ["sun", "star", "mountain"];
+  const PICGLYPH = ["●", "★", "▲"];
+  const SIZES = ["Empty", "Small", "Medium", "Large"];
+  const ROWNAMES = ["Front row", "Second row", "Third row", "Back row"];
+  const SUB = {
+    sheet: "Place stamps on the sheet, then submit it to the clerk.",
+    row: "Pick a parcel shape, fill the slots, then submit the row.",
+    env: "Pick a stamp from the tray, put three on the envelope, then submit it.",
+    houses: "Tap houses to deliver mail to them, then submit the street. Odd numbers are on the top side and even numbers on the bottom.",
+    route: "Every route starts at the post office (PO). Tap a highlighted corner to drive there, keep going, and tap the last stop to back up.",
+    truck: "Pick a box size, tap floor spots to load or unload them, then submit the load. The cab is at the front.",
+  };
+  const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  const count = (a) => a.filter(Boolean).length;
+  const states = {}, chosen = {};
+  let gameId = GAMES[0].id, brush = 1, envBrush = 1, truckBrush = 1, paint = null, drawing = false;
+
+  const gamesEl = $("[data-games]"), puzzlesEl = $("[data-puzzles]"), kicker = $("[data-kicker]"), titleEl = $("[data-title]"), subEl = $("[data-sub]");
+  const testsEl = $("[data-tests]"), buildEl = $("[data-build]"), examEl = $("[data-exam]"), bagEl = $("[data-bag]");
+  const examMsg = $("[data-exam-msg]"), fileBtn = $("[data-file]"), memoEl = $("[data-memo]"), logEl = $("[data-log]");
+  const inspectBtn = $("[data-inspect]"), peekBtn = $("[data-peek]"), peekText = $("[data-peek-text]");
+  const paletteEl = $("[data-palette]"), trayEl = $("[data-tray]"), truckPaletteEl = $("[data-truck-palette]"), routeSvg = $("[data-route-svg]");
+  const pickAll = (attr) => Object.fromEntries(ALL.map((b) => [b, $(`[${attr}="${b}"]`)]));
+  const stations = pickAll("data-station"), boardEls = pickAll("data-board"), overlays = pickAll("data-overlay"), msgEls = pickAll("data-msg");
+
+  const gameOf = (id) => GAMES.find((g) => g.id === id);
+  const curPuzzle = () => gameOf(gameId).puzzles[chosen[gameId] || 0];
+  const regulation = (p) => p.regulation || BOARDS[p.boards[0]].rules[p.rules[p.boards[0]]].text;
+  function fresh(puzzle) {
+    return {
+      puzzle, log: examples(puzzle), tests: 0, history: [], mode: "build", exam: null, checked: false, tries: 0, stampN: 0, flashKey: null, peekOpen: false, msg: "",
+      cells: {
+        sheet: new Array(BOARDS.sheet.size).fill(0), row: new Array(BOARDS.row.size).fill(0), env: new Array(BOARDS.env.size).fill(0),
+        houses: new Array(BOARDS.houses.size).fill(0), route: [OFFICE], truck: new Array(BOARDS.truck.size).fill(0),
+      },
+      stamp: Object.fromEntries(ALL.map((b) => [b, null])),
+      notes: { env: "", houses: "", route: "", truck: "" },
+    };
+  }
+  const cur = () => { const p = curPuzzle(); return states[p.id] || (states[p.id] = fresh(p)); };
+
+  const stampFace = (v) => `<span class="pstamp"><span class="art p${pic(v)}">${PICGLYPH[pic(v)]}</span><span class="v">${val(v)}</span></span>`;
+  const boxFace = (v) => `<span class="box w${v}"><span>${v}</span></span>`;
+  const pt = (d) => `${(d % 4) + 0.5},${Math.floor(d / 4) + 0.5}`;
+  function routeDrawing(p, thumb) {
+    let h = "";
+    for (let k = 0; k < 4; k++) {
+      if (thumb) for (let x = 0; x < 4; x++) h += `<circle class="rt-dot" cx="${x + 0.5}" cy="${k + 0.5}" r="0.08"/>`;
+      else h += `<line class="rt-street" x1="0.5" y1="${k + 0.5}" x2="3.5" y2="${k + 0.5}"/><line class="rt-street" x1="${k + 0.5}" y1="0.5" x2="${k + 0.5}" y2="3.5"/>`;
+    }
+    if (p.length > 1) h += `<polyline class="rt-line${thumb ? " thin" : ""}" points="${p.map(pt).join(" ")}"/>`;
+    if (thumb && p.length) {
+      const e = p[p.length - 1];
+      if (e !== p[0]) h += `<circle class="rt-end" cx="${(e % 4) + 0.5}" cy="${Math.floor(e / 4) + 0.5}" r="0.2"/>`;
+      h += `<rect class="rt-start" x="${(p[0] % 4) + 0.28}" y="${Math.floor(p[0] / 4) + 0.28}" width="0.44" height="0.44"/>`;
+    }
+    return h;
+  }
+  function thumb(item) {
+    const c = item.cells;
+    if (item.board === "sheet") return `<span class="t-sheet" aria-hidden="true">${c.map((v) => `<i${v ? ' class="on"' : ""}></i>`).join("")}</span>`;
+    if (item.board === "row") return `<span class="t-row" aria-hidden="true">${c.map((v) => `<i class="c${v}">${GLYPH[v]}</i>`).join("")}</span>`;
+    if (item.board === "env") return `<span class="t-env" aria-hidden="true">${c.map((v) => `<i class="p${pic(v)}">${PICGLYPH[pic(v)]}<b>${val(v)}</b></i>`).join("")}</span>`;
+    if (item.board === "houses") {
+      const side = (hs) => hs.map((h) => `<i${c[h - 1] ? ' class="on"' : ""}></i>`).join("");
+      return `<span class="t-houses" aria-hidden="true">${side([1, 3, 5, 7, 9])}<i class="rd"></i>${side([2, 4, 6, 8, 10])}</span>`;
+    }
+    if (item.board === "truck") return `<span class="t-truck" aria-hidden="true">${c.map((v) => `<i>${v ? `<b class="w${v}"></b>` : ""}</i>`).join("")}</span>`;
+    return `<svg class="t-route" viewBox="0 0 4 4" aria-hidden="true">${routeDrawing(c, true)}</svg>`;
+  }
+  const stampHtml = (ok, size) => `<span class="rstamp ${ok ? "ok" : "no"} ${size}">${ok ? "Approved" : size === "sm" ? "Returned" : "Return to sender"}</span>`;
+  function itemLabel(item) {
+    const c = item.cells;
+    if (item.board === "sheet") return `Stamp sheet with ${plural(count(c), "stamp")}`;
+    if (item.board === "row") return `Parcel row: ${c.map((v) => KINDS[v].toLowerCase()).join(", ")}`;
+    if (item.board === "env") return `Envelope: ${c.map((v) => `${PICS[pic(v)]} worth ${val(v)}`).join(", ")}`;
+    if (item.board === "houses") { const m = mailed(c); return m.length ? `Mail to houses ${m.join(", ")}` : "No mail on the street"; }
+    if (item.board === "truck") return `Truck with ${plural(count(c), "box")}, total weight ${c.reduce((s, v) => s + v, 0)}`;
+    return `Route from the post office through ${plural(c.length - 1, "more stop")}${closedRoute(c) ? ", ending back at the post office" : ""}`;
+  }
+  const nextTo = (a, b) => Math.abs((a % 4) - (b % 4)) + Math.abs(Math.floor(a / 4) - Math.floor(b / 4)) === 1;
+  // Corners the route may drive to next: unvisited neighbors of the last stop, or back to the post office to close a loop.
+  function nextCorners(p) {
+    if (closedRoute(p)) return [];
+    const last = p[p.length - 1];
+    return [...Array(BOARDS.route.size).keys()].filter((i) => nextTo(last, i) && (!p.includes(i) || (i === p[0] && p.length >= 4)));
+  }
+
+  // Arrow keys move focus within a board, with one tab stop.
+  function roving(container, cols) {
+    const items = () => [...container.querySelectorAll("[data-i]")];
+    items().forEach((b, i) => (b.tabIndex = i === 0 ? 0 : -1));
+    container.addEventListener("keydown", (e) => {
+      const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -cols, ArrowDown: cols }[e.key];
+      if (step == null) return;
+      const list = items(), i = list.indexOf(document.activeElement), j = i + step;
+      if (i < 0 || j < 0 || j >= list.length || (Math.abs(step) === 1 && Math.floor(j / cols) !== Math.floor(i / cols))) return;
+      e.preventDefault();
+      list[i].tabIndex = -1; list[j].tabIndex = 0; list[j].focus();
+    });
+  }
+  function addButton(b, cls, i, html, style) {
+    const el = document.createElement("button");
+    el.type = "button"; el.className = cls; el.dataset.i = i;
+    if (html) el.innerHTML = html;
+    if (style) el.style.cssText = style;
+    boardEls[b].append(el);
+  }
+
+  gamesEl.innerHTML = GAMES.map((g) => `<button type="button" class="tab${g.super ? " super" : ""}" data-game="${g.id}" aria-pressed="false"><span class="b">${g.name}</span><span class="s">${g.when}</span></button>`).join("");
+  paletteEl.innerHTML = KINDS.map((name, v) => `<button type="button" data-brush="${v}" aria-pressed="false"><span class="swatch c${v}">${GLYPH[v]}</span>${name}</button>`).join("");
+  trayEl.innerHTML = Array.from({ length: 9 }, (_, k) => k + 1).map((v) => `<button type="button" data-env-brush="${v}" aria-pressed="false" aria-label="${PICS[pic(v)]} stamp worth ${val(v)}">${stampFace(v)}</button>`).join("");
+  truckPaletteEl.innerHTML = SIZES.map((name, v) => `<button type="button" data-truck-brush="${v}" aria-pressed="false">${v ? boxFace(v) : '<span class="swatch"></span>'}${name}${v ? ` (${v})` : ""}</button>`).join("");
+  for (let i = 0; i < BOARDS.sheet.size; i++) addButton("sheet", "sc", i);
+  for (let i = 0; i < BOARDS.row.size; i++) addButton("row", "slot", i);
+  for (let i = 0; i < BOARDS.env.size; i++) addButton("env", "spot", i);
+  for (let c = 0; c < 5; c++) addButton("houses", "house", 2 * c, `<span class="shape">${2 * c + 1}</span>`, `grid-row: 1; grid-column: ${c + 1}`);
+  for (let c = 0; c < 5; c++) addButton("houses", "house", 2 * c + 1, `<span class="shape">${2 * c + 2}</span>`, `grid-row: 3; grid-column: ${c + 1}`);
+  for (let i = 0; i < BOARDS.route.size; i++) addButton("route", "corner", i);
+  for (let i = 0; i < BOARDS.truck.size; i++) addButton("truck", "bay", i);
+  roving(boardEls.sheet, 5);
+  roving(boardEls.row, 7);
+  roving(boardEls.env, 3);
+  roving(boardEls.houses, 5);
+  roving(boardEls.route, 4);
+  roving(boardEls.truck, 2);
+
+  function renderBoards(s) {
+    const c = s.cells;
+    boardEls.sheet.querySelectorAll("[data-i]").forEach((b, i) => {
+      b.className = c.sheet[i] ? "sc on" : "sc";
+      b.setAttribute("aria-pressed", String(!!c.sheet[i]));
+      b.setAttribute("aria-label", `Row ${Math.floor(i / 5) + 1}, column ${(i % 5) + 1}`);
+    });
+    boardEls.row.querySelectorAll("[data-i]").forEach((b, i) => {
+      const v = c.row[i];
+      b.className = `slot c${v}`;
+      b.textContent = GLYPH[v];
+      b.setAttribute("aria-label", `Slot ${i + 1}: ${v ? KINDS[v].toLowerCase() + " parcel" : "empty"}`);
+    });
+    boardEls.env.querySelectorAll("[data-i]").forEach((b, i) => {
+      const v = c.env[i];
+      b.className = v ? "spot has" : "spot";
+      b.innerHTML = v ? stampFace(v) : "";
+      b.setAttribute("aria-label", `Stamp spot ${i + 1}: ${v ? `${PICS[pic(v)]} worth ${val(v)}` : "empty"}`);
+    });
+    boardEls.houses.querySelectorAll("[data-i]").forEach((b) => {
+      const i = +b.dataset.i, on = !!c.houses[i];
+      b.className = on ? "house mail" : "house";
+      b.setAttribute("aria-pressed", String(on));
+      b.setAttribute("aria-label", `House ${i + 1}, ${(i + 1) % 2 ? "top" : "bottom"} side${on ? ", gets mail" : ""}`);
+    });
+    const p = c.route, last = p[p.length - 1], open = nextCorners(p);
+    boardEls.route.querySelectorAll("[data-i]").forEach((b, i) => {
+      const at = p.indexOf(i);
+      let cls = "corner", label = "not on the route";
+      if (at === 0) { cls += closedRoute(p) ? " start home" : " start"; label = closedRoute(p) ? "post office, where the route starts and ends" : "post office, where the route starts"; }
+      else if (i === last) { cls += " end"; label = "last stop"; }
+      else if (at > 0) { cls += " on"; label = `stop ${at + 1}`; }
+      if (open.includes(i)) { cls += " next"; label = i === OFFICE ? "post office, you can drive back here" : "you can drive here next"; }
+      b.className = cls;
+      b.setAttribute("aria-label", `Corner row ${Math.floor(i / 4) + 1}, column ${(i % 4) + 1}: ${label}`);
+    });
+    routeSvg.innerHTML = routeDrawing(p, false);
+    boardEls.truck.querySelectorAll("[data-i]").forEach((b, i) => {
+      const v = c.truck[i];
+      b.className = v ? "bay has" : "bay";
+      b.innerHTML = v ? boxFace(v) : "";
+      b.setAttribute("aria-label", `${ROWNAMES[Math.floor(i / 2)]}, ${i % 2 ? "right" : "left"} lane: ${v ? `${SIZES[v].toLowerCase()} box, weight ${v}` : "empty"}`);
+    });
+    paletteEl.querySelectorAll("[data-brush]").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.brush === brush)));
+    trayEl.querySelectorAll("[data-env-brush]").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.envBrush === envBrush)));
+    truckPaletteEl.querySelectorAll("[data-truck-brush]").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.truckBrush === truckBrush)));
+    for (const b of Object.keys(s.notes)) msgEls[b].textContent = s.notes[b];
+  }
+
+  function renderOverlays(s) {
+    for (const b of ALL) {
+      const st = s.stamp[b], n = st ? st.n : 0;
+      if (overlays[b]._n === n) continue;
+      overlays[b]._n = n;
+      overlays[b].innerHTML = st ? stampHtml(st.follows, "lg") + (st.repeat ? '<span class="again">Already submitted</span>' : "") : "";
+    }
+  }
+
+  function render() {
+    const s = cur(), p = s.puzzle, game = gameOf(gameId), multi = p.boards.length > 1, idx = chosen[gameId] || 0;
+    gamesEl.querySelectorAll("[data-game]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.game === gameId)));
+    puzzlesEl.innerHTML = game.puzzles.map((_, n) => `<button type="button" data-puzzle="${n}" aria-pressed="${n === idx}">Puzzle ${n + 1}</button>`).join("");
+    kicker.textContent = `${game.when} · Regulation No. ${p.no}`;
+    titleEl.textContent = game.name;
+    subEl.textContent = multi
+      ? `${BOARDS[p.boards[0]].name} and ${BOARDS[p.boards[1]].name} share one secret regulation in this puzzle. Submit either one as often as you like.`
+      : SUB[p.boards[0]];
+    testsEl.textContent = s.tests;
+    buildEl.classList.toggle("multi", multi);
+    for (const b of ALL) stations[b].hidden = !p.boards.includes(b);
+    renderBoards(s);
+    renderOverlays(s);
+
+    logEl.innerHTML = [...s.log].reverse().map((e) => {
+      const k = key(e);
+      return `<li><button type="button" class="doc${k === s.flashKey ? " flash" : ""}" data-k="${k}" aria-label="${e.example ? "Example. " : ""}${itemLabel(e)}. ${e.follows ? "Approved" : "Returned"}. Bring it back to the counter.">${thumb(e)}${stampHtml(e.follows, "sm")}${e.example ? '<span class="tag">Example</span>' : ""}</button></li>`;
+    }).join("");
+
+    buildEl.hidden = s.mode !== "build";
+    examEl.hidden = s.mode !== "exam";
+    memoEl.hidden = s.mode !== "solved";
+    inspectBtn.disabled = s.mode !== "build";
+
+    if (s.mode === "exam") {
+      const dis = s.checked ? " disabled" : "";
+      bagEl.innerHTML = s.exam.map((it, n) => `<div class="doc" role="group" aria-label="Item ${n + 1}: ${itemLabel(it)}">${thumb(it)}<div class="sort"><button type="button" data-n="${n}" data-v="1" aria-pressed="${it.answer === true}"${dis}>Approve</button><button type="button" data-n="${n}" data-v="0" aria-pressed="${it.answer === false}"${dis}>Return</button></div></div>`).join("");
+      fileBtn.disabled = s.checked || s.exam.some((it) => it.answer == null);
+      examMsg.textContent = s.msg;
+    }
+
+    if (s.mode === "solved") {
+      const ok = s.history.filter(Boolean).length;
+      memoEl.innerHTML = `<div class="airmail" aria-hidden="true"></div>
+        <div class="memo-body">
+          <p class="memo-head">Head office · Memo</p>
+          <p class="memo-no">Regulation No. ${p.no}</p>
+          <p class="memo-text">${regulation(p)}</p>
+          ${p.note ? `<p class="small">${p.note}</p>` : ""}
+          <p class="small">Closed with ${plural(s.tests, "submission")}. Inspection passed on try ${s.tries}.</p>
+          <div class="share">
+            <span>Return to Sender · ${game.name} No. ${p.no} · ${plural(s.tests, "submission")}</span>
+            <div class="hist" role="img" aria-label="${ok} approved, ${s.history.length - ok} returned">${s.history.map((v) => `<i class="${v ? "ok" : "no"}"></i>`).join("")}</div>
+          </div>
+          <div class="actions"><button type="button" class="btn" data-again>Play this puzzle again</button></div>
+        </div>`;
+    }
+
+    peekBtn.textContent = s.peekOpen ? "Hide the regulation" : "Peek at the regulation";
+    peekText.hidden = !s.peekOpen || s.mode === "solved";
+    peekText.textContent = `Regulation No. ${p.no}: ${regulation(p)}`;
+  }
+
+  const ready = {
+    env: (c) => c.every(Boolean) || "An envelope needs all three stamps before the clerk will look at it.",
+    houses: (c) => c.some(Boolean) || "Deliver mail to at least one house first.",
+    route: (c) => c.length >= 2 || "Drive at least one block from the post office first.",
+    truck: (c) => c.some(Boolean) || "Load at least one box first.",
+  };
+  function submit(b) {
+    const s = cur(), check = ready[b] ? ready[b](s.cells[b]) : true;
+    if (check !== true) { s.notes[b] = check; renderBoards(s); return; }
+    const item = { board: b, cells: s.cells[b].slice() }, k = key(item);
+    const found = s.log.find((e) => key(e) === k);
+    let follows;
+    if (found) follows = found.follows;
+    else {
+      follows = !!BOARDS[b].rules[s.puzzle.rules[b]].test(item.cells);
+      s.log.push({ ...item, follows });
+      s.tests++;
+      s.history.push(follows);
+    }
+    s.stamp[b] = { follows, repeat: !!found, n: ++s.stampN };
+    s.flashKey = k;
+    if (b in s.notes) s.notes[b] = "";
+    render();
+  }
+
+  function changed(s, b) {
+    s.stamp[b] = null;
+    if (b in s.notes) s.notes[b] = "";
+    renderBoards(s);
+    renderOverlays(s);
+  }
+  function setCell(b, i, v) {
+    const s = cur();
+    if (s.cells[b][i] === v) return;
+    s.cells[b][i] = v;
+    changed(s, b);
+  }
+  // Toggle boards flip on and off; brush boards place the chosen item or clear it if it is already there.
+  const valueFor = (b, i) => {
+    const v = cur().cells[b][i];
+    if (b === "sheet" || b === "houses") return v ? 0 : 1;
+    const want = b === "row" ? brush : truckBrush;
+    return v === want ? 0 : want;
+  };
+
+  for (const b of ["sheet", "row", "houses", "truck"]) {
+    const el = boardEls[b];
+    el.addEventListener("pointerdown", (e) => {
+      const c = e.target.closest("[data-i]");
+      if (!c || cur().mode !== "build") return;
+      e.preventDefault();
+      paint = { b, v: valueFor(b, +c.dataset.i) };
+      setCell(b, +c.dataset.i, paint.v);
+      el.setPointerCapture(e.pointerId);
+    });
+    el.addEventListener("pointermove", (e) => {
+      if (!paint || paint.b !== b) return;
+      const hit = document.elementFromPoint(e.clientX, e.clientY);
+      const c = hit && hit.closest ? hit.closest("[data-i]") : null;
+      if (c && el.contains(c)) setCell(b, +c.dataset.i, paint.v);
+    });
+    const end = () => { paint = null; };
+    el.addEventListener("pointerup", end);
+    el.addEventListener("pointercancel", end);
+    el.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      const c = e.target.closest("[data-i]");
+      if (!c || cur().mode !== "build") return;
+      e.preventDefault();
+      setCell(b, +c.dataset.i, valueFor(b, +c.dataset.i));
+    });
+  }
+
+  boardEls.env.addEventListener("click", (e) => {
+    const c = e.target.closest("[data-i]"), s = cur();
+    if (!c || s.mode !== "build") return;
+    const i = +c.dataset.i;
+    s.cells.env[i] = s.cells.env[i] === envBrush ? 0 : envBrush;
+    changed(s, "env");
+  });
+
+  // Extends, closes or backs up the route from the post office; while dragging it only extends.
+  function routeTap(i, dragging) {
+    const s = cur();
+    if (s.mode !== "build") return;
+    const p = s.cells.route, last = p[p.length - 1];
+    if (dragging && i === last) return;
+    let note = "";
+    if (i === last && p.length > 1) p.pop();
+    else if (i === last) note = "Every route starts at the post office. Tap a highlighted corner to drive there.";
+    else if (nextCorners(p).includes(i)) p.push(i);
+    else if (closedRoute(p)) note = "The route is back at the post office. Tap the post office to back up a step.";
+    else if (p.includes(i)) note = "A route cannot cross its own path. Pick a highlighted corner.";
+    else note = "You can only drive to a highlighted corner next to the last stop.";
+    if (dragging && note) return;
+    changed(s, "route");
+    s.notes.route = note;
+    msgEls.route.textContent = note;
+  }
+  boardEls.route.addEventListener("pointerdown", (e) => {
+    const c = e.target.closest("[data-i]");
+    if (!c) return;
+    e.preventDefault();
+    drawing = true;
+    routeTap(+c.dataset.i, false);
+    boardEls.route.setPointerCapture(e.pointerId);
+  });
+  boardEls.route.addEventListener("pointermove", (e) => {
+    if (!drawing) return;
+    const hit = document.elementFromPoint(e.clientX, e.clientY);
+    const c = hit && hit.closest ? hit.closest("[data-i]") : null;
+    if (c && boardEls.route.contains(c)) routeTap(+c.dataset.i, true);
+  });
+  const stopDrawing = () => { drawing = false; };
+  boardEls.route.addEventListener("pointerup", stopDrawing);
+  boardEls.route.addEventListener("pointercancel", stopDrawing);
+  boardEls.route.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const c = e.target.closest("[data-i]");
+    if (!c) return;
+    e.preventDefault();
+    routeTap(+c.dataset.i, false);
+  });
+
+  gamesEl.addEventListener("click", (e) => { const b = e.target.closest("[data-game]"); if (b) { gameId = b.dataset.game; paint = null; drawing = false; render(); } });
+  puzzlesEl.addEventListener("click", (e) => { const b = e.target.closest("[data-puzzle]"); if (b) { chosen[gameId] = +b.dataset.puzzle; paint = null; drawing = false; render(); } });
+  paletteEl.addEventListener("click", (e) => { const b = e.target.closest("[data-brush]"); if (b) { brush = +b.dataset.brush; renderBoards(cur()); } });
+  trayEl.addEventListener("click", (e) => { const b = e.target.closest("[data-env-brush]"); if (b) { envBrush = +b.dataset.envBrush; renderBoards(cur()); } });
+  truckPaletteEl.addEventListener("click", (e) => { const b = e.target.closest("[data-truck-brush]"); if (b) { truckBrush = +b.dataset.truckBrush; renderBoards(cur()); } });
+  document.querySelectorAll("[data-submit-board]").forEach((btn) => btn.addEventListener("click", () => submit(btn.dataset.submitBoard)));
+  document.querySelectorAll("[data-clear-board]").forEach((btn) => btn.addEventListener("click", () => {
+    const s = cur(), b = btn.dataset.clearBoard;
+    s.cells[b] = b === "route" ? [OFFICE] : s.cells[b].map(() => 0);
+    s.stamp[b] = null;
+    if (b in s.notes) s.notes[b] = "";
+    render();
+  }));
+  logEl.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-k]"), s = cur();
+    if (!b || s.mode !== "build") return;
+    const entry = s.log.find((x) => key(x) === b.dataset.k);
+    s.cells[entry.board] = entry.cells.slice();
+    s.stamp[entry.board] = null;
+    if (entry.board in s.notes) s.notes[entry.board] = "";
+    s.flashKey = b.dataset.k;
+    render();
+  });
+  inspectBtn.addEventListener("click", () => {
+    const s = cur();
+    s.mode = "exam"; s.checked = false; s.msg = "";
+    s.exam = buildExam(s.puzzle, s.tries, new Set(s.log.map(key)));
+    render();
+  });
+  bagEl.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-n]"), s = cur();
+    if (!b || s.checked) return;
+    s.exam[+b.dataset.n].answer = b.dataset.v === "1";
+    render();
+    const again = bagEl.querySelector(`[data-n="${b.dataset.n}"][data-v="${b.dataset.v}"]`);
+    if (again) again.focus();
+  });
+  fileBtn.addEventListener("click", () => {
+    const s = cur();
+    s.tries++;
+    const wrong = s.exam.filter((it) => it.answer !== it.truth).length;
+    if (!wrong) s.mode = "solved";
+    else { s.checked = true; s.msg = `${wrong} of 8 are filed wrong. Make a few more submissions, then ask for a new inspection.`; }
+    render();
+  });
+  $("[data-back]").addEventListener("click", () => { const s = cur(); s.mode = "build"; s.exam = null; s.checked = false; s.msg = ""; render(); });
+  const restart = () => { const p = curPuzzle(); states[p.id] = fresh(p); render(); };
+  $("[data-restart]").addEventListener("click", restart);
+  memoEl.addEventListener("click", (e) => { if (e.target.closest("[data-again]")) restart(); });
+  peekBtn.addEventListener("click", () => { const s = cur(); s.peekOpen = !s.peekOpen; render(); });
+  render();
+})();
+</script>
