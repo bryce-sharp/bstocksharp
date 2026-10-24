@@ -228,7 +228,8 @@ unlisted at its own URL until it is polished:
    `data/return-to-sender/months/`, like Snug's, so a puzzle never changes once
    played.
 2. **Rough playable page** at `/games/return-to-sender` plus a signed-in lab page
-   like `/games/snug/lab`. Saved on the device only.
+   like `/games/snug/lab`. Saved on the device only. (Stages 1 and 2 built
+   2026-10-23.)
 3. **Polish**, with lots of back and forth: the look, the stamp landing, sound, a
    How to play and tutorial, hints, accessibility, and above all an easy phone
    layout.
