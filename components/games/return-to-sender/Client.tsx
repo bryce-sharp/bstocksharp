@@ -14,3 +14,4 @@ function Loading() {
 // The game reads window and localStorage while rendering, so it only renders in the browser.
 export const ReturnToSenderGame = dynamic(() => import("./ReturnToSender").then((m) => m.ReturnToSender), { ssr: false, loading: Loading });
 export const ReturnToSenderLab = dynamic(() => import("./Lab").then((m) => m.Lab), { ssr: false, loading: Loading });
+export const ReturnToSenderArt = dynamic(() => import("./art/ArtSheet").then((m) => m.ArtSheet), { ssr: false, loading: Loading });

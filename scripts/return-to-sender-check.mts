@@ -5,7 +5,8 @@
 
 import { makeRng } from "../components/games/daily.ts";
 import { BOARDS } from "../components/games/return-to-sender/boards/index.ts";
-import { checkPuzzle, createPuzzle } from "../components/games/return-to-sender/puzzle.ts";
+import { itemKey } from "../components/games/return-to-sender/engine.ts";
+import { checkPuzzle, createPuzzle, hintPair } from "../components/games/return-to-sender/puzzle.ts";
 
 const ITEMS = 300, PUZZLES = 40;
 const problems = new Map<string, number>();
@@ -35,6 +36,14 @@ for (const board of Object.values(BOARDS)) {
       const found = checkPuzzle(puzzle, 3);
       for (const p of found) note(`${regulation.id}: ${p}`);
       if (!found.length) clean++;
+      // Both of the day's hints: an approved and a returned item, neither already in the trays.
+      const seen = puzzle.examples.map(itemKey);
+      for (let n = 0; n < 2; n++) {
+        const pair = hintPair(puzzle, board.id, n, seen);
+        if (!pair) note(`${regulation.id}: no hint ${n + 1}`);
+        else if (!regulation.test(pair[0].cells) || regulation.test(pair[1].cells) || pair.some((p) => seen.includes(itemKey(p)))) note(`${regulation.id}: hint ${n + 1} is wrong`);
+        else seen.push(...pair.map(itemKey));
+      }
     }
     console.log(`${regulation.id}: ${made}/${ITEMS} items approved, ${clean}/${PUZZLES} puzzles clean`);
   }

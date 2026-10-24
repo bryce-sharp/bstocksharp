@@ -10,20 +10,31 @@ export const GAME = "return-to-sender";
 /** Puzzle numbers count from this day, the first day of the first generated month. */
 export const LAUNCH_DATE = "2026-10-01";
 
+/** An item in the trays: a submission, or half of a supervisor's hint pair. */
+export interface Entry extends Sample {
+  hint?: boolean;
+}
+
 export interface Result {
   version: number;
   submissions: number;
-  /** The inspection try that passed, counting from 1. */
+  /** Shifts worked, counting the perfect one (or the shifts before giving up). */
   tries: number;
-  /** Each submission's stamp in order: true for approved. */
+  /** Each submission's stamp in order: true for approved. Hints are not included. */
   history: boolean[];
-  /** The submissions themselves, so a finished day still shows its log. */
-  submitted?: Sample[];
+  /** Everything in the trays, so a finished day still shows its log. */
+  submitted?: Entry[];
+  hints?: number;
+  /** Asked head office for the memo instead of finishing a perfect shift. */
+  gaveUp?: boolean;
 }
 export interface Progress {
   version: number;
-  submitted: Sample[];
+  submitted: Entry[];
+  /** Shifts finished so far. */
   tries: number;
+  /** A shift underway: the answers given so far. Its bag is rebuilt from the puzzle, the try number and the trays. */
+  shift?: { answers: boolean[] };
 }
 
 const boardGame = (board: BoardId) => `${GAME}.${board}`;
@@ -73,6 +84,34 @@ export function loadTestBoard(): BoardId {
     // Fall through to the first board.
   }
   return BOARD_IDS[0]!;
+}
+
+/** Testing only: forget today's result and run for a board, so the day can be played again as if new. */
+export function resetDay(dateKey: string, board: BoardId) {
+  clearProgress(dateKey, board);
+  try {
+    localStorage.removeItem(`${boardGame(board)}.attempt.${dateKey}`);
+  } catch {
+    // Nothing to reset when storage is blocked.
+  }
+}
+
+const HOW_TO_KEY = `${GAME}.howToSeen`;
+
+export function howToSeen(): boolean {
+  try {
+    return localStorage.getItem(HOW_TO_KEY) === "1";
+  } catch {
+    return true;
+  }
+}
+
+export function markHowToSeen() {
+  try {
+    localStorage.setItem(HOW_TO_KEY, "1");
+  } catch {
+    // It just opens again next time.
+  }
 }
 
 export function saveTestBoard(board: BoardId) {

@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Box from "@mui/material/Box";
+import { SheetPicture } from "../desk";
 import type { Cells } from "../engine";
 import { DASH, INK, PAPER, PAPER_2, PERF, POSTAL, RULE } from "../palette";
 import type { BoardView, EditorProps } from "../views";
@@ -91,6 +92,7 @@ export const SHEET_VIEW: BoardView = {
   empty: () => new Array(SIZE).fill(0),
   Editor: SheetEditor,
   Thumb: SheetThumb,
+  Picture: SheetPicture,
   describe: (cells) => {
     const n = cells.filter(Boolean).length;
     return `Stamp sheet with ${n} stamp${n === 1 ? "" : "s"}`;

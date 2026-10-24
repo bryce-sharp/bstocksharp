@@ -2,7 +2,7 @@
 
 import { makeRng } from "../daily";
 import { findRegulation } from "./boards";
-import { BAG_SIZE, MAX_APPROVED, MIN_APPROVED, buildBag, itemKey, makeExamples, passes, type BagItem, type Item, type Part, type Puzzle } from "./engine";
+import { BAG_SIZE, MAX_APPROVED, MIN_APPROVED, buildBag, itemKey, makeExamples, passes, type BagItem, type BoardId, type Item, type Part, type Puzzle, type Sample } from "./engine";
 
 function resolve(part: Part) {
   const found = findRegulation(part);
@@ -31,6 +31,33 @@ export function approves(puzzle: Puzzle, item: Item): boolean {
 /** The bag for an inspection try; `exclude` holds the keys of items already in the player's log. */
 export function inspectionBag(puzzle: Puzzle, attempt: number, exclude: Iterable<string>): BagItem[] {
   return buildBag(puzzle.parts.map(resolve), makeRng(`${puzzle.seed}:bag:${attempt}`), new Set(exclude));
+}
+
+/**
+ * A supervisor's hint: two items one small change apart, one approved and one returned, neither in `exclude`. `n`
+ * counts the hints already given, so each ring brings a different pair.
+ */
+export function hintPair(puzzle: Puzzle, board: BoardId, n: number, exclude: Iterable<string>): [Sample, Sample] | null {
+  const part = puzzle.parts.find((p) => p.board === board);
+  if (!part) return null;
+  const { board: def, regulation } = resolve(part);
+  const skip = new Set(exclude);
+  const rng = makeRng(`${puzzle.seed}:hint:${board}:${n}`);
+  const fresh = (cells: number[]) => !skip.has(itemKey({ board, cells }));
+  for (let t = 0; t < 400; t++) {
+    const yes = regulation.make(rng);
+    if (!passes(regulation, yes) || def.filled(yes) < 3 || !fresh(yes)) continue;
+    for (let u = 0; u < 30; u++) {
+      const no = def.mutate(yes, rng);
+      if (def.filled(no) > 0 && !passes(regulation, no) && fresh(no)) {
+        return [
+          { board, cells: yes, follows: true },
+          { board, cells: no, follows: false },
+        ];
+      }
+    }
+  }
+  return null;
 }
 
 /** Everything wrong with a puzzle, checked over its first `attempts` inspection bags; empty means it is fine. */

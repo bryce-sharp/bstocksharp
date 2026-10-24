@@ -14,6 +14,8 @@ export interface BoardView {
   empty: () => Cells;
   Editor: React.ComponentType<EditorProps>;
   Thumb: React.ComponentType<{ cells: Cells }>;
+  /** A large drawing of an item, for the shift. */
+  Picture: React.ComponentType<{ cells: Cells; size: number }>;
   /** A short description for screen readers. */
   describe: (cells: Cells) => string;
   howTo: string;

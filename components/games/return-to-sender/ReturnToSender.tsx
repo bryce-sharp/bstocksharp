@@ -2,39 +2,74 @@
 
 import * as React from "react";
 import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
+import Divider from "@mui/material/Divider";
 import GlobalStyles from "@mui/material/GlobalStyles";
+import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
-import TextField from "@mui/material/TextField";
-import { formatLongDate, puzzleNumber, todayKey } from "../daily";
+import useMediaQuery from "@mui/material/useMediaQuery";
+import type { SxProps, Theme } from "@mui/material/styles";
+import { addDays, puzzleNumber, todayKey } from "../daily";
 import { BOARD_IDS, BOARDS, findRegulation } from "./boards";
-import { BAG_SIZE, itemKey, type BagItem, type BoardId, type Cells, type Item, type Puzzle, type Sample } from "./engine";
-import { DISPLAY, RTS_FONTS, TYPE } from "./fonts";
+import { DeskCalendar, Handbook, HangingSign, PAPER_CARD, ServiceBell, TestingClipboard, Tray, surface } from "./desk";
+import { BAG_SIZE, itemKey, type BagItem, type BoardId, type Cells, type Item, type Puzzle } from "./engine";
+import { RTS_FONTS, TYPE, DISPLAY } from "./fonts";
+import { HowToPlay, PaperDialog } from "./handbook";
 import { loadDay } from "./load";
-import { AIRMAIL, APPROVED, DASH, DESK, INK, MUTED, ON_DARK, ON_DARK_MUTED, PAPER, POSTAL, RETURNED, RULE } from "./palette";
-import { DocCard, Kicker, PaperPanel, STAMP_KEYFRAMES, Stamp, Tag } from "./parts";
-import { approves, inspectionBag } from "./puzzle";
-import { LAUNCH_DATE, clearProgress, loadProgress, loadResult, loadTestBoard, saveProgress, saveResult, saveTestBoard, type Result } from "./records";
+import { AIRMAIL, APPROVED, DASH, INK, MUTED, ON_DARK, ON_DARK_MUTED, PAPER, POSTAL, RETURNED } from "./palette";
+import { Heading, Memo, Squares, Timesheet } from "./paperwork";
+import { DocCard, STAMP_KEYFRAMES, Stamp, Tag } from "./parts";
+import { approves, hintPair, inspectionBag } from "./puzzle";
+import { LAUNCH_DATE, clearProgress, howToSeen, loadProgress, loadResult, loadTestBoard, markHowToSeen, resetDay, saveProgress, saveResult, saveTestBoard, type Entry, type Progress, type Result } from "./records";
 import { PUZZLE_VERSION, type DayPuzzles } from "./schedule";
+import { INK_DELAY, InkDefs, InkStamp, PRESS_KEYFRAMES, StampOver, stampDateLine } from "./stamp";
 import { VIEWS } from "./views";
 
 const SHARE_URL = "https://bstocksharp.dev/games/return-to-sender";
+const HINTS_PER_DAY = 2;
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const visuallyHidden = { position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" } as const;
 
-const primaryButton = { bgcolor: POSTAL, color: "#fff", fontWeight: 600, textTransform: "none", boxShadow: "none", "&:hover": { bgcolor: "#213f80", boxShadow: "none" } } as const;
-const plainButton = { color: INK, border: `1px solid ${DASH}`, fontWeight: 600, textTransform: "none", "&:hover": { borderColor: INK, bgcolor: "transparent" } } as const;
-const smallText = { m: 0, fontSize: 13, lineHeight: 1.5, color: MUTED } as const;
+const DESK_KEYFRAMES = {
+  "@keyframes rtsSlideIn": { from: { transform: "translateY(-28px) rotate(-3deg)", opacity: 0 }, to: { transform: "none", opacity: 1 } },
+  "@keyframes rtsPrint": { from: { transform: "translateY(-36px)", opacity: 0 }, to: { transform: "none", opacity: 1 } },
+  "@keyframes rtsLamp": { from: { opacity: 0 }, to: { opacity: 1 } },
+};
 
-/** Today's mail: while testing, a picker chooses which board's puzzle to play. */
+const LOOKS = {
+  plain: { fontFamily: TYPE, fontSize: 15, lineHeight: 1.1, px: 2, py: 1.2, borderRadius: "5px", cursor: "pointer", border: `1px solid ${DASH}`, bgcolor: PAPER, color: INK },
+  primary: { fontFamily: TYPE, fontSize: 15, lineHeight: 1.1, px: 2, py: 1.2, borderRadius: "5px", cursor: "pointer", border: `1px solid ${POSTAL}`, bgcolor: POSTAL, color: "#fff" },
+  shift: { fontFamily: TYPE, fontSize: 15, lineHeight: 1.1, px: 2, py: 1.2, borderRadius: "5px", cursor: "pointer", border: `1px solid ${RETURNED}`, bgcolor: RETURNED, color: "#fff" },
+  link: { fontFamily: TYPE, fontSize: 13, p: 0.5, border: 0, bgcolor: "transparent", color: MUTED, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: "3px" },
+} as const;
+
+type BtnProps = Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "color"> & { look?: keyof typeof LOOKS; sx?: SxProps<Theme> };
+
+function Btn({ look = "plain", sx, ...rest }: BtnProps) {
+  return (
+    <Box
+      component="button"
+      type="button"
+      {...rest}
+      sx={[LOOKS[look], { whiteSpace: "nowrap", "&:disabled": { opacity: 0.45, cursor: "default" }, "&:focus-visible": { outline: `2px solid ${POSTAL}`, outlineOffset: "2px" } }, ...(Array.isArray(sx) ? sx : [sx])]}
+    />
+  );
+}
+
+/** The post office desk. While testing, the clipboard picks the board and the calendar steps through past days. */
 export function ReturnToSender() {
-  const [dateKey] = React.useState(todayKey);
+  const [today] = React.useState(todayKey);
+  const [dateKey, setDateKey] = React.useState(today);
   const [board, setBoard] = React.useState<BoardId>(loadTestBoard);
-  const [day, setDay] = React.useState<DayPuzzles | "error" | null>(null);
+  const [day, setDay] = React.useState<{ key: string; data: DayPuzzles } | "error" | null>(null);
+  const [resets, setResets] = React.useState(0);
+  const [menu, setMenu] = React.useState<HTMLElement | null>(null);
+  const [howTo, setHowTo] = React.useState(() => !howToSeen());
+  const phone = useMediaQuery("(max-width:899.95px)");
 
   React.useEffect(() => {
     let live = true;
     loadDay(dateKey).then(
-      (d) => live && setDay(d),
+      (data) => live && setDay({ key: dateKey, data }),
       () => live && setDay("error"),
     );
     return () => {
@@ -42,99 +77,141 @@ export function ReturnToSender() {
     };
   }, [dateKey]);
 
-  const puzzle = day && day !== "error" ? day.puzzles[board] : undefined;
+  const loaded = day && day !== "error" && day.key === dateKey ? day.data : null;
+  const puzzle = loaded?.puzzles[board];
   const number = puzzleNumber(dateKey, LAUNCH_DATE);
-  const status = day === "error" ? "Today's mail could not be loaded. Check your connection, then reload the page." : !day ? "Sorting today's mail..." : !puzzle ? `There is no ${BOARDS[board].name} puzzle today.` : "";
+  const status = day === "error" ? "The mail could not be loaded. Check your connection, then reload the page." : !loaded ? "Sorting the mail..." : !puzzle ? `There is no ${BOARDS[board].name} today.` : "";
+  const openMenu = (e: React.MouseEvent<HTMLElement>) => setMenu(e.currentTarget);
 
   return (
-    <Box className={RTS_FONTS} sx={{ bgcolor: DESK, color: ON_DARK, borderRadius: "10px", p: { xs: 1.5, sm: 2.5, md: 3 }, display: "grid", gap: 2.5 }}>
-      <GlobalStyles styles={STAMP_KEYFRAMES} />
-      <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: 2 }}>
-        <Box sx={{ display: "grid", gap: 0.75 }}>
-          <Box component="p" sx={{ m: 0, fontFamily: TYPE, fontWeight: 700, fontSize: 12, letterSpacing: "0.12em", textTransform: "uppercase", color: ON_DARK_MUTED }}>
-            No. {number} · {formatLongDate(dateKey)}
-          </Box>
-          <Box component="h1" sx={{ m: 0, fontFamily: DISPLAY, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.02em", lineHeight: 0.95, fontSize: { xs: 40, sm: 56 } }}>
-            Return to Sender
+    <Box className={RTS_FONTS} sx={{ position: "relative", background: surface("wood"), color: ON_DARK, borderRadius: "10px", px: { xs: 1.25, sm: 2, md: 3 }, pt: { xs: 0.5, md: 1 }, pb: { xs: 12, md: 3 }, display: "grid", gap: { xs: 1.25, md: 2.5 }, alignContent: "start", boxShadow: "inset 0 0 60px rgba(0,0,0,0.45)", minHeight: { md: 640 } }}>
+      <GlobalStyles styles={{ ...STAMP_KEYFRAMES, ...PRESS_KEYFRAMES, ...DESK_KEYFRAMES }} />
+      <InkDefs />
+      <Box sx={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "start", gap: 1 }}>
+        <Box sx={{ justifySelf: "start", pt: { xs: 1, md: 1.5 } }}>
+          <DeskCalendar dateKey={dateKey} small={phone} arrows onPrev={() => setDateKey(addDays(dateKey, -1))} onNext={() => setDateKey(addDays(dateKey, 1))} canPrev={dateKey > LAUNCH_DATE} canNext={dateKey < today} />
+        </Box>
+        <HangingSign style="enamel" number={number} small={phone} />
+        <Box sx={{ justifySelf: "end", display: "flex", gap: 2, alignItems: "start", pt: { xs: 1, md: 1.5 } }}>
+          {!phone && <TestingClipboard board={BOARDS[board].name} onClick={openMenu} />}
+          <Box component="button" type="button" aria-label="Open the employee handbook: how to play" onClick={() => setHowTo(true)} sx={{ border: 0, p: 0, bgcolor: "transparent", cursor: "pointer" }}>
+            <Handbook small />
           </Box>
         </Box>
-        <TextField
-          select
-          size="small"
-          label="Board (testing)"
-          value={board}
-          onChange={(e) => {
-            const next = e.target.value as BoardId;
-            setBoard(next);
-            saveTestBoard(next);
-          }}
-          sx={{
-            minWidth: 200,
-            "& .MuiInputBase-root": { color: ON_DARK, fontFamily: TYPE },
-            "& .MuiOutlinedInput-notchedOutline": { borderColor: ON_DARK_MUTED },
-            "& .MuiInputLabel-root, & .MuiInputLabel-root.Mui-focused": { color: ON_DARK_MUTED },
-            "& .MuiSvgIcon-root": { color: ON_DARK },
-          }}
-        >
-          {BOARD_IDS.map((b) => (
-            <MenuItem key={b} value={b}>
-              {BOARDS[b].name}
-            </MenuItem>
-          ))}
-        </TextField>
       </Box>
-      <Box component="p" sx={{ m: 0, fontSize: 13, color: ON_DARK_MUTED }}>
-        Testing build: every board has a puzzle each day, and results are saved on this device only.
-      </Box>
+      {phone && (
+        <Box component="button" type="button" onClick={openMenu} aria-haspopup="menu" sx={{ justifySelf: "center", fontFamily: TYPE, fontSize: 12, color: INK, bgcolor: PAPER, border: "3px solid #8a6a45", borderRadius: "5px", px: 1, py: 0.25, cursor: "pointer" }}>
+          Testing · {BOARDS[board].name} ▾
+        </Box>
+      )}
       {puzzle ? (
-        <Counter key={`${dateKey}:${board}`} puzzle={puzzle} dateKey={dateKey} board={board} number={number} />
+        <Desk key={`${dateKey}:${board}:${resets}`} puzzle={puzzle} dateKey={dateKey} board={board} number={number} practiceDay={dateKey !== today} phone={phone} />
       ) : (
-        <Box component="p" aria-live="polite" sx={{ m: 0, py: 6, textAlign: "center", fontFamily: TYPE, color: ON_DARK_MUTED }}>
+        <Box component="p" aria-live="polite" sx={{ m: 0, py: 8, textAlign: "center", fontFamily: TYPE, color: ON_DARK }}>
           {status}
         </Box>
       )}
+      <Menu anchorEl={menu} open={!!menu} onClose={() => setMenu(null)}>
+        {BOARD_IDS.map((b) => (
+          <MenuItem
+            key={b}
+            selected={b === board}
+            onClick={() => {
+              setBoard(b);
+              saveTestBoard(b);
+              setMenu(null);
+            }}
+          >
+            {BOARDS[b].name}
+          </MenuItem>
+        ))}
+        <Divider />
+        <MenuItem
+          disabled={dateKey !== today}
+          onClick={() => {
+            resetDay(today, board);
+            setResets((r) => r + 1);
+            setMenu(null);
+          }}
+        >
+          Reset today&apos;s puzzle
+        </MenuItem>
+      </Menu>
+      <HowToPlay
+        open={howTo}
+        onClose={() => {
+          setHowTo(false);
+          markHowToSeen();
+        }}
+        boardName={BOARDS[board].name}
+        boardHowTo={VIEWS[board].howTo}
+      />
     </Box>
   );
 }
 
-type Mode = "build" | "exam" | "solved";
+type Mode = "build" | "shift" | "timesheet" | "solved";
+type DialogName = "shift" | "giveUp" | "hint" | "approved" | "returned" | null;
 interface Shown {
   follows: boolean;
   repeat: boolean;
-  /** Counts stamps, so the same result thumps down again on the next submit. */
+  /** Counts presses, so the same stamp lands again on the next submit. */
   n: number;
 }
 
-/** One board's puzzle for the day: build and submit items, keep the log, then pass an inspection. */
-function Counter({ puzzle, dateKey, board, number }: { puzzle: Puzzle; dateKey: string; board: BoardId; number: number }) {
+/** One board's puzzle for the day: the desk, the trays and bell, the shift, the timesheet and the memo. */
+function Desk({ puzzle, dateKey, board, number, practiceDay, phone }: { puzzle: Puzzle; dateKey: string; board: BoardId; number: number; practiceDay: boolean; phone: boolean }) {
   const view = VIEWS[board];
   const part = puzzle.parts.find((p) => p.board === board)!;
   const regulationText = findRegulation(part)?.regulation.text ?? part.regulation;
+  const dateLine = stampDateLine(number, dateKey);
+  const examples = puzzle.examples.filter((e) => e.board === board);
+
   const [initial] = React.useState(() => {
+    if (practiceDay) return { result: null as Result | null, progress: null as Progress | null };
     const result = loadResult(dateKey, board);
     return { result, progress: result ? null : loadProgress(dateKey, board) };
   });
   const [saved, setSaved] = React.useState<Result | null>(initial.result);
-  const [practice, setPractice] = React.useState<Result | null>(null);
-  const [replay, setReplay] = React.useState(false);
-  const [submitted, setSubmitted] = React.useState<Sample[]>(initial.result?.submitted ?? initial.progress?.submitted ?? []);
-  const [tries, setTries] = React.useState(initial.progress?.tries ?? 0);
-  const [mode, setMode] = React.useState<Mode>(initial.result ? "solved" : "build");
+  const [practice, setPractice] = React.useState(practiceDay);
+  const [practiceResult, setPracticeResult] = React.useState<Result | null>(null);
+  const [entries, setEntries] = React.useState<Entry[]>(initial.result?.submitted ?? initial.progress?.submitted ?? []);
+  const [tries, setTries] = React.useState(initial.progress?.tries ?? initial.result?.tries ?? 0);
+  // A shift left underway comes back exactly: its bag is rebuilt from the same try and the same trays.
+  const [shift, setShift] = React.useState<{ bag: BagItem[]; answers: boolean[] } | null>(() => {
+    const p = initial.progress;
+    if (!p?.shift) return null;
+    return { bag: inspectionBag(puzzle, p.tries, [...examples, ...p.submitted].map(itemKey)), answers: p.shift.answers };
+  });
+  const [mode, setMode] = React.useState<Mode>(initial.result ? "solved" : shift ? "shift" : "build");
+  const [lastRight, setLastRight] = React.useState(0);
   const [cells, setCells] = React.useState<Cells>(view.empty);
   const [shown, setShown] = React.useState<Shown | null>(null);
+  const [landing, setLanding] = React.useState<{ ok: boolean; n: number } | null>(null);
   const [flashKey, setFlashKey] = React.useState<string | null>(null);
-  const [bag, setBag] = React.useState<BagItem[]>([]);
-  const [answers, setAnswers] = React.useState<(boolean | null)[]>([]);
-  const [checked, setChecked] = React.useState(false);
-  const [message, setMessage] = React.useState("");
-  const stamps = React.useRef(0);
+  const [dialog, setDialog] = React.useState<DialogName>(null);
+  const [hintNote, setHintNote] = React.useState<Entry[]>([]);
+  const [coarse] = React.useState(() => window.matchMedia("(pointer: coarse)").matches);
+  const [copied, setCopied] = React.useState(false);
+  const presses = React.useRef(0);
+  const timer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  React.useEffect(() => {
+    const t = timer;
+    return () => clearTimeout(t.current);
+  }, []);
 
-  const examples = puzzle.examples.filter((e) => e.board === board);
-  const log = [...examples, ...submitted];
-  const result = replay ? practice : saved;
-  // Only the scored first run is kept; a replay is practice.
-  const keep = (nextSubmitted: Sample[], nextTries: number) => {
-    if (!replay) saveProgress(dateKey, board, { version: PUZZLE_VERSION, submitted: nextSubmitted, tries: nextTries });
+  const log: Entry[] = [...examples, ...entries];
+  const submissions = entries.filter((e) => !e.hint);
+  const hintsUsed = entries.filter((e) => e.hint).length / 2;
+  const result = practice ? practiceResult : saved;
+  const live = mode === "shift" || mode === "timesheet";
+
+  // Only the scored first run of today is kept; past days and replays are practice.
+  const keep = (nextEntries: Entry[], nextTries: number, nextShift?: { answers: boolean[] }) => {
+    if (!practice) saveProgress(dateKey, board, { version: PUZZLE_VERSION, submitted: nextEntries, tries: nextTries, ...(nextShift ? { shift: nextShift } : {}) });
+  };
+  const thump = () => {
+    if (typeof navigator.vibrate === "function") setTimeout(() => navigator.vibrate(18), INK_DELAY);
   };
 
   const edit = (update: (prev: Cells) => Cells) => {
@@ -146,288 +223,423 @@ function Counter({ puzzle, dateKey, board, number }: { puzzle: Puzzle; dateKey: 
     const item: Item = { board, cells };
     const key = itemKey(item);
     const found = log.find((e) => itemKey(e) === key);
-    stamps.current += 1;
-    if (found) setShown({ follows: found.follows, repeat: true, n: stamps.current });
+    presses.current += 1;
+    if (found) setShown({ follows: found.follows, repeat: true, n: presses.current });
     else {
       const follows = approves(puzzle, item);
-      const next = [...submitted, { ...item, follows }];
-      setSubmitted(next);
+      const next = [...entries, { ...item, follows }];
+      setEntries(next);
       keep(next, tries);
-      setShown({ follows, repeat: false, n: stamps.current });
+      setShown({ follows, repeat: false, n: presses.current });
     }
     setFlashKey(key);
+    thump();
   };
 
-  const bringBack = (entry: Sample) => {
+  const bringBack = (entry: Entry) => {
     setCells([...entry.cells]);
     setShown(null);
     setFlashKey(itemKey(entry));
+    setDialog(null);
   };
 
-  const inspect = () => {
-    const next = inspectionBag(puzzle, tries, log.map(itemKey));
-    setBag(next);
-    setAnswers(next.map(() => null));
-    setChecked(false);
-    setMessage("");
-    setMode("exam");
+  const ring = () => {
+    if (!submissions.length || hintsUsed >= HINTS_PER_DAY) return;
+    const pair = hintPair(puzzle, board, hintsUsed, log.map(itemKey));
+    if (!pair) return;
+    const added = pair.map((p) => ({ ...p, hint: true }));
+    const next = [...entries, ...added];
+    setEntries(next);
+    keep(next, tries);
+    setHintNote(added);
+    setDialog("hint");
   };
 
-  const file = () => {
-    const nextTries = tries + 1;
-    setTries(nextTries);
-    const wrong = bag.filter((item, n) => answers[n] !== item.truth).length;
-    if (wrong) {
-      setChecked(true);
-      setMessage(`${wrong} of ${bag.length} are filed wrong. Make a few more submissions, then ask for a new inspection.`);
-      keep(submitted, nextTries);
-      return;
-    }
-    const done: Result = { version: PUZZLE_VERSION, submissions: submitted.length, tries: nextTries, history: submitted.map((s) => s.follows), submitted };
-    if (replay) setPractice(done);
+  const startShift = () => {
+    setShift({ bag: inspectionBag(puzzle, tries, log.map(itemKey)), answers: [] });
+    setMode("shift");
+    setDialog(null);
+    keep(entries, tries, { answers: [] });
+  };
+
+  const makeResult = (nextTries: number, gaveUp: boolean): Result => ({
+    version: PUZZLE_VERSION,
+    submissions: submissions.length,
+    tries: nextTries,
+    history: submissions.map((s) => s.follows),
+    submitted: entries,
+    hints: hintsUsed,
+    ...(gaveUp ? { gaveUp } : {}),
+  });
+
+  const finish = (done: Result) => {
+    if (practice) setPracticeResult(done);
     else {
       saveResult(dateKey, board, done);
       clearProgress(dateKey, board);
       setSaved(done);
     }
+  };
+
+  function finishShift(bag: BagItem[], answers: boolean[]) {
+    const right = bag.filter((item, i) => answers[i] === item.truth).length;
+    const nextTries = tries + 1;
+    setTries(nextTries);
+    setLastRight(right);
+    setShift(null);
+    if (right === bag.length) finish(makeResult(nextTries, false));
+    else keep(entries, nextTries);
+    setMode("timesheet");
+  }
+
+  const answer = (approve: boolean) => {
+    if (!shift || landing) return;
+    const answers = [...shift.answers, approve];
+    const bag = shift.bag;
+    setShift({ bag, answers });
+    presses.current += 1;
+    setLanding({ ok: approve, n: presses.current });
+    thump();
+    keep(entries, tries, { answers });
+    timer.current = setTimeout(() => {
+      setLanding(null);
+      if (answers.length === bag.length) finishShift(bag, answers);
+    }, 900);
+  };
+
+  const giveUp = () => {
+    finish(makeResult(tries, true));
+    setDialog(null);
     setMode("solved");
   };
 
-  const backToCounter = () => {
-    setMode("build");
-    setBag([]);
-    setChecked(false);
-    setMessage("");
-  };
-
   const playAgain = () => {
-    setReplay(true);
-    setPractice(null);
-    setSubmitted([]);
+    setPractice(true);
+    setPracticeResult(null);
+    setEntries([]);
     setTries(0);
+    setShift(null);
     setCells(view.empty());
     setShown(null);
     setFlashKey(null);
     setMode("build");
   };
 
-  return (
-    <PaperPanel>
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "minmax(0, 1fr) 320px" }, gap: { xs: 3, md: 3.5 }, p: { xs: 2, sm: 3 } }}>
-        <Box sx={{ display: "grid", gap: 2, alignContent: "start", minWidth: 0 }}>
-          <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-end", gap: 1.5 }}>
-            <Box sx={{ display: "grid", gap: 0.75 }}>
-              <Kicker>
-                Regulation No. {number}
-                {replay ? " · Practice" : ""}
-              </Kicker>
-              <Box component="h2" sx={{ m: 0, fontFamily: DISPLAY, fontWeight: 700, fontSize: 32, lineHeight: 1, textTransform: "uppercase" }}>
-                {BOARDS[board].name}
-              </Box>
-            </Box>
-            <Box sx={{ fontFamily: TYPE, fontSize: 13, color: MUTED }}>
-              Submissions
-              <Box component="b" sx={{ fontSize: 22, color: INK, ml: 0.75 }}>
-                {submitted.length}
-              </Box>
-            </Box>
-          </Box>
+  const approvedPile = log.filter((e) => e.follows);
+  const returnedPile = log.filter((e) => !e.follows);
+  const bellLabel = !submissions.length ? "Hint after one try" : hintsUsed >= HINTS_PER_DAY ? "No rings left" : hintsUsed ? "1 ring left" : phone ? "Hint" : "Ring for a hint";
 
-          {mode === "build" && (
-            <>
-              <Box component="p" sx={{ ...smallText, fontSize: 14 }}>
-                {view.howTo} Then submit it to the clerk.
-              </Box>
-              <Box sx={{ position: "relative", width: "100%", maxWidth: 300 }}>
-                <view.Editor cells={cells} onChange={edit} />
-                {shown && (
-                  <Box key={shown.n} aria-live="polite" sx={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1, pointerEvents: "none" }}>
-                    <Stamp ok={shown.follows} big />
-                    {shown.repeat && (
-                      <Box component="span" sx={{ fontFamily: TYPE, fontSize: 12, bgcolor: PAPER, px: 0.75, py: 0.25, borderRadius: "3px" }}>
-                        Already submitted
-                      </Box>
-                    )}
-                  </Box>
-                )}
-              </Box>
-              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-                <Button variant="contained" onClick={submit} sx={primaryButton}>
-                  {view.submitLabel}
-                </Button>
-                <Button onClick={() => edit(() => view.empty())} sx={plainButton}>
-                  Clear
-                </Button>
-              </Box>
-            </>
-          )}
-
-          {mode === "exam" && (
-            <Box sx={{ display: "grid", gap: 2 }}>
-              <Box component="p" sx={{ ...smallText, fontSize: 14 }}>
-                Inspection: approve or return each item in this mail bag. All {bag.length} right closes the puzzle.
-              </Box>
-              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", sm: "repeat(4, minmax(0, 1fr))" }, gap: 1.25 }}>
-                {bag.map((item, n) => (
-                  <DocCard key={itemKey(item)} label={`Item ${n + 1}: ${view.describe(item.cells)}`}>
-                    <view.Thumb cells={item.cells} />
-                    <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px", width: "100%" }}>
-                      {[true, false].map((approve) => (
-                        <SortButton
-                          key={String(approve)}
-                          approve={approve}
-                          on={answers[n] === approve}
-                          disabled={checked}
-                          onClick={() => setAnswers((a) => a.map((x, j) => (j === n ? approve : x)))}
-                        />
-                      ))}
-                    </Box>
-                  </DocCard>
-                ))}
-              </Box>
-              <Box component="p" aria-live="polite" sx={{ m: 0, minHeight: "1.5em", color: RETURNED, fontWeight: 500 }}>
-                {message}
-              </Box>
-              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-                <Button variant="contained" onClick={file} disabled={checked || answers.some((a) => a === null)} sx={primaryButton}>
-                  File the inspection
-                </Button>
-                <Button onClick={backToCounter} sx={plainButton}>
-                  Back to the counter
-                </Button>
-              </Box>
-            </Box>
-          )}
-
-          {mode === "solved" && result && (
-            <Memo number={number} board={board} regulationText={regulationText} result={result} practice={replay} onPlayAgain={playAgain} />
-          )}
-        </Box>
-
-        <Box sx={{ display: "grid", gap: 2, alignContent: "start", minWidth: 0 }}>
-          <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
-            <Kicker>Submission log</Kicker>
-            <Button variant="contained" onClick={inspect} disabled={mode !== "build"} sx={primaryButton}>
-              Request inspection
-            </Button>
-          </Box>
-          <Box component="ol" sx={{ listStyle: "none", m: 0, p: 0, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(104px, 1fr))", gap: 1, maxHeight: 380, overflow: "auto" }}>
-            {[...log].reverse().map((entry, i) => {
-              const key = itemKey(entry);
-              const example = log.length - 1 - i < examples.length;
-              return (
-                <li key={key}>
-                  <DocCard
-                    label={`${example ? "Example. " : ""}${view.describe(entry.cells)}. ${entry.follows ? "Approved" : "Returned"}.${mode === "build" ? " Bring it back to the counter." : ""}`}
-                    active={key === flashKey}
-                    onClick={mode === "build" ? () => bringBack(entry) : undefined}
-                  >
-                    <view.Thumb cells={entry.cells} />
-                    <Stamp ok={entry.follows} />
-                    {example && <Tag>Example</Tag>}
-                  </DocCard>
-                </li>
-              );
-            })}
-          </Box>
-          <Box component="p" sx={smallText}>
-            Newest first. Tap an item to bring it back to the counter.
-          </Box>
-          <Box component="ul" sx={{ m: 0, pl: 2.25, display: "grid", gap: 0.75, fontSize: 14 }}>
-            <li>Build an item and submit it. The clerk stamps it Approved or Return to sender, by today&apos;s secret regulation.</li>
-            <li>When you think you know the regulation, request an inspection: approve or return {BAG_SIZE} new items. All right closes the puzzle.</li>
-            <li>A wrong inspection sends you back to the counter. Your score is how many items you submitted.</li>
-          </Box>
-        </Box>
-      </Box>
-    </PaperPanel>
-  );
-}
-
-function SortButton({ approve, on, disabled, onClick }: { approve: boolean; on: boolean; disabled: boolean; onClick: () => void }) {
-  const color = approve ? APPROVED : RETURNED;
-  return (
+  const bell = (
     <Box
       component="button"
       type="button"
-      aria-pressed={on}
-      disabled={disabled}
-      onClick={onClick}
-      sx={{
-        fontFamily: TYPE,
-        fontWeight: 700,
-        fontSize: 11,
-        letterSpacing: "0.04em",
-        textTransform: "uppercase",
-        py: 1,
-        px: 0.25,
-        borderRadius: "3px",
-        cursor: disabled ? "default" : "pointer",
-        border: `1px solid ${on ? color : RULE}`,
-        color: on ? color : MUTED,
-        bgcolor: on ? `${color}1f` : "transparent",
-      }}
+      onClick={ring}
+      disabled={!submissions.length || hintsUsed >= HINTS_PER_DAY}
+      aria-label={`Service bell: ${bellLabel}`}
+      sx={{ border: 0, p: 0, bgcolor: "transparent", color: "inherit", cursor: "pointer", "&:disabled": { cursor: "default" }, "&:focus-visible": { outline: `2px solid ${PAPER}`, outlineOffset: "4px", borderRadius: "6px" } }}
     >
-      {approve ? "Approve" : "Return"}
+      <ServiceBell state={!submissions.length ? "locked" : hintsUsed ? "used" : "ready"} rung={hintsUsed} small plaque={bellLabel} />
     </Box>
   );
-}
 
-/** The head office memo that closes a puzzle: the regulation, the score, and the share line. */
-function Memo({ number, board, regulationText, result, practice, onPlayAgain }: { number: number; board: BoardId; regulationText: string; result: Result; practice: boolean; onPlayAgain: () => void }) {
-  const [coarse] = React.useState(() => window.matchMedia("(pointer: coarse)").matches);
-  const [copied, setCopied] = React.useState(false);
-  const squares = result.history.map((ok) => (ok ? "■" : "□")).join("");
-  const text = [`Return to Sender No. ${number}`, `${BOARDS[board].name}: closed with ${plural(result.submissions, "submission")}`, squares, SHARE_URL].filter(Boolean).join("\n");
-  // The link goes at the end of one text, never as a separate url, so share targets keep the whole message.
+  const trays = (
+    <Box sx={{ display: "flex", gap: { xs: 1.5, md: 2.5 }, alignItems: "end", justifyContent: "center" }}>
+      {(["approved", "returned"] as const).map((pile) => {
+        const items = pile === "approved" ? approvedPile : returnedPile;
+        return (
+          <Box
+            key={pile}
+            component="button"
+            type="button"
+            onClick={() => setDialog(pile)}
+            aria-label={`${pile === "approved" ? "Approved" : "Returned"} tray, ${plural(items.length, "item")}. Open it.`}
+            sx={{ border: 0, p: 0, bgcolor: "transparent", color: ON_DARK, cursor: "pointer", "&:focus-visible": { outline: `2px solid ${PAPER}`, outlineOffset: "4px", borderRadius: "6px" } }}
+          >
+            <Tray ok={pile === "approved"} items={items.map((e) => e.cells)} Thumb={view.Thumb} mini={phone} />
+          </Box>
+        );
+      })}
+      {phone && bell}
+    </Box>
+  );
+
+  const giveUpLink = (
+    <Btn look="link" onClick={() => setDialog("giveUp")} sx={{ color: phone ? ON_DARK_MUTED : MUTED }}>
+      Ask head office for the memo
+    </Btn>
+  );
+
+  const counter = (
+    <Box sx={{ ...PAPER_CARD, overflow: "hidden" }}>
+      <Box aria-hidden sx={{ height: 10, background: AIRMAIL }} />
+      <Box sx={{ p: { xs: 1.25, sm: 2.5 }, display: "grid", gap: { xs: 1, md: 2 }, justifyItems: "center" }}>
+        <Box sx={{ justifySelf: "stretch", display: "flex", justifyContent: "space-between", gap: 1, fontFamily: TYPE, fontSize: 13, color: MUTED, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+          <span>
+            {BOARDS[board].name}
+            {practice ? " · Practice" : ""}
+          </span>
+          <span>{plural(submissions.length, "submission")}</span>
+        </Box>
+        {/* On short phones the sheet shrinks so the trays and the action bar still fit without scrolling. */}
+        <Box sx={{ position: "relative", width: "100%", maxWidth: { xs: "min(300px, calc(100svh - 420px))", md: 300 } }}>
+          <view.Editor cells={cells} onChange={edit} />
+          {shown && (
+            <StampOver run={shown.n}>
+              <InkStamp ok={shown.follows} kind="dated-soft" wash size={0.85} dateLine={dateLine} />
+            </StampOver>
+          )}
+          {shown?.repeat && (
+            <Box sx={{ position: "absolute", left: "50%", bottom: 10, transform: "translateX(-50%)", fontFamily: TYPE, fontSize: 12, color: INK, bgcolor: PAPER, px: 0.75, py: 0.25, borderRadius: "3px", pointerEvents: "none" }}>Already submitted</Box>
+          )}
+          <Box aria-live="polite" sx={visuallyHidden}>
+            {shown ? `${shown.follows ? "Approved" : "Returned to sender"}${shown.repeat ? ", already submitted" : ""}` : ""}
+          </Box>
+        </Box>
+        {!phone && (
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Btn look="primary" onClick={submit}>
+              {view.submitLabel}
+            </Btn>
+            <Btn onClick={() => edit(() => view.empty())}>Clear</Btn>
+          </Box>
+        )}
+        {!phone && giveUpLink}
+      </Box>
+    </Box>
+  );
+
+  const index = shift ? (landing ? shift.answers.length - 1 : shift.answers.length) : 0;
+  const current = shift?.bag[index];
+  const shiftView = shift && current && (
+    <Box sx={{ position: "relative", zIndex: 1201, display: "grid", gap: 2, justifyItems: "center", py: { xs: 1, md: 3 } }}>
+      <Box sx={{ fontFamily: TYPE, fontSize: 15, letterSpacing: "0.12em", textTransform: "uppercase", color: ON_DARK }}>
+        Item {index + 1} of {shift.bag.length}
+      </Box>
+      <Box sx={{ position: "relative" }}>
+        <Box key={index} sx={{ animation: "rtsSlideIn 0.35s ease-out both" }}>
+          <view.Picture cells={current.cells} size={phone ? 250 : 290} />
+        </Box>
+        {landing && (
+          <StampOver run={landing.n}>
+            <InkStamp ok={landing.ok} kind="dated-soft" wash size={0.85} dateLine={dateLine} />
+          </StampOver>
+        )}
+      </Box>
+      <Box sx={{ display: "flex", gap: 1.5 }}>
+        <StampButton ok onClick={() => answer(true)} disabled={!!landing} />
+        <StampButton ok={false} onClick={() => answer(false)} disabled={!!landing} />
+      </Box>
+      <Box sx={{ fontFamily: TYPE, fontSize: 13, color: ON_DARK_MUTED, textAlign: "center" }}>Shift {tries + 1}. You stay until the bag is sorted.</Box>
+    </Box>
+  );
+
+  const timesheet = (
+    <Box sx={{ position: "relative", zIndex: 1201, display: "grid", gap: 2.5, justifyItems: "center", py: { xs: 1, md: 3 } }}>
+      <Box sx={{ animation: "rtsPrint 0.6s ease-out both" }}>
+        <Timesheet number={number} shift={tries} right={lastRight} submissions={submissions.length} hints={hintsUsed} history={submissions.map((s) => s.follows)} dateLine={dateLine} />
+      </Box>
+      {lastRight === BAG_SIZE ? (
+        <Btn look="primary" onClick={() => setMode("solved")}>
+          Collect the memo
+        </Btn>
+      ) : (
+        <Btn look="primary" onClick={() => setMode("build")}>
+          Back to the desk
+        </Btn>
+      )}
+    </Box>
+  );
+
+  const summary = result
+    ? result.gaveUp
+      ? `Not solved: you asked head office after ${plural(result.submissions, "submission")}${result.hints ? ` and ${plural(result.hints, "hint")}` : ""}.`
+      : `Perfect on shift ${result.tries}, with ${plural(result.submissions, "submission")}${result.hints ? ` and ${plural(result.hints, "hint")}` : ""}.`
+    : "";
+  const shareLine = result ? `${BOARDS[board].name} · ${result.gaveUp ? "Asked head office" : `Perfect on shift ${result.tries}`} · ${plural(result.submissions, "submission")}${result.hints ? ` · ${plural(result.hints, "hint")}` : ""}` : "";
+  const shareText = [`Return to Sender No. ${number}`, shareLine, result?.history.map((ok) => (ok ? "■" : "□")).join(""), SHARE_URL].filter(Boolean).join("\n");
   const share = () => {
+    // The link goes at the end of one text, never as a separate url, so share targets keep the whole message.
     if (coarse && typeof navigator.share === "function") {
-      navigator.share({ text }).catch(() => {});
+      navigator.share({ text: shareText }).catch(() => {});
       return;
     }
-    navigator.clipboard?.writeText(text).then(
+    navigator.clipboard?.writeText(shareText).then(
       () => setCopied(true),
       () => setCopied(false),
     );
   };
 
-  return (
-    <Box sx={{ border: `1px solid ${RULE}`, borderRadius: "4px", overflow: "hidden", bgcolor: PAPER }}>
-      <Box aria-hidden sx={{ height: 10, background: AIRMAIL }} />
-      <Box sx={{ display: "grid", gap: 1.25, p: "16px 18px" }}>
-        <Kicker>Head office · Memo</Kicker>
-        <Box component="h3" sx={{ m: 0, fontFamily: DISPLAY, fontWeight: 700, fontSize: 26, lineHeight: 1, textTransform: "uppercase" }}>
-          Regulation No. {number}
-        </Box>
-        <Box component="p" sx={{ m: 0, fontFamily: TYPE, fontWeight: 700, fontSize: 17, lineHeight: 1.45 }}>
-          {regulationText}
-        </Box>
-        <Box component="p" sx={smallText}>
-          {practice ? `Practice run: ${plural(result.submissions, "submission")}, not scored.` : `Closed with ${plural(result.submissions, "submission")}. Inspection passed on try ${result.tries}.`}
-        </Box>
+  const memo = result && (
+    <Box sx={{ width: "100%", maxWidth: 480, justifySelf: "center" }}>
+      <Memo number={number} regulationText={regulationText} summary={practice ? `Practice run, not saved. ${summary}` : summary}>
         {!practice && (
-          <Box sx={{ display: "grid", gap: 1, p: "10px 12px", border: `1px dashed ${DASH}`, borderRadius: "4px", fontFamily: TYPE, fontSize: 13 }}>
+          <Box sx={{ display: "grid", gap: 1, p: "10px 12px", border: `1px dashed ${DASH}`, borderRadius: "4px", fontSize: 13 }}>
             <span>
-              Return to Sender No. {number} · {plural(result.submissions, "submission")}
+              Return to Sender No. {number} · {shareLine}
             </span>
-            <Box role="img" aria-label={`${result.history.filter(Boolean).length} approved, ${result.history.filter((ok) => !ok).length} returned`} sx={{ display: "flex", flexWrap: "wrap", gap: "3px" }}>
-              {result.history.map((ok, i) => (
-                <Box key={i} sx={{ width: 12, height: 12, borderRadius: "2px", boxSizing: "border-box", ...(ok ? { bgcolor: APPROVED } : { border: `2px solid ${RETURNED}` }) }} />
-              ))}
-            </Box>
+            <Squares history={result.history} />
           </Box>
         )}
         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
           {!practice && (
-            <Button variant="contained" onClick={share} sx={primaryButton}>
+            <Btn look="primary" onClick={share}>
               {coarse ? "Share result" : copied ? "Copied" : "Copy result"}
-            </Button>
+            </Btn>
           )}
-          <Button onClick={onPlayAgain} sx={plainButton}>
-            Play again for practice
-          </Button>
+          <Btn onClick={playAgain}>Play again for practice</Btn>
         </Box>
-      </Box>
+      </Memo>
+    </Box>
+  );
+
+  const pile = dialog === "approved" || dialog === "returned" ? dialog : null;
+  const pileItems = [...(pile === "approved" ? approvedPile : returnedPile)].reverse();
+
+  return (
+    <>
+      {live && (
+        <Box
+          aria-hidden
+          sx={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1200,
+            // The lamp's circle of light around the item; smaller on phones so the dark still shows on a narrow screen.
+            background: {
+              xs: "radial-gradient(circle at 50% 38%, rgba(255, 236, 190, 0.12) 0 150px, rgba(8, 10, 14, 0.9) 300px)",
+              md: "radial-gradient(circle at 50% 42%, rgba(255, 236, 190, 0.12) 0 180px, rgba(8, 10, 14, 0.88) 420px)",
+            },
+            animation: "rtsLamp 0.5s ease-out both",
+          }}
+        />
+      )}
+
+      {mode === "build" && (
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "minmax(0, 1fr) 360px" }, gap: { xs: 1.5, md: 3 }, alignItems: "start" }}>
+          {counter}
+          <Box sx={{ display: "grid", gap: { xs: 1.5, md: 2.5 }, justifyItems: "center", pt: { md: 2 } }}>
+            {trays}
+            {!phone && (
+              <Box sx={{ display: "flex", gap: 3, alignItems: "center" }}>
+                {bell}
+                <Btn look="shift" onClick={() => setDialog("shift")}>
+                  Start shift
+                </Btn>
+              </Box>
+            )}
+            {phone && giveUpLink}
+          </Box>
+        </Box>
+      )}
+      {mode === "shift" && shiftView}
+      {mode === "timesheet" && timesheet}
+      {mode === "solved" && memo}
+
+      {phone && mode === "build" && (
+        <Box sx={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 1100, display: "grid", gridTemplateColumns: "auto 1fr auto", gap: 1, px: "max(12px, env(safe-area-inset-left, 0px))", pt: 1.25, pb: "calc(10px + env(safe-area-inset-bottom, 0px))", bgcolor: "rgba(20, 22, 26, 0.95)", boxShadow: "0 -6px 18px rgba(0,0,0,0.35)" }}>
+          <Btn onClick={() => edit(() => view.empty())}>Clear</Btn>
+          <Btn look="primary" onClick={submit}>
+            {view.submitLabel}
+          </Btn>
+          <Btn look="shift" onClick={() => setDialog("shift")}>
+            Shift
+          </Btn>
+        </Box>
+      )}
+
+      <PaperDialog open={dialog === "shift"} onClose={() => setDialog(null)} labelledBy="rts-shift">
+        <Heading id="rts-shift">Start your shift?</Heading>
+        <Box component="p" sx={{ m: 0 }}>
+          Your shift is {BAG_SIZE} items, one at a time. Once it starts, you stay until the bag is sorted. The timesheet says how many you sorted right, never which.
+        </Box>
+        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+          <Btn look="shift" onClick={startShift}>
+            Start shift
+          </Btn>
+          <Btn onClick={() => setDialog(null)}>Not yet</Btn>
+        </Box>
+      </PaperDialog>
+
+      <PaperDialog open={dialog === "giveUp"} onClose={() => setDialog(null)} labelledBy="rts-give-up">
+        <Heading id="rts-give-up">Ask head office?</Heading>
+        <Box component="p" sx={{ m: 0 }}>
+          Head office will send the memo with today&apos;s regulation. The day counts as played, not solved.
+        </Box>
+        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+          <Btn look="shift" onClick={giveUp}>
+            Ask head office
+          </Btn>
+          <Btn onClick={() => setDialog(null)}>Keep working</Btn>
+        </Box>
+      </PaperDialog>
+
+      <PaperDialog open={dialog === "hint"} onClose={() => setDialog(null)} labelledBy="rts-hint">
+        <Box sx={{ fontSize: 12, letterSpacing: "0.14em", textTransform: "uppercase", color: MUTED }}>Supervisor&apos;s note</Box>
+        <Heading id="rts-hint">Look closely at these two</Heading>
+        <Box component="p" sx={{ m: 0 }}>
+          They differ by one small change. One was approved and one returned. Both are in your trays now.
+        </Box>
+        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+          {hintNote.map((e) => (
+            <DocCard key={itemKey(e)} label={`${view.describe(e.cells)}. ${e.follows ? "Approved" : "Returned"}.`}>
+              <view.Picture cells={e.cells} size={phone ? 110 : 150} />
+              <Stamp ok={e.follows} />
+            </DocCard>
+          ))}
+        </Box>
+        <Btn look="primary" onClick={() => setDialog(null)} sx={{ justifySelf: "start" }}>
+          Back to the desk
+        </Btn>
+      </PaperDialog>
+
+      <PaperDialog open={!!pile} onClose={() => setDialog(null)} labelledBy="rts-pile">
+        <Box sx={{ display: "flex", gap: 1 }}>
+          {(["approved", "returned"] as const).map((p) => (
+            <Btn key={p} look={pile === p ? "primary" : "plain"} onClick={() => setDialog(p)} aria-pressed={pile === p}>
+              {p === "approved" ? `Approved · ${approvedPile.length}` : `Returned · ${returnedPile.length}`}
+            </Btn>
+          ))}
+        </Box>
+        <Heading id="rts-pile">{pile === "approved" ? "Approved pile" : "Returned pile"}</Heading>
+        {pileItems.length ? (
+          <Box component="ol" sx={{ listStyle: "none", m: 0, p: 0, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))", gap: 1 }}>
+            {pileItems.map((e) => (
+              <li key={itemKey(e)}>
+                <DocCard
+                  label={`${e.hint ? "Hint. " : examples.includes(e) ? "Example. " : ""}${view.describe(e.cells)}.${mode === "build" ? " Bring it back to the desk." : ""}`}
+                  active={itemKey(e) === flashKey}
+                  onClick={mode === "build" ? () => bringBack(e) : undefined}
+                >
+                  <view.Thumb cells={e.cells} />
+                  {e.hint ? <Tag>Hint</Tag> : examples.includes(e) ? <Tag>Example</Tag> : null}
+                </DocCard>
+              </li>
+            ))}
+          </Box>
+        ) : (
+          <Box component="p" sx={{ m: 0, color: MUTED }}>
+            Nothing here yet.
+          </Box>
+        )}
+        <Box component="p" sx={{ m: 0, fontSize: 13, color: MUTED }}>
+          Newest first.{mode === "build" ? " Tap an item to bring it back to the desk." : ""}
+        </Box>
+      </PaperDialog>
+    </>
+  );
+}
+
+function StampButton({ ok, onClick, disabled }: { ok: boolean; onClick: () => void; disabled: boolean }) {
+  const color = ok ? APPROVED : RETURNED;
+  return (
+    <Box
+      component="button"
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      sx={{ fontFamily: DISPLAY, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", fontSize: { xs: 17, md: 19 }, color, bgcolor: PAPER, border: `3px solid ${color}`, borderRadius: "6px", px: 2.25, py: 1.25, cursor: "pointer", boxShadow: "0 4px 0 rgba(0,0,0,0.35)", "&:active": { transform: "translateY(2px)", boxShadow: "0 2px 0 rgba(0,0,0,0.35)" }, "&:disabled": { opacity: 0.6, cursor: "default" }, "&:focus-visible": { outline: `2px solid ${PAPER}`, outlineOffset: "3px" } }}
+    >
+      {ok ? "Approve" : "Return"}
     </Box>
   );
 }

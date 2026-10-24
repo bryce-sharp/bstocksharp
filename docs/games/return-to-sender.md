@@ -217,6 +217,57 @@ difficulty should come from settings and less obvious ideas.
 - **Stats**: the median submissions per puzzle, to tune difficulty and retire
   regulations that feel unfair.
 
+## Stage 3 decisions (polish)
+
+Agreed 2026-10-24, before building.
+
+| Area | Decision |
+|---|---|
+| Scene | A top-down post office desk: your item lies on the counter like real mail, and the rubber stamp is the hero. Cozy, not grim. |
+| Theme | Its own look; it does not follow the site's light or dark mode (like Snug). |
+| Type | A typewriter face for the clerk's voice, with a few options to compare; a bold face for stamps. |
+| The stamp | Must look great, both the stamping motion and the ink. A hand only if it looks good; otherwise the stamp alone, maybe with the shadow of a hand or arm. |
+| Header colors | An "unlisted" flag in `lib/games.ts` so the site header takes the game's colors before it is in the gallery. |
+| No plain header | Diegetic pieces instead where they help, for example a hanging sign with the name and number. Actions stay clear. |
+| Diegetic UI | Lean into objects on the desk: a binder for How to play, and more (see open questions). |
+| Phone screen | The playable area fits without scrolling (instructions and the full log may scroll). Show the last 2 submissions; open the full log as a popup. Look at how other apps do this. |
+| Wider screens | Two columns: the counter and the log. |
+| Stamp moment | A slam with ink texture, and a vibration on phones that support it. No sound for now: sound comes later in one pass across every game. |
+| The item | Submitting never wipes it; the stamp stays until the item changes. Repeats are free. |
+| The log | Two piles, Approved and Returned. It must work for all six boards. |
+| Names | **The desk**: build and submit items, free and unlimited (the testing ground). **Your shift**: the live sort of 8 items. **The timesheet**: prints after a shift with how many of 8 were right. **A perfect shift**: 8 of 8, which closes the day and brings the head office memo. |
+| Your shift | The desk clears, the lighting changes to show you are "live", items come in one at a time to stamp, and the timesheet prints. No grid, desktop included. |
+| Starting a shift | Locked in until the bag is sorted, so you cannot peek at items and then test them. |
+| After a failed shift | The timesheet shows only how many were right, never which ones or their answers (decided 2026-10-24; open to revisiting). |
+| Score | The main number is which shift was perfect ("Perfect on shift 2"); desk submissions come second ("7 submissions"). "Ask head office for the memo" gives up: the regulation is shown and the day counts as played, not solved. |
+| Share | Text plus a picture on phones, like Snug. Two picture ideas to compare on the art sheet: the timesheet slip, and a postcard. |
+| Stats | Saved on the device (like Snug signed out), then to the account in Stage 5. |
+| How to play | Essential, since every board needs its own. Combined with the tutorial, perhaps taught by the clerk in their dry voice. |
+| Hints | A service bell on the desk, ringable after your first submission, at most 2 rings a day. Each ring gives a nudge (for example two items one square apart, one approved and one returned), never the rule. Each ring is noted on the timesheet ("with 1 hint"). |
+| Desk objects | Try them all and keep the game obvious: a hanging sign (name and number), a desk calendar (date and testing past-day arrows), a clipboard (testing board picker), an employee handbook binder (How to play and a first-day tutorial taught by the clerk), the service bell (hints), two trays (the log piles), a desk lamp (shift lighting), the timesheet, and the head office memo. Anything that hides an action becomes a plain button instead. |
+| Tone | Dry, bureaucratic humor in small doses. Words can change once the board is polished. |
+| Accessibility | Keyboard play. Colorblind-safe by design (no setting needed). Reduced motion is not a priority. |
+| Sound | None until the later all-games sound pass. |
+| Testing tools | A small testing pill for the board picker, past-day arrows for practice, and a testing-only "Reset today". |
+
+### Art sheet picks (2026-10-24)
+
+From `/games/return-to-sender/art`:
+
+| Section | Pick |
+|---|---|
+| Typewriter face | Special Elite |
+| Stamp face | Oswald |
+| Ink | Dated, with easier-to-read text and a toned-down version of the inked roughness (softer options added to compare) |
+| Stamp landing | The stamp only, with no arm shadow |
+| Desk surface | Oak desk |
+| Hanging sign | Blue enamel |
+| Desk objects and log piles | As drawn |
+| Desk on a computer | Good, but the handbook label overflowed and the bell looked out of place; the bell gets a home (a plaque beside the trays) |
+| Phone layout | Two trays under the sheet |
+| Your shift and the memo | As drawn |
+| Share picture | The postcard |
+
 ## Build plan
 
 The Coming soon card on `/games` shipped first (PR #56). Then Stamp sheet, in stages,
