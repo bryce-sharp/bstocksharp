@@ -24,7 +24,8 @@ Peter Wason's 2-4-6 task (1960).
 |---|---|
 | Game type | Hidden-rule induction ("The Rule"). Chosen over Secret Neighbors (Minesweeper where the numbers count a secret set of squares) and Loop (a Masyu-style loop puzzle) after playing mockups of the first two. |
 | Format | Daily on the web, the same puzzle for everyone, with a weekly rhythm. One-time story games are saved for a future Godot project. |
-| Theme | A post office ("Stamp Office"): rubber stamps, forms, a stern clerk, memos from head office. Papers, Please (Lucas Pope, 2013) is the tone reference, kept cozy rather than grim. The name is a placeholder. |
+| Theme | A post office ("Stamp Office"): rubber stamps, forms, a stern clerk, memos from head office. Papers, Please (Lucas Pope, 2013) is the tone reference, kept cozy rather than grim. |
+| Name | **Return to Sender** (decided 2026-10-23, unless something better comes up). Code lives under `return-to-sender`. |
 | The week | Monday to Saturday each have their own board (kind of mail). **Super Sunday** puts one regulation on **two** boards at once, and the pair changes from week to week. Never all boards at once. |
 | Proving it | An inspection of 8 items. Each bag approves **3, 4 or 5** items, never a fixed half, so splitting the bag evenly is not a safe guess. On Super Sunday each board in the bag has at least one approved and one returned item. |
 | Wrong inspection | Says how many are filed wrong (not which), sends you back to the counter, and the next inspection is a new bag. There is no way to fail. |
@@ -33,8 +34,10 @@ Peter Wason's 2-4-6 task (1960).
 | Accessibility | Bryce is colorblind. Color never carries meaning alone: parcels and stamp pictures are shapes, boxes are sizes with weights printed, mail is a badge. Colors avoid red-green pairs. |
 | Every board | Must make the legal moves obvious (the first route playtest failed this). |
 | Build order | One board at a time. **Stamp sheet first**, then polish and lab it before adding the next. Adding all six at once would be too much. |
+| Testing phase | Every built board gets a puzzle every day, and a test-only picker chooses which one to play (Monday could be Parcel row or Envelope). Once every board feels good, the picker goes away and the boards spread back out to their weekdays. |
+| Saving while testing | On the device only. Nothing goes to the database until the kinks are worked out (stage 5 of the build plan). |
 | Hints | Wanted, not designed yet (see Open questions). |
-| Gallery | A "Coming soon" card on `/games` until the first board ships. |
+| Gallery | A "Coming soon" card on `/games` until the first board ships. It can tease the name with something postal, such as a package on its way. |
 
 ## How a puzzle plays
 
@@ -202,7 +205,6 @@ difficulty should come from settings and less obvious ideas.
 
 ## Open questions
 
-- **Name**: Return to Sender is a placeholder; check it is free before committing.
 - **Visual identity**: Snug-level polish for the counter, stamps, sound, and the
   stamp landing.
 - **Hints**: for example, after a number of submissions, show an approved item that
@@ -217,20 +219,27 @@ difficulty should come from settings and less obvious ideas.
 
 ## Build plan
 
-1. **Coming soon card** on `/games` (done on this branch).
-2. **Stamp sheet first**, following Snug's setup: register it in `lib/games.ts`, a
-   route under `app/games/`, components in `components/games/<name>/`, and
-   `components/games/daily.ts` for date keys, seeded randomness and the
-   one-recorded-attempt store.
-3. **Port the mockup logic** (regulations, `make`, the example and inspection
-   builders) to TypeScript with tests. It is already separate from the mockup's UI.
-4. **Lab page** like `/games/snug/lab` (signed in only) to see any regulation's
-   examples and inspection bags before it goes live.
-5. **Generate months ahead** with a script like `npm run snug:months`, so a published
-   puzzle never changes.
-6. **Accounts and streaks**: Snug syncs through `snug_days`. For this game, consider
+The Coming soon card on `/games` shipped first (PR #56). Then Stamp sheet, in stages,
+unlisted at its own URL until it is polished:
+
+1. **Engine**: the regulations, the example and inspection builders, and a check
+   script, in `components/games/return-to-sender/`, using `makeRng` from
+   `components/games/daily.ts`. Puzzles are generated months ahead into
+   `data/return-to-sender/months/`, like Snug's, so a puzzle never changes once
+   played.
+2. **Rough playable page** at `/games/return-to-sender` plus a signed-in lab page
+   like `/games/snug/lab`. Saved on the device only.
+3. **Polish**, with lots of back and forth: the look, the stamp landing, sound, a
+   How to play and tutorial, hints, accessibility, and above all an easy phone
+   layout.
+4. **Content**: grow from 8 regulations to about 45 with settings, rate their
+   difficulty, and review each in the lab.
+5. **Accounts and stats**: Snug syncs through `snug_days`. For this game, consider
    one shared table keyed by game, added with an idempotent
    `scripts/migrate-<name>.mjs` run on dev and then live (never `npm run db:push`;
-   see the root `CLAUDE.md`).
-7. **Then the next board**, one at a time: lab it, playtest it, ship it. Super
-   Sunday comes once at least two boards are live.
+   see the root `CLAUDE.md`). Streaks and the median submissions per puzzle.
+6. **Launch Stamp sheet**: an entry in `lib/games.ts`, a 1200 by 630 preview image,
+   and the gallery card.
+
+Then the next board, one at a time: lab it, playtest it, ship it. Super Sunday comes
+once at least two boards are live.
