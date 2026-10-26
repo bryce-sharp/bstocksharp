@@ -9,6 +9,7 @@ import { StitchBorder } from "./stitches";
 import { useFloatingHeader } from "@/components/shared/SlidingHeader";
 import { QuiltCalendar } from "./calendar";
 import { MonthReveal, revealDue } from "./monthQuilt";
+import { ViewportReadout } from "./ViewportReadout";
 import { GAME, LAUNCH_DATE, clearStaleRecords, loadBest, playerStats, saveBest, type Progress } from "./records";
 import { canvasFile, canvasFonts, drawResultPicture, quiltGrid } from "./share";
 import { SNUG_FONTS } from "./fonts";
@@ -199,8 +200,10 @@ export function Snug({ shareUrl, profileId }: { shareUrl?: string; profileId?: n
   );
   // Signed out on this site (not framed elsewhere): offer an account so quilts follow the player.
   const saveHref = profileId === undefined && window.self === window.top ? "/login?from=/games/snug" : undefined;
+  const showViewport = useMemo(() => new URLSearchParams(window.location.search).has("viewport"), []);
   return (
     <div className={SNUG_FONTS}>
+      {showViewport && <ViewportReadout allowance={toolbarAllowance()} />}
       {synced && loaded?.dateKey === dateKey ? (
         <SnugDay
           key={dateKey}
