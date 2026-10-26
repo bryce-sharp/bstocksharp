@@ -9,25 +9,41 @@ import { db } from "@/lib/db";
 /** The apps a self sign-up's hub gets. */
 export const SIGNUP_APPS = ["games"];
 
-// Cloudflare's published test keys, which always pass; used only off production.
+// The bstocksharp.dev widget's public key; development uses Cloudflare's
+// published test keys, which always pass, unless TURNSTILE_SECRET_KEY is set.
+const SITE_KEY = "0x4AAAAAAFnKXNBBkccYYR2Y";
 const TEST_SITE_KEY = "1x00000000000000000000AA";
 const TEST_SECRET = "1x0000000000000000000000000000000AA";
 const isProd = process.env.NODE_ENV === "production";
+const realKeys = isProd || !!process.env.TURNSTILE_SECRET_KEY;
 
-/** Turnstile's public key for the page, or null when sign-up has no keys (closed). */
+/** The widget's action name, checked on both sides. */
+export const TURNSTILE_ACTION = "signup";
+/** Hosts a real token may come from (TURNSTILE_HOSTNAMES, comma-separated, overrides). */
+const HOSTNAMES = (process.env.TURNSTILE_HOSTNAMES ?? "bstocksharp.dev,www.bstocksharp.dev").split(",").map((h) => h.trim());
+
+/** Turnstile's public key for the page, or null when sign-up has no secret to check it (closed). */
 export function turnstileSiteKey(): string | null {
-  return process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? (isProd ? null : TEST_SITE_KEY);
+  if (!realKeys) return TEST_SITE_KEY;
+  return process.env.TURNSTILE_SECRET_KEY ? SITE_KEY : null;
 }
 
-/** Asks Cloudflare whether the widget's token came from a person; fails closed. */
+/** Asks Cloudflare whether the widget's token came from a person on this site; fails closed. */
 export async function verifyTurnstile(token: string, ip: string | null): Promise<boolean> {
-  const secret = process.env.TURNSTILE_SECRET_KEY ?? (isProd ? null : TEST_SECRET);
-  if (!secret || !token) return false;
+  const secret = realKeys ? process.env.TURNSTILE_SECRET_KEY : TEST_SECRET;
+  if (!secret || !token || token.length > 2048) return false;
   try {
     const body = new URLSearchParams({ secret, response: token, ...(ip ? { remoteip: ip } : {}) });
-    const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body });
-    const out = (await res.json()) as { success?: boolean };
-    return out.success === true;
+    const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      body,
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return false;
+    const out = (await res.json()) as { success?: boolean; action?: string; hostname?: string };
+    if (out.success !== true) return false;
+    // Test keys answer with a placeholder host and action, so only real tokens are held to them.
+    return !realKeys || (out.action === TURNSTILE_ACTION && HOSTNAMES.includes(out.hostname ?? ""));
   } catch {
     return false;
   }

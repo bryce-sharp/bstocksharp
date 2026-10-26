@@ -32,10 +32,11 @@ Working rules for Claude Code in this repository. Laptop setup for people is in
   banks are connected); `PLAID_WEBHOOK_URL`; `CRON_SECRET`. The live site refuses Sandbox.
 - `SITE_ADMINS`: comma-separated usernames (today `bstocksharp`) who also see site events
   (those with no household) on the Activity tab of /group. It grants no household data.
-- Self sign-up (`/signup`, games-only hubs): `NEXT_PUBLIC_TURNSTILE_SITE_KEY` and
-  `TURNSTILE_SECRET_KEY` from a free Cloudflare Turnstile widget (unset on the live site =
-  sign-up closed; development falls back to Cloudflare's always-pass test keys), and
-  `SIGNUP_DAILY_CAP` (new games-only hubs per day, default 25).
+- Self sign-up (`/signup`, games-only hubs): `TURNSTILE_SECRET_KEY`, the Cloudflare
+  Turnstile widget's secret (its public site key is in `lib/signup.ts`). Unset on the live
+  site = sign-up closed; development uses Cloudflare's always-pass test keys unless it is
+  set. `TURNSTILE_HOSTNAMES` overrides the allowed hosts (default bstocksharp.dev and www);
+  `SIGNUP_DAILY_CAP` is new games-only hubs per day (default 25).
 
 ## Plaid bank sync
 

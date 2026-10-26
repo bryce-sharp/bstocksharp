@@ -14,11 +14,15 @@ import SportsEsportsIcon from "@mui/icons-material/SportsEsports";
 import SubmitButton from "@/components/shared/SubmitButton";
 import { signUpAction } from "@/app/actions/signup";
 
-type Turnstile = { render: (el: HTMLElement, opts: { sitekey: string }) => string; remove: (id: string) => void };
+type Turnstile = {
+  render: (el: HTMLElement, opts: { sitekey: string; action: string }) => string;
+  remove: (id: string) => void;
+};
 
 // Self sign-up for games (mirrors JoinForm). Turnstile renders into its box and
-// adds its token to the form as cf-turnstile-response.
-export default function SignUpForm({ from, siteKey }: { from: string; siteKey: string | null }) {
+// adds its token to the form as cf-turnstile-response; a token is single-use, so
+// the widget is rendered afresh after every failed submit.
+export default function SignUpForm({ from, siteKey, action }: { from: string; siteKey: string | null; action: string }) {
   const [state, formAction] = React.useActionState(signUpAction, null);
   const box = React.useRef<HTMLDivElement>(null);
   const [scriptReady, setScriptReady] = React.useState(false);
@@ -26,9 +30,9 @@ export default function SignUpForm({ from, siteKey }: { from: string; siteKey: s
   React.useEffect(() => {
     const turnstile = (window as { turnstile?: Turnstile }).turnstile;
     if (!siteKey || !box.current || !turnstile) return;
-    const id = turnstile.render(box.current, { sitekey: siteKey });
+    const id = turnstile.render(box.current, { sitekey: siteKey, action });
     return () => turnstile.remove(id);
-  }, [siteKey, scriptReady, state]);
+  }, [siteKey, action, scriptReady, state]);
 
   return (
     <Container maxWidth="xs" sx={{ py: { xs: 6, md: 10 } }}>
