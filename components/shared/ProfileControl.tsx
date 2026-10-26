@@ -33,6 +33,7 @@ export default async function ProfileControl() {
     name: p.name,
     color: p.color,
     lockedBy: lockedBy.get(p.id) ?? null,
+    you: members.some((m) => m.id === session?.accountId && m.profileId === p.id),
   });
 
   return (

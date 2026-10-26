@@ -156,7 +156,7 @@ export default async function PeopleTab({
                     offeredApps={offeredApps}
                   />
                 ) : canEdit && claim && !mine ? (
-                  <Tooltip title={`Claimed — only ${claim.username} can manage ${p.name}`}>
+                  <Tooltip title={`Only ${claim.username} can change ${p.name}'s own things`}>
                     <span>
                       <IconButton size="small" disabled aria-label={`${p.name} is claimed`}>
                         <LockOutlinedIcon fontSize="small" />

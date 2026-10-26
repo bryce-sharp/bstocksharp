@@ -32,6 +32,8 @@ export type ProfilePick = {
   /** Username of the OTHER account claiming this profile, or null if it's
    *  unclaimed or claimed by you — i.e. whose data you can't edit. */
   lockedBy: string | null;
+  /** This is the person your own login is. */
+  you: boolean;
 };
 
 /** "Bryce" → "B", "Bryce Stock" → "BS". */
@@ -125,7 +127,7 @@ export default function ProfileMenu({
             color="text.secondary"
             sx={{ px: 2, display: "block" }}
           >
-            Switch profile
+            View someone&apos;s stuff
           </Typography>
         ) : null}
         {profiles.map((p) => (
@@ -137,15 +139,19 @@ export default function ProfileMenu({
             <ListItemIcon>
               <ProfileAvatar profile={p} size={24} />
             </ListItemIcon>
-            <ListItemText>{p.name}</ListItemText>
-            {/* Edit mode is per-DEVICE, not per-profile: it still opens communal
-                things (net worth, catalog, shared cars) while you're viewing
-                someone else — only a claimed profile's OWN data is out of reach.
-                The lock explains that on hover, and swallows its own click so
-                tapping it on a phone reads the note instead of switching. */}
+            <ListItemText>
+              {p.name}
+              {p.you ? (
+                <Typography component="span" variant="body2" color="text.secondary">
+                  {" "}
+                  (you)
+                </Typography>
+              ) : null}
+            </ListItemText>
+            {/* The lock explains itself on hover, and swallows its own click so tapping it on a phone reads the note. */}
             {p.lockedBy ? (
               <Tooltip
-                title={`${p.name}'s own data is locked — only ${p.lockedBy} can edit it. Household data stays open to everyone.`}
+                title={`You can look, but only ${p.lockedBy} can change ${p.name}'s own things. Shared household things stay open to everyone.`}
                 enterTouchDelay={0}
                 leaveTouchDelay={4000}
               >
