@@ -32,6 +32,25 @@ function write(hidden: boolean) {
   listeners.forEach((l) => l());
 }
 
+let gamesOpen = 0;
+let gameHidden = true;
+
+/** Call from a game: while it is mounted the bar starts hidden and floats over the page, so showing it never moves the game. */
+export function useFloatingHeader() {
+  React.useEffect(() => {
+    gamesOpen++;
+    gameHidden = true;
+    listeners.forEach((l) => l());
+    return () => {
+      gamesOpen--;
+      listeners.forEach((l) => l());
+    };
+  }, []);
+}
+
+const readFloating = () => gamesOpen > 0;
+const readHidden = () => (gamesOpen > 0 ? gameHidden : read());
+
 function subscribe(onChange: () => void) {
   listeners.add(onChange);
   window.addEventListener("storage", onChange);
@@ -61,7 +80,8 @@ const tabSx = {
 
 /** The site header above every app, which people can slide away to see just the page. */
 export default function SlidingHeader({ header, children }: { header: React.ReactNode; children: React.ReactNode }) {
-  const hidden = React.useSyncExternalStore(subscribe, read, () => false);
+  const floating = React.useSyncExternalStore(subscribe, readFloating, () => false);
+  const hidden = React.useSyncExternalStore(subscribe, readHidden, () => false);
   const skin = React.useContext(HeaderSkinContext);
 
   const barRef = React.useRef<HTMLDivElement>(null);
@@ -77,7 +97,9 @@ export default function SlidingHeader({ header, children }: { header: React.Reac
   const [animate, setAnimate] = React.useState(false);
   const toggle = () => {
     setAnimate(true);
-    write(!hidden);
+    if (!floating) return write(!hidden);
+    gameHidden = !hidden;
+    listeners.forEach((l) => l());
   };
 
   return (
@@ -89,9 +111,10 @@ export default function SlidingHeader({ header, children }: { header: React.Reac
           {
             position: "sticky",
             top: hidden ? -barHeight : 0,
-            mt: hidden ? `${-barHeight}px` : 0,
+            mt: hidden || floating ? `${-barHeight}px` : 0,
             zIndex: 1100,
             transition: animate ? "top 280ms ease, margin-top 280ms ease" : "none",
+            boxShadow: floating && !hidden ? "0 6px 18px rgba(0,0,0,.18)" : "none",
             "@media (prefers-reduced-motion: reduce)": { transition: "none" },
           },
           ...(Array.isArray(skin.bar) ? skin.bar : [skin.bar]),

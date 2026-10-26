@@ -6,6 +6,7 @@ import { PUZZLE_VERSION } from "./version";
 import { bounds, cellKey, rotateCCW, rotateCW, shapeClass, shapeKey, type Cell } from "./pieces";
 import { BINDING, LINEN } from "./quilt";
 import { StitchBorder } from "./stitches";
+import { useFloatingHeader } from "@/components/shared/SlidingHeader";
 import { QuiltCalendar } from "./calendar";
 import { MonthReveal, revealDue } from "./monthQuilt";
 import { GAME, LAUNCH_DATE, clearStaleRecords, loadBest, playerStats, saveBest, type Progress } from "./records";
@@ -19,14 +20,30 @@ import { BoardSvg, Btn, FONT, HowToPlay, INK, KnitDefs, PanelStitches, PatchSvg,
 const HOW_TO_SEEN = "snug.howToSeen";
 const MAX_CELL = 54;
 const MIN_CELL = 18;
-/** Room below the play area for the buttons, the panel's bottom padding, and the maker's label. */
-const FOOTER_H = 112;
+/** Room below the play area for the buttons; the panel's edge and the maker's label may sit under a browser toolbar. */
+const FOOTER_H = 68;
 /** Room around the board for its binding, in cells. */
 const BOARD_PAD = 0.45;
 /** Side-by-side is kept whenever pieces stay at least this many pixels per square. */
 const SIDE_MIN_CELL = 30;
-/** Below this, a stacked layout lets the header scroll away to keep pieces usable. */
-const STACK_MIN_CELL = 28;
+
+/** iPhone Safari's floating toolbar covers the bottom of the page without shrinking the window. */
+const IPHONE_TOOLBAR_H = 76;
+
+function toolbarAllowance(): number {
+  const standalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone === true;
+  return /iPhone|iPod/.test(navigator.userAgent) && !standalone ? IPHONE_TOOLBAR_H : 0;
+}
+
+/** The height the game can count on: the smallest the browser reports (toolbars showing), less a floating toolbar. */
+function visibleHeight(): number {
+  const probe = document.createElement("div");
+  probe.style.cssText = "position:fixed;top:0;height:100svh;visibility:hidden;pointer-events:none";
+  document.body.appendChild(probe);
+  const small = probe.offsetHeight || Infinity;
+  probe.remove();
+  return Math.min(window.innerHeight, window.visualViewport?.height ?? Infinity, small) - toolbarAllowance();
+}
 
 interface Slot {
   x: number;
@@ -128,6 +145,7 @@ const shift = (cells: readonly Cell[], s: Spot) => cells.map(([x, y]) => [x + s.
  * their account is merged in before the day opens, and saves go to it.
  */
 export function Snug({ shareUrl, profileId }: { shareUrl?: string; profileId?: number }) {
+  useFloatingHeader();
   const [today, setToday] = useState(() => todayKey());
   // Runs played on the boards from before the month quilts are cleared before anything reads them.
   const [synced, setSynced] = useState(() => {
@@ -286,7 +304,7 @@ function SnugDay({
   // Ticks the visible clock; the value itself is read from `clock`.
   const [, setNow] = useState(() => Date.now());
   const [width, setWidth] = useState(0);
-  const [viewH, setViewH] = useState(() => window.innerHeight);
+  const [viewH, setViewH] = useState(visibleHeight);
   const coarsePointer = useMemo(() => window.matchMedia("(pointer: coarse)").matches, []);
   /** The play area's distance from the top of the page, including any site header above the game. */
   const [topY, setTopY] = useState(200);
@@ -329,7 +347,7 @@ function SnugDay({
       // resizes the game mid-drag. On touch screens only a width change (rotation) re-lays out.
       if (coarsePointer && window.innerWidth === lastWidth) return;
       lastWidth = window.innerWidth;
-      setViewH(window.innerHeight);
+      setViewH(visibleHeight());
       measure();
     };
     window.addEventListener("resize", onResize);
@@ -384,8 +402,8 @@ function SnugDay({
     for (; cell >= SIDE_MIN_CELL && !(pick = trySide(cell)); cell--);
     if (!pick) {
       side = false;
-      for (cell = MAX_CELL; cell >= STACK_MIN_CELL && !(pick = tryStack(cell, room)); cell--);
-      if (!pick) for (cell = MAX_CELL; cell > MIN_CELL && !(pick = tryStack(cell, viewH - FOOTER_H - 16)); cell--);
+      // Every patch and button in view beats bigger squares: players miss what they have to scroll to.
+      for (cell = MAX_CELL; cell >= MIN_CELL && !(pick = tryStack(cell, room)); cell--);
       pick ??= tryStack(MIN_CELL, Infinity)!;
     }
     const { scale, trayCells, pack } = pick!;
