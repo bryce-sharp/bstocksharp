@@ -9,7 +9,6 @@ import { StitchBorder } from "./stitches";
 import { useFloatingHeader } from "@/components/shared/SlidingHeader";
 import { QuiltCalendar } from "./calendar";
 import { MonthReveal, revealDue } from "./monthQuilt";
-import { ViewportReadout } from "./ViewportReadout";
 import { GAME, LAUNCH_DATE, clearStaleRecords, loadBest, playerStats, saveBest, type Progress } from "./records";
 import { canvasFile, canvasFonts, drawResultPicture, quiltGrid } from "./share";
 import { SNUG_FONTS } from "./fonts";
@@ -29,26 +28,35 @@ const BOARD_PAD = 0.45;
 const SIDE_MIN_CELL = 30;
 
 /**
- * iPhone Safari's floating toolbar covers the bottom of the page without shrinking the window; the panel's edge
- * and the maker's label may sit under it, so this is only the part of it above them.
+ * Room for iPhone Safari's toolbar when it floats over the page; the panel's edge and the maker's label may sit
+ * under it, so this is only the part of it above them.
  */
 const IPHONE_TOOLBAR_H = 44;
-/** As a home-screen app there is no toolbar, but the home indicator strip still crowds the bottom edge. */
-const IPHONE_HOME_STRIP_H = 20;
+/** As a home-screen app the page runs under the home indicator, which crowds the bottom edge. */
+const IPHONE_HOME_STRIP_H = 34;
+
+/** A height in CSS units, measured in pixels. */
+function cssHeight(height: string): number {
+  const probe = document.createElement("div");
+  probe.style.cssText = `position:fixed;top:0;height:${height};visibility:hidden;pointer-events:none`;
+  document.body.appendChild(probe);
+  const px = probe.offsetHeight;
+  probe.remove();
+  return px;
+}
 
 function toolbarAllowance(): number {
   if (!/iPhone|iPod/.test(navigator.userAgent)) return 0;
   const standalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone === true;
-  return standalone ? IPHONE_HOME_STRIP_H : IPHONE_TOOLBAR_H;
+  if (standalone) return IPHONE_HOME_STRIP_H;
+  // Measured on an iPhone: with Tabs set to Top, Bottom or Compact, Safari's toolbars sit outside the page, which
+  // is 40 to 150px short of its largest height (100lvh). Only a page already at its largest runs under them.
+  return cssHeight("100lvh") - window.innerHeight < 20 ? IPHONE_TOOLBAR_H : 0;
 }
 
 /** The height the game can count on: the smallest the browser reports (toolbars showing), less a floating toolbar. */
 function visibleHeight(): number {
-  const probe = document.createElement("div");
-  probe.style.cssText = "position:fixed;top:0;height:100svh;visibility:hidden;pointer-events:none";
-  document.body.appendChild(probe);
-  const small = probe.offsetHeight || Infinity;
-  probe.remove();
+  const small = cssHeight("100svh") || Infinity;
   return Math.min(window.innerHeight, window.visualViewport?.height ?? Infinity, small) - toolbarAllowance();
 }
 
@@ -200,10 +208,8 @@ export function Snug({ shareUrl, profileId }: { shareUrl?: string; profileId?: n
   );
   // Signed out on this site (not framed elsewhere): offer an account so quilts follow the player.
   const saveHref = profileId === undefined && window.self === window.top ? "/login?from=/games/snug" : undefined;
-  const showViewport = useMemo(() => new URLSearchParams(window.location.search).has("viewport"), []);
   return (
     <div className={SNUG_FONTS}>
-      {showViewport && <ViewportReadout allowance={toolbarAllowance()} />}
       {synced && loaded?.dateKey === dateKey ? (
         <SnugDay
           key={dateKey}
