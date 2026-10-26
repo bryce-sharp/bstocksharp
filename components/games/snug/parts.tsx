@@ -250,6 +250,8 @@ export function ResultCard(props: {
   shareGrid?: string;
   stats: Stats;
   moreGames: MoreGamesLink;
+  /** Where a signed-out player signs in or makes an account, to save across devices. */
+  saveHref?: string;
 }) {
   const { result, recorded, isReplay, center, sheet = false } = props;
   const perfect = result.gaps === 0;
@@ -335,6 +337,14 @@ export function ResultCard(props: {
         </Btn>
       </div>
       <StatsRow stats={props.stats} compact={sheet} />
+      {props.saveHref && (
+        <div style={{ fontSize: 13, marginTop: 12 }}>
+          <a href={props.saveHref} style={{ color: BINDING, fontWeight: 500 }}>
+            Sign in or create an account
+          </a>{" "}
+          to keep your quilts on every device.
+        </div>
+      )}
       <div style={{ fontSize: 12, marginTop: 12, opacity: 0.6 }}>A new quilt arrives at midnight.</div>
       <a
         href={props.moreGames.href}

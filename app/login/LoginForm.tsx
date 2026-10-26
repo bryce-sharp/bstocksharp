@@ -7,11 +7,13 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import TextField from "@mui/material/TextField";
 import Alert from "@mui/material/Alert";
+import MuiLink from "@mui/material/Link";
 import Button from "@mui/material/Button";
 import Divider from "@mui/material/Divider";
 import CircularProgress from "@mui/material/CircularProgress";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import FingerprintIcon from "@mui/icons-material/Fingerprint";
+import Link from "@/components/shared/AppLink";
 import SubmitButton from "@/components/shared/SubmitButton";
 import { startAuthentication, browserSupportsWebAuthn } from "@simplewebauthn/browser";
 import { loginAction } from "@/app/actions/session";
@@ -123,6 +125,13 @@ export default function LoginForm({ from, notice }: { from: string; notice?: str
               </SubmitButton>
             </Stack>
           </form>
+          <Typography variant="body2" color="text.secondary">
+            Here for the games?{" "}
+            <MuiLink component={Link} href={from ? `/signup?from=${encodeURIComponent(from)}` : "/signup"}>
+              Create an account
+            </MuiLink>{" "}
+            to save them on every device.
+          </Typography>
         </Stack>
       </Paper>
     </Container>
