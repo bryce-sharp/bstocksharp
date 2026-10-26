@@ -71,9 +71,12 @@ function ProfileAvatar({
 export default function ProfileMenu({
   active,
   profiles,
+  hubSettings,
 }: {
   active: ProfilePick | null;
   profiles: ProfilePick[];
+  /** False for a games-only hub with one login, which has nothing to manage there. */
+  hubSettings: boolean;
 }) {
   const [anchor, setAnchor] = React.useState<null | HTMLElement>(null);
   const [, startTransition] = React.useTransition();
@@ -191,12 +194,14 @@ export default function ProfileMenu({
           </ListItemIcon>
           <ListItemText>Your account…</ListItemText>
         </MenuItem>
-        <MenuItem component={Link} href="/group" onClick={closeMenu}>
-          <ListItemIcon>
-            <GroupsIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Hub settings…</ListItemText>
-        </MenuItem>
+        {hubSettings ? (
+          <MenuItem component={Link} href="/group" onClick={closeMenu}>
+            <ListItemIcon>
+              <GroupsIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Hub settings…</ListItemText>
+          </MenuItem>
+        ) : null}
         <MenuItem
           onClick={() => {
             closeMenu();

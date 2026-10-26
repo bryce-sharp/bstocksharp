@@ -1,9 +1,9 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { accounts, groups, invites } from "@/lib/db/schema";
+import { accounts, groups, invites, profiles } from "@/lib/db/schema";
 import { hashPassword } from "@/lib/auth";
 import { createOwnHub, newLoginError } from "@/lib/own-hub";
 import { createSession } from "@/lib/session";
@@ -77,6 +77,23 @@ export async function redeemInviteAction(
     } catch {
       return { error: "That username is taken, try another." };
     }
+    // A sign-in invite for a person makes this login that person, unless
+    // someone claimed them meanwhile (the unique index on the claim decides).
+    if (invite.profileId !== null) {
+      const [person] = await db
+        .select({ id: profiles.id })
+        .from(profiles)
+        .where(and(eq(profiles.id, invite.profileId), eq(profiles.groupId, groupId)))
+        .limit(1);
+      if (person) {
+        try {
+          await db.update(accounts).set({ profileId: person.id }).where(eq(accounts.id, accountId));
+          ownProfileId = person.id;
+        } catch {
+          // Already claimed by another login; they pick their person on /group.
+        }
+      }
+    }
   }
 
   // Burn the use AFTER the account exists — a failed signup never eats a
@@ -89,7 +106,7 @@ export async function redeemInviteAction(
   await createSession(accountId, groupId);
   if (ownProfileId !== null) await setActiveProfileCookie(ownProfileId);
 
-  // Household joiners land on /group to claim their person; own-hub owners on
-  // their fresh (empty but working) hub.
-  redirect(invite.groupId !== null ? "/group" : "/");
+  // Anyone who already has their person lands in the hub; a household joiner
+  // without one lands on /group to claim theirs.
+  redirect(ownProfileId !== null ? "/" : "/group");
 }

@@ -293,6 +293,9 @@ export const invites = pgTable("invites", {
     .notNull()
     .references(() => accounts.id, { onDelete: "cascade" }),
   note: varchar("note", { length: 120 }), // "for Val" — shown in the pending list
+  // The person this sign-in is for: joining claims them, so the new login IS
+  // that person. Null = a login with no person yet (admin own-hub invites).
+  profileId: integer("profile_id").references(() => profiles.id, { onDelete: "set null" }),
   maxUses: integer("max_uses").default(1), // null = reusable until expiry/revoke
   usedCount: integer("used_count").notNull().default(0),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),

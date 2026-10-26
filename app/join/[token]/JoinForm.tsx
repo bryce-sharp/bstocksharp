@@ -15,9 +15,12 @@ import { redeemInviteAction } from "@/app/actions/join";
 export default function JoinForm({
   token,
   groupName,
+  personName,
 }: {
   token: string;
   groupName: string | null;
+  /** The person this login will be, for a sign-in link sent from their card. */
+  personName: string | null;
 }) {
   const [state, formAction] = React.useActionState(redeemInviteAction, null);
 
@@ -32,7 +35,12 @@ export default function JoinForm({
             </Typography>
           </Stack>
           <Typography variant="body2" color="text.secondary">
-            {groupName ? (
+            {groupName && personName ? (
+              <>
+                Make a login to join <strong>{groupName}</strong> as{" "}
+                <strong>{personName}</strong>. Your stuff there will be yours alone.
+              </>
+            ) : groupName ? (
               <>
                 Create a login to join <strong>{groupName}</strong> — you&apos;ll
                 see everything this household shares.

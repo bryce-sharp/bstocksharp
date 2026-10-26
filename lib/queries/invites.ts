@@ -1,7 +1,7 @@
 import "server-only";
 import { and, desc, eq, gt, isNull, lt, or } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { accounts, groups, invites } from "@/lib/db/schema";
+import { accounts, groups, invites, profiles } from "@/lib/db/schema";
 import { requireGroupId } from "@/lib/session";
 
 // An invite is LIVE while it's unrevoked, unexpired, and has uses left
@@ -19,6 +19,7 @@ export type PendingInvite = {
   token: string;
   note: string | null;
   groupId: number | null; // null = "their own new hub"
+  profileId: number | null; // the person joining claims, if any
   maxUses: number | null; // null = reusable
   usedCount: number;
   expiresAt: Date;
@@ -34,6 +35,7 @@ export async function listPendingInvites(): Promise<PendingInvite[]> {
       token: invites.token,
       note: invites.note,
       groupId: invites.groupId,
+      profileId: invites.profileId,
       maxUses: invites.maxUses,
       usedCount: invites.usedCount,
       expiresAt: invites.expiresAt,
@@ -50,6 +52,8 @@ export type JoinableInvite = {
   groupId: number | null; // null = mint a fresh hub
   groupName: string | null; // the household's name, for the /join greeting
   createdByAccountId: number | null; // an own-hub invite copies this login's hub apps
+  profileId: number | null; // the person this login will be
+  personName: string | null; // that person's name, for the /join greeting
 };
 
 /**
@@ -68,9 +72,12 @@ export async function getJoinableInvite(
       groupId: invites.groupId,
       groupName: groups.name,
       createdByAccountId: invites.createdByAccountId,
+      profileId: invites.profileId,
+      personName: profiles.name,
     })
     .from(invites)
     .leftJoin(groups, eq(invites.groupId, groups.id))
+    .leftJoin(profiles, eq(invites.profileId, profiles.id))
     .where(and(eq(invites.token, token), live()))
     .limit(1);
   return row ?? null;

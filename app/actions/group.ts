@@ -3,7 +3,7 @@
 import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, lt, or } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   accounts,
@@ -115,6 +115,53 @@ export async function createInviteAction(
   return { token, household, reusable };
 }
 
+export type PersonInviteState = { token: string } | { error: string };
+
+/**
+ * A sign-in link for one person in this hub: whoever opens it makes a login
+ * that IS that person. Owner-only, like every invite; the person must not have
+ * a login yet. A live link for them is reused rather than minting another.
+ */
+export async function inviteToPersonAction(profileId: number): Promise<PersonInviteState> {
+  const session = await requireOwner();
+  const [person] = await db
+    .select({ id: profiles.id, archivedAt: profiles.archivedAt, isDemo: groups.isDemo })
+    .from(profiles)
+    .innerJoin(groups, eq(profiles.groupId, groups.id))
+    .where(and(eq(profiles.id, profileId), eq(profiles.groupId, session.groupId)))
+    .limit(1);
+  if (!person || person.isDemo || person.archivedAt) {
+    return { error: "This person can't get a sign-in link." };
+  }
+  if (await claimedBy(profileId)) return { error: "This person already has a login." };
+
+  const [live] = await db
+    .select({ token: invites.token })
+    .from(invites)
+    .where(
+      and(
+        eq(invites.profileId, profileId),
+        isNull(invites.revokedAt),
+        gt(invites.expiresAt, new Date()),
+        lt(invites.usedCount, 1),
+      ),
+    )
+    .limit(1);
+  if (live) return { token: live.token };
+
+  const token = randomBytes(24).toString("base64url");
+  await db.insert(invites).values({
+    token,
+    groupId: session.groupId,
+    profileId,
+    createdByAccountId: session.accountId,
+    maxUses: 1,
+    expiresAt: new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000),
+  });
+  revalidatePath("/group");
+  return { token };
+}
+
 /** Kill a live invite link (the row stays as audit trail). */
 export async function revokeInviteAction(
   inviteId: number,
@@ -214,35 +261,12 @@ export async function transferOwnershipAction(formData: FormData): Promise<void>
   revalidatePath("/group");
 }
 
-/**
- * Delete the WHOLE hub, forever: every person, car, workout, weigh-in, login
- * and invite. Owner-only, and the form must echo the hub's exact name back
- * (the type-the-name ritual). Deletion order matters:
- *   1. attachment rows — polymorphic (no FK), they'd survive the cascade;
- *   2. workouts — `ON DELETE RESTRICT` behind profiles (the guard that stops a
- *      profile delete nuking shared routines) would abort the group cascade;
- *   3. the group row — everything else cascades off it (accounts→passkeys+
- *      invites, profiles→weight data, vehicles→records/fuel/parts/journal…).
- * Other members' sessions die at their next request (liveness check).
- */
-export async function deleteHubAction(formData: FormData): Promise<void> {
-  const session = await requireOwner();
-  const [group] = await db
-    .select({ name: groups.name, isDemo: groups.isDemo })
-    .from(groups)
-    .where(eq(groups.id, session.groupId))
-    .limit(1);
-  if (!group || group.isDemo) throw new Error("This hub can't be deleted.");
-
-  const typed = String(formData.get("confirm") ?? "").trim();
-  if (typed !== group.name) {
-    throw new Error("The name you typed doesn't match this hub's name.");
-  }
-
+/** Deletes a hub and everything in it, in the order the comment on deleteHubAction explains. */
+async function eraseHub(groupId: number): Promise<void> {
   const groupVehicles = db
     .select({ id: vehicles.id })
     .from(vehicles)
-    .where(eq(vehicles.groupId, session.groupId));
+    .where(eq(vehicles.groupId, groupId));
   await db
     .delete(attachments)
     .where(
@@ -287,14 +311,75 @@ export async function deleteHubAction(formData: FormData): Promise<void> {
       db
         .select({ id: profiles.id })
         .from(profiles)
-        .where(eq(profiles.groupId, session.groupId)),
+        .where(eq(profiles.groupId, groupId)),
     ),
   );
 
-  await db.delete(groups).where(eq(groups.id, session.groupId));
+  await db.delete(groups).where(eq(groups.id, groupId));
+}
 
+/**
+ * Delete the WHOLE hub, forever: every person, car, workout, weigh-in, login
+ * and invite. Owner-only, and the form must echo the hub's exact name back
+ * (the type-the-name ritual). Deletion order matters:
+ *   1. attachment rows — polymorphic (no FK), they'd survive the cascade;
+ *   2. workouts — `ON DELETE RESTRICT` behind profiles (the guard that stops a
+ *      profile delete nuking shared routines) would abort the group cascade;
+ *   3. the group row — everything else cascades off it (accounts→passkeys+
+ *      invites, profiles→weight data, vehicles→records/fuel/parts/journal…).
+ * Other members' sessions die at their next request (liveness check).
+ */
+export async function deleteHubAction(formData: FormData): Promise<void> {
+  const session = await requireOwner();
+  const [group] = await db
+    .select({ name: groups.name, isDemo: groups.isDemo })
+    .from(groups)
+    .where(eq(groups.id, session.groupId))
+    .limit(1);
+  if (!group || group.isDemo) throw new Error("This hub can't be deleted.");
+
+  const typed = String(formData.get("confirm") ?? "").trim();
+  if (typed !== group.name) {
+    throw new Error("The name you typed doesn't match this hub's name.");
+  }
+
+  await eraseHub(session.groupId);
   await destroySession();
   redirect("/login");
+}
+
+/**
+ * Delete your own account when you are the only login in your hub (a games
+ * sign-up, say): the hub and everything in it go with it. The form must echo
+ * your username. Anyone sharing a hub leaves or hands it over on /group instead.
+ */
+export async function deleteMyAccountAction(formData: FormData): Promise<void> {
+  const session = await requireSession();
+  const [me] = await db
+    .select({
+      username: accounts.username,
+      ownerAccountId: groups.ownerAccountId,
+      isDemo: groups.isDemo,
+    })
+    .from(accounts)
+    .innerJoin(groups, eq(accounts.groupId, groups.id))
+    .where(eq(accounts.id, session.accountId))
+    .limit(1);
+  if (!me || me.isDemo || me.ownerAccountId !== session.accountId) {
+    throw new Error("Only the owner of a hub of one can delete their account here.");
+  }
+  const others = await db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(eq(accounts.groupId, session.groupId));
+  if (others.length !== 1) throw new Error("Others share this hub; hand it over in Hub settings first.");
+  if (String(formData.get("confirm") ?? "").trim().toLowerCase() !== me.username) {
+    throw new Error("The username you typed doesn't match.");
+  }
+
+  await eraseHub(session.groupId);
+  await destroySession();
+  redirect("/games");
 }
 
 /** Rename the household (shown on /group and in invite greetings). */

@@ -2,17 +2,20 @@ import { listProfiles } from "@/lib/queries/profiles";
 import { listGroupMembers } from "@/lib/queries/groups";
 import { getActiveProfile } from "@/lib/profile";
 import { getSession } from "@/lib/session";
+import { hubApps } from "@/lib/hub-apps";
 import ProfileMenu, { type ProfilePick } from "./ProfileMenu";
 
 // Server component: reads who's active + the roster, then hands a plain,
 // serializable slice to the client menu. Passed into AppHeader as a prop.
 export default async function ProfileControl() {
-  const [profiles, active, members, session] = await Promise.all([
+  const [profiles, active, members, session, apps] = await Promise.all([
     listProfiles(),
     getActiveProfile(),
     listGroupMembers(),
     getSession(),
+    hubApps(),
   ]);
+  const gamesOnly = apps.length === 1 && apps[0] === "games";
 
   // profileId → the username holding its claim, for profiles claimed by SOMEONE
   // ELSE. "Claim is the lock" (lib/auth): those profiles' OWNED data is theirs
@@ -36,6 +39,7 @@ export default async function ProfileControl() {
     <ProfileMenu
       active={active ? pick(active) : null}
       profiles={profiles.map(pick)}
+      hubSettings={!(gamesOnly && members.length <= 1)}
     />
   );
 }
