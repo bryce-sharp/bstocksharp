@@ -8,6 +8,7 @@ import { requireEditor } from "@/lib/auth";
 import { requireGroupId } from "@/lib/session";
 import { mintApiToken } from "@/lib/finance/tokens";
 import { parseInt as parseBoundedInt, parseStr } from "@/lib/finance/parse";
+import { requireApp } from "@/lib/hub-apps";
 
 const SETTINGS = "/finance/settings";
 
@@ -19,6 +20,7 @@ export async function mintTokenAction(
   _prev: { token: string } | { error: string } | null,
   formData: FormData,
 ): Promise<{ token: string } | { error: string }> {
+  await requireApp("finance");
   await requireEditor();
   const groupId = await requireGroupId();
 
@@ -56,6 +58,7 @@ export async function revokeTokenAction(
   id: number,
   _formData: FormData,
 ): Promise<void> {
+  await requireApp("finance");
   await requireEditor();
   const groupId = await requireGroupId();
   await db

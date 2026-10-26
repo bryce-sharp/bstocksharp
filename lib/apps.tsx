@@ -91,12 +91,13 @@ export function getApp(slug: string): AppDef | undefined {
 }
 
 /**
- * The apps a profile should see, given the slugs they've hidden. Hiding is a
- * personal preference, not a permission (the hub has no roles). If a profile
- * somehow hid every app, we fall back to showing all of them so the hub is
- * never a dead end.
+ * The apps a profile should see, given the slugs they've hidden and the apps
+ * the hub has (`offered`, lib/hub-apps). Hiding is a personal preference, not
+ * a permission. If a profile somehow hid every app, we fall back to all of
+ * the hub's apps so the hub is never a dead end.
  */
-export function visibleApps(hidden: string[] = []): AppDef[] {
-  const shown = APPS.filter((a) => !hidden.includes(a.slug));
-  return shown.length > 0 ? shown : APPS;
+export function visibleApps(hidden: string[] = [], offered?: string[]): AppDef[] {
+  const hubs = offered ? APPS.filter((a) => offered.includes(a.slug)) : APPS;
+  const shown = hubs.filter((a) => !hidden.includes(a.slug));
+  return shown.length > 0 ? shown : hubs;
 }

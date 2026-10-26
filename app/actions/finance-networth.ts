@@ -10,6 +10,7 @@ import { accountOrder } from "@/lib/queries/finance-networth";
 import { getAtlasViewForGroup } from "@/lib/queries/finance-atlas";
 import { getGroupTimezone } from "@/lib/queries/group";
 import { todayISO } from "@/lib/finance/parse";
+import { requireApp } from "@/lib/hub-apps";
 
 // Net worth writes. Everything here is HOUSEHOLD data → requireEditor()
 // (communal), scoped to the session group. Money fields arrive as raw strings
@@ -58,6 +59,7 @@ const ACCOUNT_KINDS = new Set([
  * partial log is fine and never nulls out an existing value.
  */
 export async function saveSnapshotsAction(formData: FormData): Promise<void> {
+  await requireApp("finance");
   await requireEditor();
   const groupId = await requireGroupId();
 
@@ -94,6 +96,7 @@ export async function deleteSnapshotAction(
   month: string,
   _formData: FormData,
 ): Promise<void> {
+  await requireApp("finance");
   await requireEditor();
   const groupId = await requireGroupId();
   const normalized = normalizeMonth(month);
@@ -124,6 +127,7 @@ export async function deleteMonthSnapshotsAction(
   month: string,
   _formData: FormData,
 ): Promise<void> {
+  await requireApp("finance");
   await requireEditor();
   const groupId = await requireGroupId();
   const normalized = normalizeMonth(month);
@@ -170,6 +174,7 @@ function parseAccount(formData: FormData) {
 }
 
 export async function addAccountAction(formData: FormData): Promise<void> {
+  await requireApp("finance");
   await requireEditor();
   const groupId = await requireGroupId();
   const data = parseAccount(formData);
@@ -190,6 +195,7 @@ export async function updateAccountAction(
   id: number,
   formData: FormData,
 ): Promise<void> {
+  await requireApp("finance");
   await requireEditor();
   const groupId = await requireGroupId();
   const data = parseAccount(formData);
@@ -217,6 +223,7 @@ export async function moveAccountAction(
   dir: "up" | "down",
   _formData: FormData,
 ): Promise<void> {
+  await requireApp("finance");
   await requireEditor();
   const groupId = await requireGroupId();
 
@@ -275,6 +282,7 @@ export async function setAccountArchivedAction(
   archived: boolean,
   _formData: FormData,
 ): Promise<void> {
+  await requireApp("finance");
   await requireEditor();
   const groupId = await requireGroupId();
   await db
@@ -291,6 +299,7 @@ export async function deleteAccountAction(
   id: number,
   _formData: FormData,
 ): Promise<void> {
+  await requireApp("finance");
   await requireEditor();
   const groupId = await requireGroupId();
   await db
@@ -323,6 +332,7 @@ async function takeHomePart(groupId: number, total: string, startMonth: string):
  * look like it doesn't exist.
  */
 export async function saveSavingsGoalAction(formData: FormData): Promise<void> {
+  await requireApp("finance");
   await requireEditor();
   const groupId = await requireGroupId();
 
@@ -361,6 +371,7 @@ export async function saveSavingsGoalAction(formData: FormData): Promise<void> {
  * overlap (latest-starting wins) instead of a hole.
  */
 export async function startSavingsGoalAction(formData: FormData): Promise<void> {
+  await requireApp("finance");
   await requireEditor();
   const groupId = await requireGroupId();
 

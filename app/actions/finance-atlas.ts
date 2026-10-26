@@ -24,6 +24,7 @@ import {
   todayISO,
   currentMonthISO,
 } from "@/lib/finance/parse";
+import { requireApp } from "@/lib/hub-apps";
 
 // ATLAS writes. Compensation + deductions are PROFILE-owned (a claimed
 // person's income is theirs alone) → requireEditorFor; recurring expenses are
@@ -83,6 +84,7 @@ export async function saveCompPlanAction(
   profileId: number,
   formData: FormData,
 ): Promise<void> {
+  await requireApp("finance");
   await requireEditorFor(profileId);
   const data = parseComp(formData);
 
@@ -109,6 +111,7 @@ export async function removeCompensationAction(
   profileId: number,
   _formData: FormData,
 ): Promise<void> {
+  await requireApp("finance");
   await requireEditorFor(profileId);
   await db.delete(incomeDeductions).where(eq(incomeDeductions.profileId, profileId));
   await db.delete(compensationPlans).where(eq(compensationPlans.profileId, profileId));
@@ -120,6 +123,7 @@ export async function startCompPlanAction(
   profileId: number,
   formData: FormData,
 ): Promise<void> {
+  await requireApp("finance");
   await requireEditorFor(profileId);
   const data = parseComp(formData);
   const startDate = normalizeMonth(formData.get("startMonth"));
@@ -215,6 +219,7 @@ export async function addDeductionAction(
   profileId: number,
   formData: FormData,
 ): Promise<void> {
+  await requireApp("finance");
   await requireEditorFor(profileId);
   const data = await parseDeduction(formData);
   const startDate =
@@ -228,6 +233,7 @@ export async function updateDeductionAction(
   id: number,
   formData: FormData,
 ): Promise<void> {
+  await requireApp("finance");
   const row = await scopedDeduction(id);
   await requireEditorFor(row.profileId);
   await db
@@ -242,6 +248,7 @@ export async function replaceDeductionAction(
   id: number,
   formData: FormData,
 ): Promise<void> {
+  await requireApp("finance");
   const row = await scopedDeduction(id);
   await requireEditorFor(row.profileId);
   const data = await parseDeduction(formData);
@@ -263,6 +270,7 @@ export async function endDeductionAction(
   id: number,
   _formData: FormData,
 ): Promise<void> {
+  await requireApp("finance");
   const row = await scopedDeduction(id);
   await requireEditorFor(row.profileId);
   await db
@@ -277,6 +285,7 @@ export async function deleteDeductionAction(
   id: number,
   _formData: FormData,
 ): Promise<void> {
+  await requireApp("finance");
   const row = await scopedDeduction(id);
   await requireEditorFor(row.profileId);
   await db.delete(incomeDeductions).where(eq(incomeDeductions.id, id));
@@ -291,6 +300,7 @@ export async function reassignCategoryAction(
   to: string | null,
   _formData: FormData,
 ): Promise<void> {
+  await requireApp("finance");
   await requireEditor();
   const groupId = await requireGroupId();
   const target = to?.trim() || null;
@@ -388,6 +398,7 @@ async function scopedExpense(id: number) {
 }
 
 export async function addExpenseAction(formData: FormData): Promise<void> {
+  await requireApp("finance");
   await requireEditor();
   const groupId = await requireGroupId();
   const data = await parseExpense(formData);
@@ -402,6 +413,7 @@ export async function updateExpenseAction(
   id: number,
   formData: FormData,
 ): Promise<void> {
+  await requireApp("finance");
   await requireEditor();
   const row = await scopedExpense(id);
   await db
@@ -444,6 +456,7 @@ export async function replaceExpenseAction(
   id: number,
   formData: FormData,
 ): Promise<void> {
+  await requireApp("finance");
   await requireEditor();
   const row = await scopedExpense(id);
   const data = await parseExpense(formData);
@@ -456,6 +469,7 @@ export async function replaceExpenseAction(
 
 /** A bill's price history (every version, every payment) for its History tab. */
 export async function getBillHistoryAction(id: number): Promise<BillHistoryView | { error: string }> {
+  await requireApp("finance");
   const groupId = await requireGroupId();
   const view = await getBillHistory(groupId, id, currentMonthISO(await getGroupTimezone(groupId)));
   return view ?? { error: "That bill no longer exists." };
@@ -470,6 +484,7 @@ export async function acceptBillPriceAction(
   amount: number,
   month: string,
 ): Promise<{ ok: true } | { error: string }> {
+  await requireApp("finance");
   await requireEditor();
   const row = await scopedExpense(id);
   const startDate = normalizeMonth(month);
@@ -504,6 +519,7 @@ export async function acceptBillPriceAction(
 
 /** Keep the bill's price as it is; the suggestion stays quiet until the price moves again. */
 export async function ignoreBillPriceAction(id: number, amount: number): Promise<{ ok: true } | { error: string }> {
+  await requireApp("finance");
   await requireEditor();
   const row = await scopedExpense(id);
   if (!Number.isFinite(amount) || amount <= 0) return { error: "That price could not be ignored." };
@@ -518,6 +534,7 @@ export async function endExpenseAction(
   id: number,
   _formData: FormData,
 ): Promise<void> {
+  await requireApp("finance");
   await requireEditor();
   const row = await scopedExpense(id);
   await db
@@ -532,6 +549,7 @@ export async function deleteExpenseAction(
   id: number,
   _formData: FormData,
 ): Promise<void> {
+  await requireApp("finance");
   await requireEditor();
   const row = await scopedExpense(id);
   await db.delete(recurringExpenses).where(eq(recurringExpenses.id, row.id));

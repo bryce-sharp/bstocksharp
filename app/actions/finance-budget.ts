@@ -20,6 +20,7 @@ import { toTxnRow } from "@/lib/queries/finance-transactions";
 import { moneyDirection, signedAmount } from "@/lib/finance/cashflow";
 import { releaseBankLinks } from "@/lib/plaid/apply";
 import type { TxnRowData } from "@/components/finance/TransactionRow";
+import { requireApp } from "@/lib/hub-apps";
 
 // Budget writes — HOUSEHOLD data (requireEditor). The transaction TABLE is the
 // point of the whole app: SMS seeds a row, then anyone edits the row freely.
@@ -115,6 +116,7 @@ export async function updateTransactionAction(
   id: number,
   formData: FormData,
 ): Promise<TxnRowData> {
+  await requireApp("finance");
   await requireEditor();
   const { row, groupId } = await scopedTxn(id);
   const has = (k: string) => formData.has(k);
@@ -218,6 +220,7 @@ export async function updateTransactionAction(
 /** Quick-add a transaction the bank didn't text (gas), or income (paycheck,
  *  a gift). Income is entered positive; it's excluded from all spend math. */
 export async function addManualTransactionAction(formData: FormData): Promise<void> {
+  await requireApp("finance");
   await requireEditor();
   const groupId = await requireGroupId();
 
@@ -322,6 +325,7 @@ export async function deleteTransactionAction(
   id: number,
   _formData: FormData,
 ): Promise<void> {
+  await requireApp("finance");
   await requireEditor();
   await scopedTxn(id); // group-scope check
   // A row the bank feed knows about stays deleted: later bank updates skip it.
@@ -333,6 +337,7 @@ export async function deleteTransactionAction(
 
 // ── Funds — imaginary envelopes (balance disconnected from real accounts) ─────
 export async function createFundAction(formData: FormData): Promise<void> {
+  await requireApp("finance");
   await requireEditor();
   const groupId = await requireGroupId();
   const name = parseStr(formData.get("name"));
@@ -377,6 +382,7 @@ export async function adjustFundAction(
   fundId: number,
   formData: FormData,
 ): Promise<void> {
+  await requireApp("finance");
   await requireEditor();
   const { row } = await scopedFund(fundId);
   const amount = parseMoney(formData.get("amount"));
@@ -389,6 +395,7 @@ export async function adjustFundAction(
 /** Close a fund (spent out / no longer used). History stays; it leaves the
  *  active list. */
 export async function closeFundAction(id: number, _formData: FormData): Promise<void> {
+  await requireApp("finance");
   await requireEditor();
   await scopedFund(id);
   await db.update(funds).set({ closedAt: new Date() }).where(eq(funds.id, id));

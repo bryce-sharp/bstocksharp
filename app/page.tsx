@@ -10,6 +10,7 @@ import CardContent from "@mui/material/CardContent";
 import ProfileControl from "@/components/shared/ProfileControl";
 import { getActiveProfile } from "@/lib/profile";
 import { visibleApps } from "@/lib/apps";
+import { hubApps } from "@/lib/hub-apps";
 
 // Tab title follows whoever's active, rather than a baked-in name.
 export async function generateMetadata() {
@@ -19,8 +20,8 @@ export async function generateMetadata() {
 
 // The Hub: a launcher for all the sub-apps (from the registry in lib/apps.tsx).
 export default async function HubPage() {
-  const active = await getActiveProfile();
-  const apps = visibleApps(active?.hiddenApps);
+  const [active, offered] = await Promise.all([getActiveProfile(), hubApps()]);
+  const apps = visibleApps(active?.hiddenApps, offered);
 
   // Only one app in view → this person has no use for a launcher; take them
   // straight in. They can still reach other apps + settings from any header.

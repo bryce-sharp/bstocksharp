@@ -13,6 +13,7 @@ import { getSession } from "@/lib/session";
 import { isOwner } from "@/lib/auth";
 import { listGroupMembers } from "@/lib/queries/groups";
 import { listAllProfiles } from "@/lib/queries/profiles";
+import { hubApps } from "@/lib/hub-apps";
 
 export const metadata = { title: "Your account" };
 
@@ -27,10 +28,11 @@ export default async function AccountPage({
   const session = await getSession();
   if (!session) redirect("/login?from=/account");
 
-  const [members, profiles, owner] = await Promise.all([
+  const [members, profiles, owner, offeredApps] = await Promise.all([
     listGroupMembers(),
     listAllProfiles(),
     isOwner(),
+    hubApps(),
   ]);
   const me = members.find((m) => m.id === session.accountId);
   const mine = profiles.find((p) => p.id === me?.profileId && !p.archivedAt);
@@ -74,6 +76,7 @@ export default async function AccountPage({
                 archived={false}
                 canDeactivate={others.length > 0}
                 heirs={others.map((p) => ({ id: p.id, name: p.name }))}
+                offeredApps={offeredApps}
               />
             </Box>
           ) : (

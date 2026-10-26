@@ -271,6 +271,9 @@ export const groups = pgTable("groups", {
   // flips at UTC midnight (~7pm Central). Set from the browser's detected zone in
   // /group settings; defaults to Central.
   timezone: varchar("timezone", { length: 64 }).notNull().default("America/Chicago"),
+  // The apps this hub has (slugs from lib/apps.tsx). Null = every app; a
+  // games-only sign-up lists just ["games"]. Enforced by lib/hub-apps.
+  apps: jsonb("apps").$type<string[]>(),
   createdAt: createdAt(),
 });
 
