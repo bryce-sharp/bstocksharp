@@ -19,7 +19,7 @@ import DarkModeIcon from "@mui/icons-material/DarkModeOutlined";
 import LightModeIcon from "@mui/icons-material/LightModeOutlined";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import GroupsIcon from "@mui/icons-material/Groups";
-import FingerprintIcon from "@mui/icons-material/Fingerprint";
+import ManageAccountsIcon from "@mui/icons-material/ManageAccountsOutlined";
 import LogoutIcon from "@mui/icons-material/Logout";
 import CheckIcon from "@mui/icons-material/Check";
 import { switchProfile } from "@/app/actions/profile";
@@ -184,18 +184,18 @@ export default function ProfileMenu({
 
         <Divider />
 
-        {/* The global login (whole household) — group, device passkeys, out. */}
+        {/* Your own login, then the household's settings. */}
+        <MenuItem component={Link} href="/account" onClick={closeMenu}>
+          <ListItemIcon>
+            <ManageAccountsIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Your account…</ListItemText>
+        </MenuItem>
         <MenuItem component={Link} href="/group" onClick={closeMenu}>
           <ListItemIcon>
             <GroupsIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText>Manage group…</ListItemText>
-        </MenuItem>
-        <MenuItem component={Link} href="/group?tab=sign-in" onClick={closeMenu}>
-          <ListItemIcon>
-            <FingerprintIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Password & passkeys…</ListItemText>
+          <ListItemText>Hub settings…</ListItemText>
         </MenuItem>
         <MenuItem
           onClick={() => {

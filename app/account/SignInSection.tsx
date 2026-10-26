@@ -20,8 +20,8 @@ import ChangePasswordForm from "./ChangePasswordForm";
 const fmtDate = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" });
 
 // The signed-in ACCOUNT's own keys (not the household's): the reset notice,
-// the add-Face-ID nudge, Change password, and passkeys. It is the Sign-in tab
-// of /group (?tab=sign-in), where sign-in sends people with something to see.
+// the add-Face-ID nudge, Change password, and passkeys. Sign-in sends people
+// to /account when there is something here to see.
 export default async function SignInSection({
   accountId,
   iat,

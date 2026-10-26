@@ -126,7 +126,7 @@ export async function finishPasskeyRegistration(
       },
     });
 
-  revalidatePath("/group");
+  revalidatePath("/account");
   return { ok: true };
 }
 
@@ -200,5 +200,5 @@ export async function deletePasskey(id: string): Promise<void> {
   await db
     .delete(passkeys)
     .where(and(eq(passkeys.id, id), eq(passkeys.accountId, accountId)));
-  revalidatePath("/group");
+  revalidatePath("/account");
 }

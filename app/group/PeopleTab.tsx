@@ -270,7 +270,7 @@ export default async function PeopleTab({
 
       <Typography variant="caption" color="text.secondary">
         New logins join through <strong>invite links</strong>
-        {viewerIsOwner ? " from the Invites tab" : ", minted by the group owner"}.
+        {viewerIsOwner ? " from the Invites tab" : ", minted by the hub owner"}.
         Removing a login never touches the person or their data. Locked out?
         The owner can send a one-time reset link from that person&apos;s card.
       </Typography>

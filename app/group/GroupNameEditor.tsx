@@ -58,8 +58,8 @@ export default function GroupNameEditor({
         {name}
       </Typography>
       {canEdit ? (
-        <Tooltip title="Rename group">
-          <IconButton size="small" onClick={() => setEditing(true)} aria-label="Rename group">
+        <Tooltip title="Rename hub">
+          <IconButton size="small" onClick={() => setEditing(true)} aria-label="Rename hub">
             <EditOutlinedIcon fontSize="small" />
           </IconButton>
         </Tooltip>

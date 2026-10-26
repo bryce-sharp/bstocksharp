@@ -102,7 +102,7 @@ export type ResetRecord = {
   noticeSeen: boolean;
 };
 
-/** Links that were used on this account, newest first (the /group sign-in history). */
+/** Links that were used on this account, newest first (the /account sign-in history). */
 export async function listUsedResets(accountId: number, limit = 5): Promise<ResetRecord[]> {
   const rows = await db
     .select({
@@ -144,14 +144,14 @@ export async function afterSignIn(accountId: number, from: string, method: "pass
       ),
     )
     .limit(1);
-  if (unseen) return "/group?tab=sign-in";
+  if (unseen) return "/account";
   if (method === "password") {
     const [key] = await db
       .select({ id: passkeys.id })
       .from(passkeys)
       .where(eq(passkeys.accountId, accountId))
       .limit(1);
-    if (!key) return `/group?tab=sign-in&nudge=1&next=${encodeURIComponent(dest)}`;
+    if (!key) return `/account?nudge=1&next=${encodeURIComponent(dest)}`;
   }
   return dest;
 }

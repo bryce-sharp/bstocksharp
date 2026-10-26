@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-// Passkeys (and your password) moved to the hub page's "Your sign-in" section.
+// Passkeys (and your password) live on the account page.
 export default function PasskeysPage() {
-  redirect("/group?tab=sign-in");
+  redirect("/account");
 }
