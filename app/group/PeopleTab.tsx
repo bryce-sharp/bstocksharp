@@ -24,6 +24,7 @@ import {
   removeMemberAction,
 } from "@/app/actions/group";
 import { revokeResetLinkAction } from "@/app/actions/password";
+import { hubApps } from "@/lib/hub-apps";
 
 function initial(name: string) {
   return name.trim()[0]?.toUpperCase() ?? "?";
@@ -50,10 +51,11 @@ export default async function PeopleTab({
   /** For reset links, which need an absolute URL. */
   origin: string;
 }) {
-  const [members, all, active] = await Promise.all([
+  const [members, all, active, offeredApps] = await Promise.all([
     listGroupMembers(),
     listAllProfiles(),
     getActiveProfile(),
+    hubApps(),
   ]);
   const canManage = await Promise.all(all.map((p) => canEditProfile(p.id)));
 
@@ -131,6 +133,7 @@ export default async function PeopleTab({
                     archived={archived}
                     canDeactivate={canDeactivate}
                     heirs={heirs}
+                    offeredApps={offeredApps}
                   />
                 ) : canEdit && claim && !mine ? (
                   <Tooltip title={`Claimed — only ${claim.username} can manage ${p.name}`}>

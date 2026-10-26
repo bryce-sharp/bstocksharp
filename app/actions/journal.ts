@@ -6,6 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { journalEntries } from "@/lib/db/schema";
 import { requireVehicleEditor } from "@/lib/authz";
+import { requireApp } from "@/lib/hub-apps";
 
 function parseEntry(formData: FormData) {
   const str = (k: string) => {
@@ -33,6 +34,7 @@ export async function addJournal(
   vehicleId: number,
   formData: FormData,
 ): Promise<void> {
+  await requireApp("garage");
   await requireVehicleEditor(vehicleId);
   const data = parseEntry(formData);
   if (!data.entryDate) throw new Error("Date is required.");
@@ -54,6 +56,7 @@ export async function updateJournal(
   vehicleId: number,
   formData: FormData,
 ): Promise<void> {
+  await requireApp("garage");
   await requireVehicleEditor(vehicleId);
   const data = parseEntry(formData);
   if (!data.entryDate) throw new Error("Date is required.");
@@ -73,6 +76,7 @@ export async function deleteJournal(
   vehicleId: number,
   _formData: FormData,
 ): Promise<void> {
+  await requireApp("garage");
   await requireVehicleEditor(vehicleId);
   await db.delete(journalEntries).where(and(eq(journalEntries.id, id), eq(journalEntries.vehicleId, vehicleId)));
 

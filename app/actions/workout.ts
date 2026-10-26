@@ -19,6 +19,7 @@ import { getProfile } from "@/lib/queries/profiles";
 import { countExerciseUsage, getExercise, getWorkout } from "@/lib/queries/workout";
 import { RUN_TIMING } from "@/lib/workout-config";
 import { cleanEquipment, SECTIONS } from "@/lib/workout";
+import { requireApp } from "@/lib/hub-apps";
 
 const CATALOG = "/workout/catalog";
 
@@ -62,6 +63,7 @@ function parseExercise(formData: FormData) {
 }
 
 export async function addExercise(formData: FormData): Promise<void> {
+  await requireApp("workout");
   await requireEditor();
   const data = parseExercise(formData);
   if (!data.name) throw new Error("Exercise name is required.");
@@ -78,6 +80,7 @@ export async function updateExercise(
   id: number,
   formData: FormData,
 ): Promise<void> {
+  await requireApp("workout");
   await requireEditor();
   const data = parseExercise(formData);
   if (!data.name) throw new Error("Exercise name is required.");
@@ -95,6 +98,7 @@ export async function deleteExercise(
   id: number,
   _formData: FormData,
 ): Promise<void> {
+  await requireApp("workout");
   await requireEditor();
 
   // Guard: don't orphan workout items. Send back with a message instead of
@@ -194,6 +198,7 @@ function parseDraftItems(formData: FormData): DraftItem[] {
 }
 
 export async function createWorkoutWithItems(formData: FormData): Promise<void> {
+  await requireApp("workout");
   const { name, rounds, restBetweenRounds, createdByProfileId } =
     parseWorkout(formData);
   if (!name) throw new Error("Workout name is required.");
@@ -259,6 +264,7 @@ export async function updateWorkout(
   id: number,
   formData: FormData,
 ): Promise<void> {
+  await requireApp("workout");
   await requireWorkoutEditor(id);
   const { name, rounds, restBetweenRounds, createdByProfileId } =
     parseWorkout(formData);
@@ -289,6 +295,7 @@ export async function deleteWorkout(
   id: number,
   _formData: FormData,
 ): Promise<void> {
+  await requireApp("workout");
   await requireWorkoutEditor(id);
   // Cascades to workout_items and workout_assignments (FK onDelete: cascade).
   await db.delete(workouts).where(eq(workouts.id, id));
@@ -306,6 +313,7 @@ export async function copyWorkout(
   sourceId: number,
   _formData: FormData,
 ): Promise<void> {
+  await requireApp("workout");
   const active = await getActiveProfile();
   if (!active) throw new Error("No active profile to copy to.");
   await requireEditorFor(active.id);
@@ -364,6 +372,7 @@ export async function addWorkoutItem(
   workoutId: number,
   formData: FormData,
 ): Promise<void> {
+  await requireApp("workout");
   await requireWorkoutEditor(workoutId);
   const exerciseId = int(formData, "exerciseId");
   const section = str(formData, "section") ?? "main";
@@ -410,6 +419,7 @@ export async function updateWorkoutItem(
   workoutId: number,
   formData: FormData,
 ): Promise<void> {
+  await requireApp("workout");
   await requireWorkoutEditor(workoutId);
   // Fetch the item's catalog exercise so we can diff each field against its
   // default and only persist genuine overrides. The item lookup is BOUND to the
@@ -436,6 +446,7 @@ export async function removeWorkoutItem(
   workoutId: number,
   _formData: FormData,
 ): Promise<void> {
+  await requireApp("workout");
   await requireWorkoutEditor(workoutId);
   await db
     .delete(workoutItems)
@@ -451,6 +462,7 @@ export async function moveWorkoutItem(
   workoutId: number,
   dir: "up" | "down",
 ): Promise<void> {
+  await requireApp("workout");
   await requireWorkoutEditor(workoutId);
   const rows = await db
     .select()
@@ -486,6 +498,7 @@ export async function setAssignment(
   weekday: number,
   formData: FormData,
 ): Promise<void> {
+  await requireApp("workout");
   await requireEditorFor(profileId); // your own week — you must be unlocked
   const workoutId = int(formData, "workoutId");
   // Only OUR group's workouts can be scheduled (foreign id → not found).

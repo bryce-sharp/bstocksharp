@@ -6,6 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { buildTasks } from "@/lib/db/schema";
 import { requireVehicleEditor } from "@/lib/authz";
+import { requireApp } from "@/lib/hub-apps";
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -42,6 +43,7 @@ export async function addBuildTask(
   vehicleId: number,
   formData: FormData,
 ): Promise<void> {
+  await requireApp("garage");
   await requireVehicleEditor(vehicleId);
   const data = parseTask(formData);
   if (!data.title) throw new Error("Task title is required.");
@@ -57,6 +59,7 @@ export async function updateBuildTask(
   vehicleId: number,
   formData: FormData,
 ): Promise<void> {
+  await requireApp("garage");
   await requireVehicleEditor(vehicleId);
   const data = parseTask(formData);
   if (!data.title) throw new Error("Task title is required.");
@@ -75,6 +78,7 @@ export async function deleteBuildTask(
   vehicleId: number,
   _formData: FormData,
 ): Promise<void> {
+  await requireApp("garage");
   await requireVehicleEditor(vehicleId);
   await db.delete(buildTasks).where(and(eq(buildTasks.id, id), eq(buildTasks.vehicleId, vehicleId)));
 
@@ -91,6 +95,7 @@ export async function toggleBuildTask(
   vehicleId: number,
   done: boolean,
 ): Promise<void> {
+  await requireApp("garage");
   await requireVehicleEditor(vehicleId);
   await db
     .update(buildTasks)

@@ -6,6 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { wishlistItems } from "@/lib/db/schema";
 import { requireVehicleEditor } from "@/lib/authz";
+import { requireApp } from "@/lib/hub-apps";
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -43,6 +44,7 @@ export async function addWishlistItem(
   vehicleId: number,
   formData: FormData,
 ): Promise<void> {
+  await requireApp("garage");
   await requireVehicleEditor(vehicleId);
   const data = parseItem(formData);
   if (!data.item) throw new Error("Item name is required.");
@@ -58,6 +60,7 @@ export async function updateWishlistItem(
   vehicleId: number,
   formData: FormData,
 ): Promise<void> {
+  await requireApp("garage");
   await requireVehicleEditor(vehicleId);
   const data = parseItem(formData);
   if (!data.item) throw new Error("Item name is required.");
@@ -76,6 +79,7 @@ export async function deleteWishlistItem(
   vehicleId: number,
   _formData: FormData,
 ): Promise<void> {
+  await requireApp("garage");
   await requireVehicleEditor(vehicleId);
   await db.delete(wishlistItems).where(and(eq(wishlistItems.id, id), eq(wishlistItems.vehicleId, vehicleId)));
 
@@ -89,6 +93,7 @@ export async function toggleWishlistPurchased(
   vehicleId: number,
   purchased: boolean,
 ): Promise<void> {
+  await requireApp("garage");
   await requireVehicleEditor(vehicleId);
   await db
     .update(wishlistItems)

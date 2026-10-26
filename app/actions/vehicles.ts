@@ -10,6 +10,7 @@ import { requireVehicleEditor } from "@/lib/authz";
 import { getActiveProfile } from "@/lib/profile";
 import { requireGroupId } from "@/lib/session";
 import { getProfile } from "@/lib/queries/profiles";
+import { requireApp } from "@/lib/hub-apps";
 
 /** The form's owner pick must be one of OUR profiles (or null). */
 async function validOwner(profileId: number | null): Promise<number | null> {
@@ -54,6 +55,7 @@ function parseVehicle(formData: FormData) {
 }
 
 export async function addVehicle(formData: FormData): Promise<void> {
+  await requireApp("garage");
   await requireEditor();
   const data = parseVehicle(formData);
   if (!data.name) throw new Error("Name is required.");
@@ -75,6 +77,7 @@ export async function updateVehicle(
   id: number,
   formData: FormData,
 ): Promise<void> {
+  await requireApp("garage");
   await requireVehicleEditor(id); // group-scoped (foreign id → "not found")
   const data = parseVehicle(formData);
   if (!data.name) throw new Error("Name is required.");
@@ -91,6 +94,7 @@ export async function deleteVehicle(
   id: number,
   _formData: FormData,
 ): Promise<void> {
+  await requireApp("garage");
   await requireVehicleEditor(id);
   await db.delete(vehicles).where(eq(vehicles.id, id));
 

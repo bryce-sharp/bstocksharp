@@ -41,6 +41,7 @@ export default function EditProfileButton({
   archived,
   canDeactivate,
   heirs,
+  offeredApps,
 }: {
   profileId: number;
   profileName: string;
@@ -49,6 +50,8 @@ export default function EditProfileButton({
   archived: boolean;
   canDeactivate: boolean;
   heirs: { id: number; name: string }[];
+  /** The apps this hub has (lib/hub-apps); omitted means every app. */
+  offeredApps?: string[];
 }) {
   const [open, setOpen] = React.useState(false);
   const [color, setColor] = React.useState(profileColor ?? PROFILE_SWATCHES[0]);
@@ -63,7 +66,8 @@ export default function EditProfileButton({
   }
 
   const close = () => setOpen(false);
-  const visibleCount = APPS.length - hidden.length;
+  const offered = offeredApps ? APPS.filter((a) => offeredApps.includes(a.slug)) : APPS;
+  const visibleCount = offered.filter((a) => !hidden.includes(a.slug)).length;
 
   function toggleApp(slug: string, visible: boolean) {
     setHidden((prev) =>
@@ -132,7 +136,7 @@ export default function EditProfileButton({
                   Uncheck an app to hide it from this person&apos;s hub.
                 </Typography>
                 <FormGroup>
-                  {APPS.map((a) => {
+                  {offered.map((a) => {
                     const visible = !hidden.includes(a.slug);
                     // Never let them hide the last visible app.
                     const lockOn = visible && visibleCount === 1;

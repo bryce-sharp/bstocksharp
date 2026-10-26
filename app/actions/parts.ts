@@ -6,6 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { parts } from "@/lib/db/schema";
 import { requireVehicleEditor } from "@/lib/authz";
+import { requireApp } from "@/lib/hub-apps";
 
 function parsePart(formData: FormData) {
   const str = (k: string) => {
@@ -31,6 +32,7 @@ export async function addPart(
   vehicleId: number,
   formData: FormData,
 ): Promise<void> {
+  await requireApp("garage");
   await requireVehicleEditor(vehicleId);
   const data = parsePart(formData);
   if (!data.name) throw new Error("Part name is required.");
@@ -46,6 +48,7 @@ export async function updatePart(
   vehicleId: number,
   formData: FormData,
 ): Promise<void> {
+  await requireApp("garage");
   await requireVehicleEditor(vehicleId);
   const data = parsePart(formData);
   if (!data.name) throw new Error("Part name is required.");
@@ -64,6 +67,7 @@ export async function deletePart(
   vehicleId: number,
   _formData: FormData,
 ): Promise<void> {
+  await requireApp("garage");
   await requireVehicleEditor(vehicleId);
   await db.delete(parts).where(and(eq(parts.id, id), eq(parts.vehicleId, vehicleId)));
 
