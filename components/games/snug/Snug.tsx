@@ -20,19 +20,25 @@ import { BoardSvg, Btn, FONT, HowToPlay, INK, KnitDefs, PanelStitches, PatchSvg,
 const HOW_TO_SEEN = "snug.howToSeen";
 const MAX_CELL = 54;
 const MIN_CELL = 18;
-/** Room below the play area for the buttons; the panel's edge and the maker's label may sit under a browser toolbar. */
-const FOOTER_H = 68;
+/** Room below the play area for the buttons, the panel's bottom edge, and the maker's label. */
+const FOOTER_H = 100;
 /** Room around the board for its binding, in cells. */
 const BOARD_PAD = 0.45;
 /** Side-by-side is kept whenever pieces stay at least this many pixels per square. */
 const SIDE_MIN_CELL = 30;
 
-/** iPhone Safari's floating toolbar covers the bottom of the page without shrinking the window. */
-const IPHONE_TOOLBAR_H = 76;
+/**
+ * iPhone Safari's floating toolbar covers the bottom of the page without shrinking the window; the panel's edge
+ * and the maker's label may sit under it, so this is only the part of it above them.
+ */
+const IPHONE_TOOLBAR_H = 44;
+/** As a home-screen app there is no toolbar, but the home indicator strip still crowds the bottom edge. */
+const IPHONE_HOME_STRIP_H = 20;
 
 function toolbarAllowance(): number {
+  if (!/iPhone|iPod/.test(navigator.userAgent)) return 0;
   const standalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone === true;
-  return /iPhone|iPod/.test(navigator.userAgent) && !standalone ? IPHONE_TOOLBAR_H : 0;
+  return standalone ? IPHONE_HOME_STRIP_H : IPHONE_TOOLBAR_H;
 }
 
 /** The height the game can count on: the smallest the browser reports (toolbars showing), less a floating toolbar. */
