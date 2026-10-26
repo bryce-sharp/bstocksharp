@@ -18,7 +18,7 @@ import {
   workouts,
 } from "@/lib/db/schema";
 import { destroySession, requireSession } from "@/lib/session";
-import { claimedBy, requireEditor, requireOwner } from "@/lib/auth";
+import { claimedBy, isSiteAdmin, requireEditor, requireOwner } from "@/lib/auth";
 import { getProfile } from "@/lib/queries/profiles";
 
 // Claims are SELF-service: an account claims a profile for itself ("I am this
@@ -85,6 +85,10 @@ export async function createInviteAction(
   const session = await requireOwner();
 
   const household = String(formData.get("destination") ?? "household") !== "own-hub";
+  // Owners invite people into their own hub; only a site admin starts someone a new hub.
+  if (!household && !(await isSiteAdmin())) {
+    return { error: "Only a site admin can give someone their own hub." };
+  }
   const reusable = formData.get("reusable") != null;
   const note = String(formData.get("note") ?? "").trim().slice(0, 120) || null;
 
