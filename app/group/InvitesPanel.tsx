@@ -67,10 +67,13 @@ export default function InvitesPanel({
   origin,
   groupName,
   invites,
+  canMintHubs,
 }: {
   origin: string;
   groupName: string;
   invites: InviteRow[];
+  /** Site admins may also invite someone to a new hub of their own. */
+  canMintHubs: boolean;
 }) {
   const [state, formAction] = React.useActionState<CreateInviteState, FormData>(
     createInviteAction,
@@ -127,18 +130,22 @@ export default function InvitesPanel({
                 Send them this link (valid 7 days): {created}
               </Alert>
             ) : null}
-            <TextField
-              name="destination"
-              label="They should"
-              select
-              size="small"
-              fullWidth
-              defaultValue="household"
-              slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
-            >
-              <option value="household">Join {groupName} (sees this hub)</option>
-              <option value="own-hub">Get their own empty hub</option>
-            </TextField>
+            {canMintHubs ? (
+              <TextField
+                name="destination"
+                label="They should"
+                select
+                size="small"
+                fullWidth
+                defaultValue="household"
+                slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
+              >
+                <option value="household">Join {groupName} (sees this hub)</option>
+                <option value="own-hub">Get their own empty hub</option>
+              </TextField>
+            ) : (
+              <input type="hidden" name="destination" value="household" />
+            )}
             <TextField
               name="note"
               label="Note (optional)"

@@ -14,6 +14,7 @@ import {
   setSpendCategoryForGroup,
   type SetCategoryResult,
 } from "@/lib/queries/finance-categories";
+import { requireApp } from "@/lib/hub-apps";
 
 // The explorer's "load more" — the client hands back the filters it's showing
 // plus the last cursor; we re-derive the group from the session (never trust a
@@ -22,11 +23,13 @@ export async function loadMoreTransactionsAction(
   filters: TxnFilters,
   cursor: string | null,
 ): Promise<TxnPage> {
+  await requireApp("finance");
   return searchTransactions(filters, cursor);
 }
 
 /** One transaction's details for its popup: where it came from, when, and the bank's wording. */
 export async function getTransactionDetailAction(id: number): Promise<TxnDetail | null> {
+  await requireApp("finance");
   return getTransactionDetail(await requireGroupId(), id);
 }
 
@@ -41,6 +44,7 @@ export async function setSpendCategoryAction(
   category: string | null,
   applyToMerchant: boolean,
 ): Promise<SetCategoryResult> {
+  await requireApp("finance");
   await requireEditor();
   const groupId = await requireGroupId();
   const clean = category && category.trim() ? category.trim().slice(0, 40) : null;

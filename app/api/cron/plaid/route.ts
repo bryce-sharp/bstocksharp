@@ -6,6 +6,7 @@ import { plaidItems } from "@/lib/db/schema";
 import { plaidConfigured, plaidEnv } from "@/lib/plaid/client";
 import { syncPlaidItem } from "@/lib/plaid/sync";
 import { pruneEvents } from "@/lib/events";
+import { pruneIdleGamesHubs } from "@/lib/signup";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/cron/plaid — the daily backstop (vercel.json crons). Syncs every
@@ -13,7 +14,8 @@ import { pruneEvents } from "@/lib/events";
 // webhook would have delivered still arrives within a day, and a broken login
 // still surfaces as Reconnect. Vercel sends "Authorization: Bearer
 // $CRON_SECRET"; anything else is refused, and with no secret configured the
-// route fails closed. It also trims the event log to its 180-day window.
+// route fails closed. It also trims the event log to its 180-day window and
+// deletes games-only sign-ups that never saved a game in 30 days.
 // ─────────────────────────────────────────────────────────────────────────────
 
 function fromVercelCron(req: NextRequest): boolean {
@@ -27,7 +29,8 @@ function fromVercelCron(req: NextRequest): boolean {
 export async function GET(req: NextRequest) {
   if (!fromVercelCron(req)) return NextResponse.json({ ok: false }, { status: 401 });
   const pruned = await pruneEvents();
-  if (!plaidConfigured()) return NextResponse.json({ ok: true, synced: 0, pruned });
+  const idleHubs = await pruneIdleGamesHubs();
+  if (!plaidConfigured()) return NextResponse.json({ ok: true, synced: 0, pruned, idleHubs });
 
   const items = await db
     .select({ id: plaidItems.id })
@@ -42,5 +45,5 @@ export async function GET(req: NextRequest) {
         : { id: item.id, ok: false, busy: outcome.busy === true },
     );
   }
-  return NextResponse.json({ ok: true, synced: results.length, results, pruned });
+  return NextResponse.json({ ok: true, synced: results.length, results, pruned, idleHubs });
 }

@@ -28,6 +28,7 @@ import {
 // sessions go to clear their cookie). Everything else redirects.
 const PUBLIC_PATHS = new Set([
   "/login",
+  "/signup",
   "/signout",
   "/manifest.webmanifest",
   "/manifest-icon",

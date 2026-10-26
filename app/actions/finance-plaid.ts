@@ -28,6 +28,7 @@ import {
 import { decryptToken, encryptToken } from "@/lib/plaid/crypto";
 import { suggestAccount } from "@/lib/plaid/accounts";
 import { applyPlaidItemNow, syncPlaidItem, type SyncOutcome } from "@/lib/plaid/sync";
+import { requireApp } from "@/lib/hub-apps";
 
 // Bank connections (Plaid). Connecting a bank shares account access and spends
 // one of the site's few Plaid slots, so every action here needs the household
@@ -110,6 +111,7 @@ function balanceFields(a: AccountBase) {
 export async function createLinkTokenAction(
   plaidItemId: number | null,
 ): Promise<{ linkToken: string } | { error: string }> {
+  await requireApp("finance");
   const groupId = await requireBankAdmin();
   let accessToken: string | null = null;
   if (plaidItemId !== null) {
@@ -149,6 +151,7 @@ export async function createLinkTokenAction(
 export async function connectBankAction(
   publicToken: string,
 ): Promise<{ ok: true; duplicateOf: string | null; summary: string } | { error: string }> {
+  await requireApp("finance");
   const groupId = await requireBankAdmin();
   const plaid = getPlaid();
 
@@ -260,6 +263,7 @@ export async function mapBankAccountAction(
   plaidAccountId: number,
   financialAccountId: number | null,
 ): Promise<Result> {
+  await requireApp("finance");
   const groupId = await requireBankAdmin();
 
   const [bankAccount] = await db
@@ -357,6 +361,7 @@ export async function mapBankAccountAction(
 export async function syncBankAction(
   plaidItemId: number,
 ): Promise<{ ok: true; summary: string } | { error: string }> {
+  await requireApp("finance");
   const groupId = await requireBankAdmin();
   const item = await usableItem(plaidItemId, groupId);
   if ("error" in item) return item;
@@ -369,6 +374,7 @@ export async function syncBankAction(
 export async function markBankRepairedAction(
   plaidItemId: number,
 ): Promise<{ ok: true; summary: string } | { error: string }> {
+  await requireApp("finance");
   const groupId = await requireBankAdmin();
   const item = await usableItem(plaidItemId, groupId);
   if ("error" in item) return item;
@@ -390,6 +396,7 @@ export async function disconnectBankAction(
   plaidItemId: number,
   _formData: FormData,
 ): Promise<void> {
+  await requireApp("finance");
   const groupId = await requireBankAdmin();
   const item = await getPlaidItemForGroup(plaidItemId, groupId);
   if (!item) return;

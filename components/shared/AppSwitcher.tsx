@@ -21,17 +21,20 @@ export default function AppSwitcher({
   current,
   nav = [],
   hiddenApps = [],
+  hubApps,
 }: {
   current: string;
   nav?: { label: string; href: string }[];
   hiddenApps?: string[];
+  hubApps?: string[];
 }) {
   const app = getApp(current);
   // Always include the app you're currently in, even if it's "hidden" (you got
   // here somehow) — but otherwise respect the hidden set.
-  const apps = visibleApps(hiddenApps).some((a) => a.slug === current)
-    ? visibleApps(hiddenApps)
-    : [...visibleApps(hiddenApps), getApp(current)].filter(
+  const shown = visibleApps(hiddenApps, hubApps);
+  const apps = shown.some((a) => a.slug === current)
+    ? shown
+    : [...shown, getApp(current)].filter(
         (a): a is NonNullable<typeof a> => Boolean(a),
       );
   const [anchor, setAnchor] = React.useState<null | HTMLElement>(null);

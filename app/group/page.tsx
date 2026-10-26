@@ -11,7 +11,7 @@ import InvitesPanel, { type InviteRow } from "./InvitesPanel";
 import DangerZone from "./DangerZone";
 import ActivityLog from "./ActivityLog";
 import { getSession } from "@/lib/session";
-import { isEditor } from "@/lib/auth";
+import { isEditor, isSiteAdmin } from "@/lib/auth";
 import { getMyGroup, listGroupMembers } from "@/lib/queries/groups";
 import { listPendingInvites } from "@/lib/queries/invites";
 import { activityViewer, listActivity, listActivitySources } from "@/lib/queries/activity";
@@ -47,7 +47,12 @@ export default async function GroupPage({
     redirect(query ? `/account?${query}` : "/account");
   }
 
-  const [group, canEdit, viewer] = await Promise.all([getMyGroup(), isEditor(), activityViewer()]);
+  const [group, canEdit, viewer, siteAdmin] = await Promise.all([
+    getMyGroup(),
+    isEditor(),
+    activityViewer(),
+    isSiteAdmin(),
+  ]);
   // Membership controls (invites, removal, reset links) are the OWNER's.
   const viewerIsOwner =
     group?.ownerAccountId != null && group.ownerAccountId === session.accountId;
@@ -110,12 +115,14 @@ export default async function GroupPage({
               origin={origin}
               groupName={group?.name ?? "this hub"}
               invites={inviteRows}
+              canMintHubs={siteAdmin}
             />
             <Typography variant="caption" color="text.secondary">
               Links are single-use and expire in 7 days unless you say
-              otherwise. A &ldquo;join&rdquo; invite makes them a member of this
-              hub; an &ldquo;own hub&rdquo; invite gives them a fresh private
-              one.
+              otherwise. An invite makes them a member of this hub
+              {siteAdmin
+                ? "; an \u201cown hub\u201d invite (site admins only) gives them a fresh private one."
+                : "."}
             </Typography>
           </Stack>
         ) : null}

@@ -15,11 +15,14 @@ export default function AppHeader({
   current,
   nav = [],
   hiddenApps = [],
+  hubApps,
   profileControl,
 }: {
   current: string;
   nav?: { label: string; href: string }[];
   hiddenApps?: string[];
+  /** The apps this hub has; omitted means every app. */
+  hubApps?: string[];
   profileControl?: React.ReactNode;
 }) {
   return (
@@ -34,7 +37,7 @@ export default function AppHeader({
       }}
     >
       <Toolbar sx={{ gap: 0.5 }}>
-        <AppSwitcher current={current} nav={nav} hiddenApps={hiddenApps} />
+        <AppSwitcher current={current} nav={nav} hiddenApps={hiddenApps} hubApps={hubApps} />
         {/* Inline nav on desktop; on mobile it lives in the switcher menu. */}
         <Box sx={{ display: { xs: "none", sm: "flex" }, gap: 0.5 }}>
           {nav.map((n) => (

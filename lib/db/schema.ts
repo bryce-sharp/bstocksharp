@@ -271,6 +271,9 @@ export const groups = pgTable("groups", {
   // flips at UTC midnight (~7pm Central). Set from the browser's detected zone in
   // /group settings; defaults to Central.
   timezone: varchar("timezone", { length: 64 }).notNull().default("America/Chicago"),
+  // The apps this hub has (slugs from lib/apps.tsx). Null = every app; a
+  // games-only sign-up lists just ["games"]. Enforced by lib/hub-apps.
+  apps: jsonb("apps").$type<string[]>(),
   createdAt: createdAt(),
 });
 
@@ -301,8 +304,9 @@ export const invites = pgTable("invites", {
 // ACCOUNTS — the global login (Phase A of the auth roadmap). An account is a
 // LOGIN IDENTITY for the whole hub, distinct from profiles (the household's
 // people/data — a kid can have a profile with no login). A group can hold
-// several accounts (Bryce + Lauren each get a key). No signup UI by design —
-// accounts are created with `node scripts/create-account.mjs <username>`.
+// several accounts (Bryce + Lauren each get a key). Logins come from invite
+// links, self sign-up (/signup, a games-only hub of one), or
+// `node scripts/create-account.mjs <username>`.
 // ─────────────────────────────────────────────────────────────────────────────
 export const accounts = pgTable("accounts", {
   id: serial("id").primaryKey(),

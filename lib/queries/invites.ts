@@ -49,6 +49,7 @@ export type JoinableInvite = {
   id: number;
   groupId: number | null; // null = mint a fresh hub
   groupName: string | null; // the household's name, for the /join greeting
+  createdByAccountId: number | null; // an own-hub invite copies this login's hub apps
 };
 
 /**
@@ -66,6 +67,7 @@ export async function getJoinableInvite(
       id: invites.id,
       groupId: invites.groupId,
       groupName: groups.name,
+      createdByAccountId: invites.createdByAccountId,
     })
     .from(invites)
     .leftJoin(groups, eq(invites.groupId, groups.id))

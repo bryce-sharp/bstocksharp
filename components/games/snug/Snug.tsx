@@ -191,6 +191,8 @@ export function Snug({ shareUrl, profileId }: { shareUrl?: string; profileId?: n
     () => (window.self !== window.top ? { href: `${SITE}/games`, newTab: true } : { href: "/games", newTab: false }),
     [],
   );
+  // Signed out on this site (not framed elsewhere): offer an account so quilts follow the player.
+  const saveHref = profileId === undefined && window.self === window.top ? "/login?from=/games/snug" : undefined;
   return (
     <div className={SNUG_FONTS}>
       {synced && loaded?.dateKey === dateKey ? (
@@ -202,6 +204,7 @@ export function Snug({ shareUrl, profileId }: { shareUrl?: string; profileId?: n
           onPickDate={setDateKey}
           shareUrl={shareUrl ?? SHARE_URL}
           moreGames={moreGames}
+          saveHref={saveHref}
         />
       ) : failed === dateKey ? (
         <div style={{ ...panelStyle, minHeight: "60vh", display: "grid", placeItems: "center", alignContent: "center", gap: 14, textAlign: "center" }}>
@@ -234,6 +237,7 @@ function SnugDay({
   onPickDate,
   shareUrl,
   moreGames,
+  saveHref,
 }: {
   dateKey: string;
   puzzle: Puzzle;
@@ -241,6 +245,7 @@ function SnugDay({
   onPickDate: (key: string) => void;
   shareUrl: string;
   moreGames: MoreGamesLink;
+  saveHref?: string;
 }) {
   // Scoring follows the date this quilt was opened on, so a game running past midnight stays scored.
   const [openedOn] = useState(today);
@@ -1204,6 +1209,7 @@ function SnugDay({
                   shareUrl={shareUrl}
                   stats={stats}
                   moreGames={moreGames}
+                  saveHref={saveHref}
                   shareLabel={canNativeShare ? "Share" : undefined}
                   copied={copied}
                   describe={describe}

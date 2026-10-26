@@ -6,6 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { maintenanceRecords } from "@/lib/db/schema";
 import { requireVehicleEditor } from "@/lib/authz";
+import { requireApp } from "@/lib/hub-apps";
 
 function parseRecord(formData: FormData) {
   const str = (k: string) => {
@@ -38,6 +39,7 @@ export async function addMaintenance(
   vehicleId: number,
   formData: FormData,
 ): Promise<void> {
+  await requireApp("garage");
   await requireVehicleEditor(vehicleId);
   const data = parseRecord(formData);
   if (!data.serviceType) throw new Error("Service type is required.");
@@ -59,6 +61,7 @@ export async function updateMaintenance(
   vehicleId: number,
   formData: FormData,
 ): Promise<void> {
+  await requireApp("garage");
   await requireVehicleEditor(vehicleId);
   const data = parseRecord(formData);
   if (!data.serviceType) throw new Error("Service type is required.");
@@ -78,6 +81,7 @@ export async function deleteMaintenance(
   vehicleId: number,
   _formData: FormData,
 ): Promise<void> {
+  await requireApp("garage");
   await requireVehicleEditor(vehicleId);
   await db.delete(maintenanceRecords).where(and(eq(maintenanceRecords.id, id), eq(maintenanceRecords.vehicleId, vehicleId)));
 
