@@ -304,8 +304,9 @@ export const invites = pgTable("invites", {
 // ACCOUNTS — the global login (Phase A of the auth roadmap). An account is a
 // LOGIN IDENTITY for the whole hub, distinct from profiles (the household's
 // people/data — a kid can have a profile with no login). A group can hold
-// several accounts (Bryce + Lauren each get a key). No signup UI by design —
-// accounts are created with `node scripts/create-account.mjs <username>`.
+// several accounts (Bryce + Lauren each get a key). Logins come from invite
+// links, self sign-up (/signup, a games-only hub of one), or
+// `node scripts/create-account.mjs <username>`.
 // ─────────────────────────────────────────────────────────────────────────────
 export const accounts = pgTable("accounts", {
   id: serial("id").primaryKey(),
