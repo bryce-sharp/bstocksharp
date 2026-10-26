@@ -192,8 +192,9 @@ claim (ownership). Two consequences:
   unlocked person can edit any car they can see.
 
 **Lifecycle:** all household management lives on **`/group`** (profile menu →
-*Manage group*; `/people` redirects there): add people, rename the group, edit a
-person, claim/release. *Deactivate* soft-deletes
+*Hub settings*; `/people` redirects there): add people, rename the hub, edit a
+person, claim/release. Your own login (your person, password, passkeys) is on
+**`/account`** (profile menu → *Your account*). *Deactivate* soft-deletes
 (`profiles.archived_at`) — hidden from the switcher, can't be active, **all data
 kept**; *Reactivate* restores. *Delete forever* is irreversible: it reassigns the
 person's **shared** cars + authored workouts to a chosen **heir**, then deletes their

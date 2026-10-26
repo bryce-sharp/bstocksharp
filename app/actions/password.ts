@@ -137,7 +137,7 @@ export async function changePasswordAction(
   await revokeLiveResets(session.accountId);
   // The change just ended every session, including this one; sign this device back in.
   await createSession(session.accountId, account.groupId);
-  revalidatePath("/group");
+  revalidatePath("/account");
   return { ok: true };
 }
 
@@ -154,5 +154,5 @@ export async function acknowledgeResetNoticeAction(_formData: FormData): Promise
         isNull(passwordResets.noticeSeenAt),
       ),
     );
-  revalidatePath("/group");
+  revalidatePath("/account");
 }

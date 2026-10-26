@@ -1,18 +1,14 @@
-import Link from "@/components/shared/AppLink";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import Container from "@mui/material/Container";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import Button from "@mui/material/Button";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import GroupNameEditor from "./GroupNameEditor";
 import GroupTabs, { type GroupTab } from "./GroupTabs";
 import PeopleTab from "./PeopleTab";
 import TimezoneSetting from "./TimezoneSetting";
 import InvitesPanel, { type InviteRow } from "./InvitesPanel";
 import DangerZone from "./DangerZone";
-import SignInSection from "./SignInSection";
 import ActivityLog from "./ActivityLog";
 import { getSession } from "@/lib/session";
 import { isEditor } from "@/lib/auth";
@@ -20,7 +16,7 @@ import { getMyGroup, listGroupMembers } from "@/lib/queries/groups";
 import { listPendingInvites } from "@/lib/queries/invites";
 import { activityViewer, listActivity, listActivitySources } from "@/lib/queries/activity";
 
-export const metadata = { title: "Group" };
+export const metadata = { title: "Hub settings" };
 
 /** Whole days until a date, never below zero. */
 function daysUntil(date: Date): number {
@@ -32,9 +28,8 @@ function daysUntil(date: Date): number {
 //   Invites   the owner's invite links
 //   Activity  the event log: the owner's household events, plus site events
 //             for a site admin
-//   Sign-in   the signed-in account's own password and passkeys; sign-in
-//             sends people here with a reset notice or the add-Face-ID nudge
 //   Settings  the time zone and the exit doors (leave, transfer, delete)
+// Your own password and passkeys are on /account.
 export default async function GroupPage({
   searchParams,
 }: {
@@ -43,6 +38,14 @@ export default async function GroupPage({
   const { tab, nudge, next } = await searchParams;
   const session = await getSession();
   if (!session) redirect("/login"); // proxy already gates; belt anyway
+  // The old Sign-in tab, still linked from bookmarks and older sign-in redirects.
+  if (tab === "sign-in" || nudge === "1") {
+    const query = new URLSearchParams({
+      ...(nudge ? { nudge } : {}),
+      ...(next ? { next } : {}),
+    }).toString();
+    redirect(query ? `/account?${query}` : "/account");
+  }
 
   const [group, canEdit, viewer] = await Promise.all([getMyGroup(), isEditor(), activityViewer()]);
   // Membership controls (invites, removal, reset links) are the OWNER's.
@@ -54,11 +57,9 @@ export default async function GroupPage({
     { value: "people", label: "People" },
     ...(manages ? [{ value: "invites" as const, label: "Invites" }] : []),
     ...(viewer ? [{ value: "activity" as const, label: "Activity" }] : []),
-    { value: "sign-in", label: "Sign-in" },
     { value: "settings", label: "Settings" },
   ];
-  const wanted = nudge === "1" ? "sign-in" : tab;
-  const active = tabs.find((t) => t.value === wanted)?.value ?? "people";
+  const active = tabs.find((t) => t.value === tab)?.value ?? "people";
 
   // Invite and reset links need an absolute URL: derive the origin from Host
   // headers (same idiom as lib/webauthn), never an env var.
@@ -88,18 +89,8 @@ export default async function GroupPage({
 
   return (
     <Container maxWidth="sm" sx={{ py: { xs: 4, md: 6 } }}>
-      <Button
-        component={Link}
-        href="/"
-        startIcon={<ArrowBackIcon />}
-        color="inherit"
-        sx={{ mb: 2 }}
-      >
-        Back to hub
-      </Button>
-
       <Stack spacing={2.5}>
-        <GroupNameEditor name={group?.name ?? "Group"} canEdit={canEdit} />
+        <GroupNameEditor name={group?.name ?? "Hub"} canEdit={canEdit} />
 
         <GroupTabs active={active} tabs={tabs} />
 
@@ -135,16 +126,6 @@ export default async function GroupPage({
             sources={activitySources}
             owner={viewer.scope.groupId !== null}
             siteAdmin={viewer.scope.site === true}
-          />
-        ) : null}
-
-        {active === "sign-in" ? (
-          <SignInSection
-            accountId={session.accountId}
-            iat={session.iat}
-            isOwner={viewerIsOwner}
-            nudge={nudge === "1"}
-            next={next ?? "/"}
           />
         ) : null}
 
