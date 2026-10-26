@@ -3,6 +3,8 @@
 import * as React from "react";
 import NextLink from "next/link";
 import type { LinkProps } from "next/link";
+import { usePathname } from "next/navigation";
+import { gameAtPath } from "@/lib/games";
 
 // A thin "use client" wrapper around next/link.
 //
@@ -21,7 +23,17 @@ const AppLink = React.forwardRef<
   HTMLAnchorElement,
   LinkProps & React.AnchorHTMLAttributes<HTMLAnchorElement>
 >(function AppLink(props, ref) {
-  return <NextLink ref={ref} {...props} />;
+  const pathname = usePathname();
+  const target = String(props.href);
+  // A game is its own home-screen app, so crossing into or out of one loads the page fresh for the phone to read its app setting.
+  const crossesApp = target.startsWith("/") && gameAtPath(pathname)?.slug !== gameAtPath(target.split(/[?#]/)[0]!)?.slug;
+  const onClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    props.onClick?.(e);
+    if (!crossesApp || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    window.location.assign(target);
+  };
+  return <NextLink ref={ref} {...props} onClick={onClick} />;
 });
 
 export default AppLink;
