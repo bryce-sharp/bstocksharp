@@ -39,7 +39,8 @@ import {
 } from "@/app/actions/finance-transactions";
 import type { TxnFilters } from "@/lib/queries/finance-transactions";
 
-export type TxnAccount = { id: number; name: string; kind?: string };
+/** `book` is set for an account in another of your money books (for a transfer between books). */
+export type TxnAccount = { id: number; name: string; kind?: string; book?: string };
 
 type Anchored = { txn: TxnRowData; anchor: HTMLElement };
 
@@ -63,6 +64,8 @@ export default function TransactionsTable({
   incomeCategories,
   editable,
   allowAdd = false,
+  otherBooks = [],
+  otherAccounts = [],
 }: {
   initialRows: TxnRowData[];
   initialCursor?: string | null;
@@ -80,6 +83,9 @@ export default function TransactionsTable({
   incomeCategories: string[]; // income tags
   editable: boolean;
   allowAdd?: boolean;
+  /** Your other money books and their accounts (Also count for; transfers between books). */
+  otherBooks?: { id: number; name: string }[];
+  otherAccounts?: TxnAccount[];
 }) {
   const paged = filters !== undefined;
   const pathname = usePathname();
@@ -319,6 +325,8 @@ export default function TransactionsTable({
           onSaved={patchRow}
           onDeleted={(id) => setRows((prev) => prev.filter((r) => r.id !== id))}
           onClose={() => setDetail(null)}
+          otherBooks={otherBooks}
+          otherAccounts={otherAccounts}
         />
       ) : null}
       {addOpen ? (
@@ -326,6 +334,7 @@ export default function TransactionsTable({
           funds={funds}
           bills={bills}
           accounts={accounts}
+          otherAccounts={otherAccounts}
           merchants={merchants}
           sources={sources}
           categories={categories}

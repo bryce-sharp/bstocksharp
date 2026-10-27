@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { transactions, recurringExpenses, financialAccounts } from "@/lib/db/schema";
 import { parseAlertText, categorizeMerchant, type MerchantRule } from "@/lib/finance/sms";
 import { longestMatchingRule, spendCategoryFor } from "@/lib/finance/categorize";
-import { spendRulesFor } from "@/lib/queries/finance-categories";
+import { shareFromRules, spendRulesFor } from "@/lib/queries/finance-categories";
 import { todayISO, dateInTz } from "@/lib/finance/parse";
 import { getGroupTimezone } from "@/lib/queries/group";
 import { type BookRef } from "@/lib/books";
@@ -228,6 +228,7 @@ export async function ingestAlert(
       needsReview: false,
     })
     .returning({ id: transactions.id });
+  await shareFromRules(book, { id: row.id, merchant: parsed.merchant, category, spendCategory });
 
   return { ok: true, id: row.id, deduped: false, needsReview: false, category };
 }
@@ -366,6 +367,7 @@ export async function ingestStructured(
       note,
     })
     .returning({ id: transactions.id });
+  await shareFromRules(book, { id: row.id, merchant, category, spendCategory });
 
   return { ok: true, id: row.id, deduped: false, needsReview, category };
 }

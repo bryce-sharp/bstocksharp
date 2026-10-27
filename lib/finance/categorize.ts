@@ -4,8 +4,8 @@
 
 import { flowOf, type Flow } from "@/lib/finance/cashflow";
 
-/** A merchant → tag rule; `flow` says which side of the ledger it tags. */
-export type SpendRule = { pattern: string; category: string; flow?: Flow };
+/** A merchant → tag rule; `flow` says which side of the ledger it tags; `alsoBookId` is another book that also counts the rows. */
+export type SpendRule = { pattern: string; category: string; flow?: Flow; alsoBookId?: number | null };
 
 /** The rule that governs a merchant: longest matching pattern wins (so a
  *  specific "WM SUPERCENTER #4279" override beats a broad "WALMART"). Null if

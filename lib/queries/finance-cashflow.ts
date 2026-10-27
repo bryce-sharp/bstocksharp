@@ -5,15 +5,16 @@ import { type BookRef } from "@/lib/books";
 import { transactions as t } from "@/lib/db/schema";
 import { txnWhere, type TxnFilters } from "@/lib/queries/finance-transactions";
 import { IN_CATEGORIES, REIMBURSEMENT, SPEND_CATEGORIES } from "@/lib/finance/cashflow";
+import { betweenIn, betweenOut, laneSql, tagIn } from "@/lib/finance/book-rows";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CASH FLOW — "what actually moved", beside the budget's "what's left to spend"
 // (never scored against it). ONE definition for every view — the budget's All
 // money toggle, History, and the explorer's totals — so their numbers agree:
-//   • IN  = income.
+//   • IN  = income, and money in from another of the hub's books.
 //   • OUT = discretionary, fixed, amortized (in the month it's PAID), savings
 //           (bought from savings: real money, just off-budget) and fund
-//           purchases. Refunds (negative rows) net against their own lane, and
+//           purchases, and money out to another of the hub's books. Refunds (negative rows) net against their own lane, and
 //           reimbursements (paybacks for purchases) net against money out
 //           under the tag of what they pay back.
 //   • Never counted: Excluded rows, unreadable (needs-review) rows, and fund
@@ -24,10 +25,11 @@ import { IN_CATEGORIES, REIMBURSEMENT, SPEND_CATEGORIES } from "@/lib/finance/ca
 // The lane lists come from lib/finance/cashflow (constants, never user input).
 const list = (cats: readonly string[]) => sql.raw(cats.map((c) => `'${c}'`).join(", "));
 
-const moneyIn = () =>
-  sql<string>`coalesce(sum(case when not ${t.needsReview} and ${t.category} in (${list(IN_CATEGORIES)}) then ${t.amount} else 0 end), 0)`;
-const moneyOut = () =>
-  sql<string>`coalesce(sum(case when ${t.needsReview} then 0 when ${t.category} in (${list(SPEND_CATEGORIES)}) then ${t.amount} when ${t.category} = 'fund' then greatest(${t.amount}, 0) when ${t.category} = ${REIMBURSEMENT} then -${t.amount} else 0 end), 0)`;
+// Money moved between two of the hub's books counts as in for one and out for the other.
+const moneyIn = (book: BookRef) =>
+  sql<string>`coalesce(sum(case when ${t.needsReview} then 0 when ${t.category} in (${list(IN_CATEGORIES)}) then ${t.amount} when ${betweenIn(book)} then ${t.amount} else 0 end), 0)`;
+const moneyOut = (book: BookRef) =>
+  sql<string>`coalesce(sum(case when ${t.needsReview} then 0 when ${t.category} in (${list(SPEND_CATEGORIES)}) then ${t.amount} when ${t.category} = 'fund' then greatest(${t.amount}, 0) when ${t.category} = ${REIMBURSEMENT} then -${t.amount} when ${betweenOut(book)} then ${t.amount} else 0 end), 0)`;
 
 const dollars = (v: string | number | null | undefined) => Math.round(Number(v ?? 0) * 100) / 100;
 
@@ -41,7 +43,7 @@ export type SourceIn = { source: string | null; category: string; amount: number
 /** Row count plus money in/out for exactly the rows these filters match. */
 export async function summarizeCashFlow(book: BookRef, f: TxnFilters): Promise<CashFlowSummary> {
   const [row] = await db
-    .select({ count: sql<number>`count(*)::int`, moneyIn: moneyIn(), moneyOut: moneyOut() })
+    .select({ count: sql<number>`count(*)::int`, moneyIn: moneyIn(book), moneyOut: moneyOut(book) })
     .from(t)
     .where(txnWhere(book, f));
   return {
@@ -73,7 +75,7 @@ function monthsBetween(first: string, last: string): string[] {
 export async function cashFlowByMonth(book: BookRef, f: TxnFilters): Promise<MonthFlow[]> {
   const month = sql<string>`to_char(${t.postedOn}, 'YYYY-MM')`;
   const rows = await db
-    .select({ month, moneyIn: moneyIn(), moneyOut: moneyOut() })
+    .select({ month, moneyIn: moneyIn(book), moneyOut: moneyOut(book) })
     .from(t)
     .where(txnWhere(book, f))
     .groupBy(month)
@@ -92,11 +94,11 @@ export async function cashFlowByMonth(book: BookRef, f: TxnFilters): Promise<Mon
 /** Money out per spend tag (null = untagged), biggest first; refund-only tags drop. */
 export async function spendByTag(book: BookRef, f: TxnFilters): Promise<TagSpend[]> {
   const rows = await db
-    .select({ tag: t.spendCategory, amount: moneyOut() })
+    .select({ tag: tagIn(book), amount: moneyOut(book) })
     .from(t)
     .where(txnWhere(book, f))
-    .groupBy(t.spendCategory)
-    .orderBy(desc(moneyOut()));
+    .groupBy(sql`1`)
+    .orderBy(desc(moneyOut(book)));
   return rows
     .map((r) => ({ tag: r.tag, amount: dollars(r.amount) }))
     .filter((r) => r.amount > 0);
@@ -105,11 +107,11 @@ export async function spendByTag(book: BookRef, f: TxnFilters): Promise<TagSpend
 /** Money in per income tag (null = untagged), biggest first. */
 export async function incomeByTag(book: BookRef, f: TxnFilters): Promise<TagSpend[]> {
   const rows = await db
-    .select({ tag: t.spendCategory, amount: moneyIn() })
+    .select({ tag: tagIn(book), amount: moneyIn(book) })
     .from(t)
     .where(txnWhere(book, f))
-    .groupBy(t.spendCategory)
-    .orderBy(desc(moneyIn()));
+    .groupBy(sql`1`)
+    .orderBy(desc(moneyIn(book)));
   return rows
     .map((r) => ({ tag: r.tag, amount: dollars(r.amount) }))
     .filter((r) => r.amount > 0);
@@ -118,10 +120,10 @@ export async function incomeByTag(book: BookRef, f: TxnFilters): Promise<TagSpen
 /** Money in/out per engine category (the "by type" lanes). */
 export async function cashFlowByCategory(book: BookRef, f: TxnFilters): Promise<CategoryFlow[]> {
   const rows = await db
-    .select({ category: t.category, moneyIn: moneyIn(), moneyOut: moneyOut() })
+    .select({ category: laneSql(book), moneyIn: moneyIn(book), moneyOut: moneyOut(book) })
     .from(t)
     .where(txnWhere(book, f))
-    .groupBy(t.category);
+    .groupBy(sql`1`);
   return rows.map((r) => ({
     category: r.category,
     moneyIn: dollars(r.moneyIn),
@@ -136,10 +138,10 @@ export async function cashFlowByMonthAndCategory(
 ): Promise<(CategoryFlow & { month: string })[]> {
   const month = sql<string>`to_char(${t.postedOn}, 'YYYY-MM')`;
   const rows = await db
-    .select({ month, category: t.category, moneyIn: moneyIn(), moneyOut: moneyOut() })
+    .select({ month, category: laneSql(book), moneyIn: moneyIn(book), moneyOut: moneyOut(book) })
     .from(t)
     .where(txnWhere(book, f))
-    .groupBy(month, t.category);
+    .groupBy(sql`1, 2`);
   return rows.map((r) => ({
     month: `${r.month}-01`,
     category: r.category,
@@ -171,7 +173,7 @@ export async function dailyMoneyOut(
   to: string,
 ): Promise<{ postedOn: string; amount: number }[]> {
   const rows = await db
-    .select({ postedOn: t.postedOn, amount: moneyOut() })
+    .select({ postedOn: t.postedOn, amount: moneyOut(book) })
     .from(t)
     .where(txnWhere(book, { from, to }))
     .groupBy(t.postedOn);

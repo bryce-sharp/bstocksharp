@@ -3,7 +3,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { and, asc, eq, inArray, isNull, isNotNull } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { accounts, bookMembers, books, groups, profiles } from "@/lib/db/schema";
+import { accounts, bookMembers, books, financialAccounts, groups, profiles } from "@/lib/db/schema";
 import { requireGroupId } from "@/lib/session";
 import { currentLogin } from "@/lib/hub-apps";
 
@@ -172,4 +172,23 @@ export async function hubBookAccess(groupId: number) {
         .where(inArray(bookMembers.bookId, rows.map((r) => r.id)))
     : [];
   return rows.map((r) => ({ ...r, members: members.filter((m) => m.bookId === r.id).map((m) => m.profileId) }));
+}
+
+/** The viewer's other books and their open accounts, for "Also count for" and transfers between books. */
+export async function otherBooksForViewer(): Promise<{
+  books: { id: number; name: string }[];
+  accounts: { id: number; name: string; kind: string; book: string }[];
+}> {
+  const [mine, current] = await Promise.all([viewerBooks(), viewerBook()]);
+  const others = mine.filter((b) => b.id !== current?.id);
+  if (!others.length) return { books: [], accounts: [] };
+  const rows = await db
+    .select({ id: financialAccounts.id, name: financialAccounts.name, kind: financialAccounts.kind, bookId: financialAccounts.bookId })
+    .from(financialAccounts)
+    .where(and(inArray(financialAccounts.bookId, others.map((b) => b.id)), isNull(financialAccounts.archivedAt)))
+    .orderBy(asc(financialAccounts.sortOrder), asc(financialAccounts.id));
+  return {
+    books: others.map((b) => ({ id: b.id, name: b.name })),
+    accounts: rows.map((a) => ({ id: a.id, name: a.name, kind: a.kind, book: others.find((b) => b.id === a.bookId)!.name })),
+  };
 }

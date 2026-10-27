@@ -22,7 +22,7 @@ import {
 } from "@/lib/queries/finance-budget";
 import { listFinancialAccounts } from "@/lib/queries/finance-networth";
 import { listIncomeCategories, listSpendCategories } from "@/lib/queries/finance-categories";
-import { toTxnRow } from "@/lib/queries/finance-transactions";
+import { toBookRows } from "@/lib/queries/finance-transactions";
 import {
   cashFlowByCategory,
   moneyInBySource,
@@ -39,11 +39,13 @@ import { getGroupTimezone } from "@/lib/queries/group";
 import { formatMoney, formatMonth } from "@/lib/format";
 import AtlasMonthSwitcher from "@/components/finance/AtlasMonthSwitcher";
 import BudgetSummary from "@/components/finance/BudgetSummary";
+import BookLanes from "@/components/finance/BookLanes";
+import { listBookLanes } from "@/lib/queries/finance-between";
 import BudgetInsights from "@/components/finance/BudgetInsights";
 import TransactionsTable from "@/components/finance/TransactionsTable";
 import FundsPanel from "@/components/finance/FundsPanel";
 import RefreshAfterSync from "@/components/finance/RefreshAfterSync";
-import { listBookMembers, requireBook } from "@/lib/books";
+import { listBookMembers, otherBooksForViewer, requireBook, viewerBook } from "@/lib/books";
 
 export const metadata = { title: "Budget" };
 
@@ -104,7 +106,12 @@ export default async function BudgetPage({
   const c = view.computation;
   const disc = c.discretionary;
 
-  const rows = txns.map(toTxnRow);
+  const rows = await toBookRows(book, txns);
+  const [bookLanes, bookName, others] = await Promise.all([
+    listBookLanes(book, month, lastDayOfMonth(month)),
+    viewerBook().then((b) => b?.name ?? "This book"),
+    otherBooksForViewer(),
+  ]);
 
   const fundPicks = c.funds.map((f) => ({ id: f.id, name: f.name }));
   const fundViews = c.funds.map((f) => ({
@@ -302,6 +309,8 @@ export default async function BudgetPage({
         </Alert>
       ) : null}
 
+      <BookLanes book={bookName} lanes={bookLanes} />
+
       <BudgetInsights
         d={{
           month,
@@ -346,6 +355,8 @@ export default async function BudgetPage({
           funds={fundPicks}
           bills={bills}
           accounts={accountPicks}
+          otherBooks={others.books}
+          otherAccounts={others.accounts}
           merchants={suggest.merchants}
           sources={suggest.sources}
           categories={categories}

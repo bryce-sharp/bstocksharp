@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   transactions,
@@ -9,14 +9,16 @@ import {
   financialAccounts,
   recurringExpenses,
   profiles,
+  transactionShares,
 } from "@/lib/db/schema";
 import { requireEditor } from "@/lib/auth";
-import { requireBook, type BookRef } from "@/lib/books";
+import { requireBook, viewerBooks, type BookRef } from "@/lib/books";
 import { getGroupTimezone } from "@/lib/queries/group";
 import { parseMoney, parseStr, parseInt as parseBoundedInt, todayISO } from "@/lib/finance/parse";
 import { categorizeMerchant } from "@/lib/finance/sms";
 import { asTransfer, merchantRulesFor, resolveSpendCategory, transferRulesFor } from "@/lib/finance/ingest";
-import { toTxnRow } from "@/lib/queries/finance-transactions";
+import { toBookRows } from "@/lib/queries/finance-transactions";
+import { shareFromRules } from "@/lib/queries/finance-categories";
 import { moneyDirection, signedAmount } from "@/lib/finance/cashflow";
 import { releaseBankLinks } from "@/lib/plaid/apply";
 import type { TxnRowData } from "@/components/finance/TransactionRow";
@@ -94,6 +96,22 @@ async function validAccount(
   return a ?? null;
 }
 
+/**
+ * An account for one side of a transfer: any account in the viewer's books, so
+ * money can move between two of them ("Between books").
+ */
+async function transferAccount(id: number | null): Promise<{ id: number; kind: string; bookId: number } | null> {
+  if (id === null) return null;
+  const mine = (await viewerBooks()).map((b) => b.id);
+  if (!mine.length) return null;
+  const [a] = await db
+    .select({ id: financialAccounts.id, kind: financialAccounts.kind, bookId: financialAccounts.bookId })
+    .from(financialAccounts)
+    .where(and(eq(financialAccounts.id, id), inArray(financialAccounts.bookId, mine)))
+    .limit(1);
+  return a ?? null;
+}
+
 /** Both sides of a transfer: two different accounts, neither a spending wallet
  *  (money into a wallet is spent; money out of one was never counted). */
 function checkTransfer(from: { kind: string } | null, into: { id: number; kind: string } | null, fromId: number | null) {
@@ -148,12 +166,11 @@ export async function updateTransactionAction(
   }
   if (has("accountId")) {
     set.accountId =
-      (await validAccount(book, parseBoundedInt(formData.get("accountId"), 1, 2 ** 31)))?.id ?? null;
+      (await transferAccount(parseBoundedInt(formData.get("accountId"), 1, 2 ** 31)))?.id ?? null;
   }
   if (has("transferAccountId")) {
     set.transferAccountId =
-      (await validAccount(book, parseBoundedInt(formData.get("transferAccountId"), 1, 2 ** 31)))?.id ??
-      null;
+      (await transferAccount(parseBoundedInt(formData.get("transferAccountId"), 1, 2 ** 31)))?.id ?? null;
   }
 
   // Links only mean something for their category; keep them honest whether the
@@ -182,10 +199,23 @@ export async function updateTransactionAction(
   if (effectiveCategory === "transfer") {
     const fromId = ("accountId" in set ? set.accountId : row.accountId) as number | null;
     const intoId = ("transferAccountId" in set ? set.transferAccountId : row.transferAccountId) as number | null;
-    checkTransfer(await validAccount(book, fromId), await validAccount(book, intoId), fromId);
+    const from = await transferAccount(fromId);
+    const into = await transferAccount(intoId);
+    checkTransfer(from, into, fromId);
     set.spendCategory = null; // transfers are never tagged
+    // A transfer lives in the book the money left (lib/finance/book-rows).
+    set.bookId = (from ?? into)!.bookId;
   } else {
     set.transferAccountId = null;
+    // Any other row stays in the book of its own account.
+    if (row.accountId != null && !has("accountId")) {
+      const own = await transferAccount(row.accountId);
+      if (own) set.bookId = own.bookId;
+    }
+  }
+  // Only spending and income can be counted by another book.
+  if (effectiveCategory === "transfer" || effectiveCategory === "ignored") {
+    await db.delete(transactionShares).where(eq(transactionShares.transactionId, id));
   }
 
   // A tag picked in the form wins (a reimbursement's is what it pays back); an
@@ -214,7 +244,7 @@ export async function updateTransactionAction(
     .returning();
   revalidatePath(BUDGET);
   revalidatePath(EXPLORER);
-  return toTxnRow(saved);
+  return (await toBookRows(book, [saved]))[0];
 }
 
 /** Quick-add a transaction the bank didn't text (gas), or income (paycheck,
@@ -277,13 +307,15 @@ export async function addManualTransactionAction(formData: FormData): Promise<vo
       .limit(1);
     if (!a) accountId = null;
   }
+  let rowBook = book;
   if (kind === "transfer") {
-    const into = await validAccount(
-      book,
-      parseBoundedInt(formData.get("transferAccountId"), 1, 2 ** 31),
-    );
-    checkTransfer(await validAccount(book, accountId), into, accountId);
+    // Either side can be in another of your books ("Between books"); the row lives where the money left.
+    const from = await transferAccount(parseBoundedInt(formData.get("accountId"), 1, 2 ** 31));
+    const into = await transferAccount(parseBoundedInt(formData.get("transferAccountId"), 1, 2 ** 31));
+    checkTransfer(from, into, from?.id ?? null);
+    accountId = from?.id ?? null;
     transferAccountId = into!.id;
+    rowBook = { id: (from ?? into)!.bookId, groupId: book.groupId };
   }
   // A fund purchase draws its fund; income can be put into one instead.
   const fundId =
@@ -298,9 +330,9 @@ export async function addManualTransactionAction(formData: FormData): Promise<vo
         (await validBill(book, parseBoundedInt(formData.get("recurringExpenseId"), 1, 2 ** 31)))
       : null;
 
-  await db.insert(transactions).values({
+  const [added] = await db.insert(transactions).values({
     groupId: book.groupId,
-    bookId: book.id,
+    bookId: rowBook.id,
     accountId,
     transferAccountId,
     postedOn,
@@ -318,7 +350,8 @@ export async function addManualTransactionAction(formData: FormData): Promise<vo
           : await resolveSpendCategory(book, category, merchant, recurringExpenseId),
     source: "manual",
     note: parseStr(formData.get("note")),
-  });
+  }).returning();
+  await shareFromRules(rowBook, added);
   revalidatePath(BUDGET);
 }
 

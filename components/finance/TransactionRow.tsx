@@ -54,6 +54,14 @@ export type TxnRowData = {
   source: string;
   /** From the bank feed: null (not reported yet), "pending", or "posted". */
   bankStatus: string | null;
+  /** Set when the row belongs to another money book and this book only counts it (read-only here). */
+  home?: { book: string; account: string | null } | null;
+  /** Other money books that also count this book's row ("Also count for"). */
+  sharedWith?: { id: number; name: string }[];
+  /** Money moved between this book and another: which way, and the other book. */
+  between?: { direction: "in" | "out"; book: string } | null;
+  /** The book this row's merchant rule always counts it for ("Always for …"), if any. */
+  alwaysFor?: number | null;
 };
 
 // `flow` groups the pickers: money out vs money in (a reimbursement pays you
@@ -123,12 +131,17 @@ export default function TransactionRow({
 }) {
   const adjusted = txn.amount !== txn.originalAmount;
   const accountName = (id: number | null) => (id == null ? null : accounts.find((a) => a.id === id)?.name ?? null);
-  const fundName =
-    txn.category === "transfer"
+  const fundName = txn.between
+    ? txn.between.direction === "out"
+      ? `${accountName(txn.accountId) ?? "?"} → ${txn.between.book}`
+      : `${txn.between.book} → ${accountName(txn.transferAccountId) ?? "?"}`
+    : txn.category === "transfer"
       ? `${accountName(txn.accountId) ?? "?"} → ${accountName(txn.transferAccountId) ?? "?"}`
-      : txn.fundId
-        ? funds.find((f) => f.id === txn.fundId)?.name
-        : null;
+      : txn.home
+        ? `Paid from ${txn.home.account ?? txn.home.book}`
+        : txn.fundId
+          ? funds.find((f) => f.id === txn.fundId)?.name
+          : null;
   const dir = direction(txn.category, txn.amount);
   // Every counted row is taggable — spending tags on money out, income tags on
   // money in. Excluded rows are never counted, so never tagged.
@@ -221,7 +234,7 @@ export default function TransactionRow({
                   textOverflow: "ellipsis",
                 }}
               >
-                {fundName ? (txn.category === "transfer" ? fundName : `→ ${fundName}`) : ""}
+                {fundName ? (txn.category === "transfer" || txn.home ? fundName : `→ ${fundName}`) : ""}
                 {fundName && txn.note ? " · " : ""}
                 {txn.note ?? ""}
               </Box>
@@ -255,13 +268,27 @@ export default function TransactionRow({
           sx={[{ flexWrap: "wrap", rowGap: 0.5 }, onPhone({ justifyContent: "flex-end" })]}
         >
           {/* Discretionary is the usual lane, so a phone shows only the others. */}
-          <Chip
-            size="small"
-            variant="outlined"
-            color={chipColor(txn.category)}
-            label={CATEGORY_LABEL[txn.category] ?? txn.category}
-            sx={txn.category === "discretionary" ? onPhone({ display: "none" }) : undefined}
-          />
+          {txn.between ? null : (
+            <Chip
+              size="small"
+              variant="outlined"
+              color={chipColor(txn.category)}
+              label={CATEGORY_LABEL[txn.category] ?? txn.category}
+              sx={txn.category === "discretionary" ? onPhone({ display: "none" }) : undefined}
+            />
+          )}
+          {txn.between ? (
+            <Chip size="small" variant="outlined" label="Between books" />
+          ) : txn.home ? (
+            <Tooltip title={`${txn.home.book}'s charge, also counted in this book`}>
+              <Chip size="small" variant="outlined" label={`From ${txn.home.book}`} />
+            </Tooltip>
+          ) : null}
+          {txn.sharedWith?.length ? (
+            <Tooltip title={`Also counted by ${txn.sharedWith.map((b) => b.name).join(", ")}`}>
+              <Chip size="small" variant="outlined" label={`Also ${txn.sharedWith.map((b) => b.name).join(", ")}`} />
+            </Tooltip>
+          ) : null}
           {txn.bankStatus === "pending" ? (
             <Tooltip title="Authorized at the bank but not posted yet; it updates in place when it posts">
               <Chip

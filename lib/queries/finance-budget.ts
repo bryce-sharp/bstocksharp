@@ -26,6 +26,7 @@ import {
   type MonthReportInput,
 } from "@/lib/finance/month-report";
 import { formatMonth } from "@/lib/format";
+import { inBook, laneHere } from "@/lib/finance/book-rows";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BUDGET reads. The engine (lib/finance/budget-engine) is pure; this layer
@@ -132,23 +133,20 @@ export async function getBudgetMonthForBook(
   const monthTxns = await db
     .select()
     .from(transactions)
-    .where(
-      and(
-        eq(transactions.bookId, book.id),
-        gte(transactions.postedOn, start),
-        lte(transactions.postedOn, end),
-      ),
-    )
+    .where(and(inBook(book), gte(transactions.postedOn, start), lte(transactions.postedOn, end)))
     .orderBy(asc(transactions.postedOn), asc(transactions.id));
-  const engineTxns: EngineTxn[] = monthTxns.map((t) => ({
-    id: t.id,
-    postedOn: t.postedOn,
-    amountC: cents(t.amount),
-    category: t.category as EngineTxn["category"],
-    recurringExpenseId: t.recurringExpenseId,
-    fundId: t.fundId,
-    needsReview: t.needsReview,
-  }));
+  const engineTxns: EngineTxn[] = monthTxns.map((t) => {
+    const here = laneHere(book, t);
+    return {
+      id: t.id,
+      postedOn: t.postedOn,
+      amountC: cents(t.amount),
+      category: here.category as EngineTxn["category"],
+      recurringExpenseId: here.recurringExpenseId,
+      fundId: here.fundId,
+      needsReview: t.needsReview,
+    };
+  });
 
   // Funds + what moved them before this month: purchases draw, income put in adds.
   const groupFunds = await db
@@ -480,7 +478,7 @@ export async function listBudgetMonthsForBook(book: BookRef): Promise<string[]> 
   const txnMonths = await db
     .selectDistinct({ m: transactions.postedOn })
     .from(transactions)
-    .where(eq(transactions.bookId, book.id));
+    .where(inBook(book));
   const set = new Set<string>();
   for (const r of txnMonths) set.add(`${r.m.slice(0, 7)}-01`);
   return [...set].sort();
@@ -568,12 +566,17 @@ export async function getSpendTrend(
             .from(transactions)
             .where(
               and(
-                eq(transactions.bookId, book.id),
+                inBook(book),
                 gte(transactions.postedOn, prev),
                 lte(transactions.postedOn, lastDayOfMonth(cur)),
                 or(
                   eq(transactions.category, "discretionary"),
                   eq(transactions.category, "reimbursement"),
+                  // Shared in from another book, its bill or fund charges count here as spending (laneHere).
+                  and(
+                    ne(transactions.bookId, book.id),
+                    inArray(transactions.category, ["fixed", "amortized", "fund"]),
+                  ),
                 ),
               ),
             )
@@ -624,12 +627,6 @@ export async function listMonthTransactions(
   return db
     .select()
     .from(transactions)
-    .where(
-      and(
-        eq(transactions.bookId, book.id),
-        gte(transactions.postedOn, start),
-        lte(transactions.postedOn, end),
-      ),
-    )
+    .where(and(inBook(book), gte(transactions.postedOn, start), lte(transactions.postedOn, end)))
     .orderBy(desc(transactions.postedOn), desc(transactions.id));
 }

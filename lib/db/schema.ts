@@ -964,6 +964,25 @@ export const transactions = pgTable(
   ],
 );
 
+// Charges another book also counts (docs/finance/money-books.md): the row stays in
+// its own book, and this book counts it too, with its own tag. Lauren's business
+// counts the supplies she bought on the Family Visa.
+export const transactionShares = pgTable(
+  "transaction_shares",
+  {
+    transactionId: integer("transaction_id")
+      .notNull()
+      .references(() => transactions.id, { onDelete: "cascade" }),
+    bookId: integer("book_id")
+      .notNull()
+      .references(() => books.id, { onDelete: "cascade" }),
+    // This book's own tag for the charge; its home book keeps transactions.spendCategory.
+    spendCategory: varchar("spend_category", { length: 40 }),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.transactionId, t.bookId] }), index("idx_txn_shares_book").on(t.bookId)],
+);
+
 // Merchant → spend-category rules (F4c). A pattern is a case-insensitive
 // substring of the card-alert merchant (same style as recurringExpenses
 // merchantPatterns); longest match wins, so "WM SUPERCENTER" beats a broad
@@ -990,6 +1009,8 @@ export const merchantCategories = pgTable(
     // income tags. A rule only ever matches rows of its own flow, so a spending
     // "Venmo" rule can't tag a Venmo payment to you (scripts/migrate-rule-flow).
     flow: varchar("flow", { length: 3 }).notNull().default("out"),
+    // Matching rows are also counted by this book (her supplier always counts for her business).
+    alsoBookId: integer("also_book_id").references(() => books.id, { onDelete: "set null" }),
     createdAt: createdAt(),
   },
   (t) => [index("idx_merchcat_group").on(t.groupId), index("idx_merchcat_book").on(t.bookId)],

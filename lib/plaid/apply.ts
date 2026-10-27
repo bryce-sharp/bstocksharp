@@ -1,11 +1,11 @@
 import "server-only";
 import { and, asc, eq, getTableColumns, gte, inArray, isNotNull, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { plaidAccounts, plaidItems, plaidTransactions, transactions } from "@/lib/db/schema";
+import { financialAccounts, plaidAccounts, plaidItems, plaidTransactions, transactionShares, transactions } from "@/lib/db/schema";
 import { asTransfer, merchantRulesFor, transferRulesFor } from "@/lib/finance/ingest";
 import { categorizeMerchant, type MerchantRule } from "@/lib/finance/sms";
 import { spendCategoryFor } from "@/lib/finance/categorize";
-import { spendRulesFor } from "@/lib/queries/finance-categories";
+import { shareFromRules, spendRulesFor } from "@/lib/queries/finance-categories";
 import { getGroupTimezone } from "@/lib/queries/group";
 import { type BookRef } from "@/lib/books";
 import { pickMatch, pickSplit } from "@/lib/finance/match";
@@ -242,12 +242,14 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
     recurringExpenseId: number | null;
     spendCategory: string | null;
     needsReview: boolean;
+    /** A transfer between books lives in the book the money left. */
+    bookId?: number;
   }): Promise<number> {
     const [row] = await db
       .insert(transactions)
       .values({
         groupId: item.groupId,
-        bookId: book.id,
+        bookId: values.bookId ?? book.id,
         accountId: values.accountId,
         transferAccountId: values.transferAccountId,
         postedOn: values.date,
@@ -262,8 +264,9 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
         needsReview: values.needsReview,
         bankStatus: values.r.pending ? "pending" : "posted",
       })
-      .returning({ id: transactions.id });
+      .returning({ id: transactions.id, merchant: transactions.merchant });
     if (values.needsReview) stats.review++;
+    await shareFromRules(book, { ...row, category: values.category, spendCategory: values.spendCategory }, spendRules);
     return row.id;
   }
 
@@ -331,7 +334,8 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
       .innerJoin(plaidItems, eq(plaidAccounts.plaidItemId, plaidItems.id))
       .where(
         and(
-          eq(plaidItems.bookId, book.id),
+          // Any of the hub's banks: the other side may be in another money book ("Between books").
+          eq(plaidItems.groupId, item.groupId),
           isNull(plaidTransactions.removedAt),
           isNull(plaidTransactions.dismissedAt),
           isNotNull(plaidAccounts.financialAccountId),
@@ -352,11 +356,26 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
     if (leg) {
       const [fromId, intoId] =
         amount > 0 ? [r.financialAccountId, leg.financialAccountId] : [leg.financialAccountId, r.financialAccountId];
+      const [from] = await db
+        .select({ bookId: financialAccounts.bookId })
+        .from(financialAccounts)
+        .where(eq(financialAccounts.id, fromId!))
+        .limit(1);
+      const fromBook = from?.bookId ?? book.id;
       if (leg.ledgerId !== null) {
         await db
           .update(transactions)
-          .set({ category: "transfer", accountId: fromId, transferAccountId: intoId, spendCategory: null, needsReview: false })
+          .set({
+            category: "transfer",
+            accountId: fromId,
+            transferAccountId: intoId,
+            spendCategory: null,
+            needsReview: false,
+            bookId: fromBook,
+          })
           .where(eq(transactions.id, leg.ledgerId));
+        // A transfer is never counted by another book.
+        await db.delete(transactionShares).where(eq(transactionShares.transactionId, leg.ledgerId));
         await refresh(leg.ledgerId, "transfer", r);
         await markApplied(r.id, leg.ledgerId);
         stats.updated++;
@@ -364,6 +383,7 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
         const id = await insertRow({
           r, date, accountId: fromId, transferAccountId: intoId, amount: abs,
           category: "transfer", recurringExpenseId: null, spendCategory: null, needsReview: false,
+          bookId: fromBook,
         });
         await markApplied(r.id, id);
         await markApplied(leg.id, id);

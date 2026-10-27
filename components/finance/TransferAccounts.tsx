@@ -24,21 +24,21 @@ export default function TransferAccounts({
         <TextField name="accountId" label="From" select required defaultValue={fromId ?? ""}>
           {choices.map((a) => (
             <MenuItem key={a.id} value={a.id}>
-              {a.name}
+              {a.book ? `${a.name} · ${a.book}` : a.name}
             </MenuItem>
           ))}
         </TextField>
         <TextField name="transferAccountId" label="Into" select required defaultValue={intoId ?? ""}>
           {choices.map((a) => (
             <MenuItem key={a.id} value={a.id}>
-              {a.name}
+              {a.book ? `${a.name} · ${a.book}` : a.name}
             </MenuItem>
           ))}
         </TextField>
       </Box>
       <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 0.75 }}>
-        Money moving between your own accounts. It is not spending or income, so it does not
-        change your budget or your savings.
+        Money moving between your own accounts, or between two of your money books. It is not
+        spending or income, so it does not change your budget or your savings.
       </Typography>
     </Box>
   );
