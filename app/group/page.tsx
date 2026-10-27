@@ -12,6 +12,7 @@ import DangerZone from "./DangerZone";
 import ActivityLog from "./ActivityLog";
 import { getSession } from "@/lib/session";
 import { isEditor, isSiteAdmin } from "@/lib/auth";
+import { allHubApps, currentLogin } from "@/lib/hub-apps";
 import { getMyGroup, listGroupMembers } from "@/lib/queries/groups";
 import { listPendingInvites } from "@/lib/queries/invites";
 import { activityViewer, listActivity, listActivitySources } from "@/lib/queries/activity";
@@ -38,6 +39,7 @@ export default async function GroupPage({
   const { tab, nudge, next } = await searchParams;
   const session = await getSession();
   if (!session) redirect("/login"); // proxy already gates; belt anyway
+  if ((await currentLogin())?.isHubLogin) redirect("/");
   // The old Sign-in tab, still linked from bookmarks and older sign-in redirects.
   if (tab === "sign-in" || nudge === "1") {
     const query = new URLSearchParams({
@@ -47,11 +49,12 @@ export default async function GroupPage({
     redirect(query ? `/account?${query}` : "/account");
   }
 
-  const [group, canEdit, viewer, siteAdmin] = await Promise.all([
+  const [group, canEdit, viewer, siteAdmin, apps] = await Promise.all([
     getMyGroup(),
     isEditor(),
     activityViewer(),
     isSiteAdmin(),
+    allHubApps(),
   ]);
   // Membership controls (invites, removal, reset links) are the OWNER's.
   const viewerIsOwner =
@@ -60,7 +63,8 @@ export default async function GroupPage({
 
   const tabs: { value: GroupTab; label: string }[] = [
     { value: "people", label: "People" },
-    ...(manages ? [{ value: "invites" as const, label: "Invites" }] : []),
+    // People's sign-in links live on their People cards; this tab is the site admin's, for starting new hubs.
+    ...(manages && siteAdmin ? [{ value: "invites" as const, label: "Invites" }] : []),
     ...(viewer ? [{ value: "activity" as const, label: "Activity" }] : []),
     { value: "settings", label: "Settings" },
   ];
@@ -77,14 +81,17 @@ export default async function GroupPage({
 
   const inviteRows: InviteRow[] =
     active === "invites"
-      ? (await listPendingInvites()).map((inv) => ({
-          id: inv.id,
-          link: `${origin}/join/${inv.token}`,
-          note: inv.note,
-          household: inv.groupId !== null,
-          reusable: inv.maxUses === null,
-          expiresInDays: daysUntil(inv.expiresAt),
-        }))
+      ? (await listPendingInvites())
+          // A person's sign-in link lives on their People card.
+          .filter((inv) => inv.profileId === null)
+          .map((inv) => ({
+            id: inv.id,
+            link: `${origin}/join/${inv.token}`,
+            note: inv.note,
+            household: inv.groupId !== null,
+            reusable: inv.maxUses === null,
+            expiresInDays: daysUntil(inv.expiresAt),
+          }))
       : [];
   const [activity, activitySources] =
     active === "activity" && viewer
@@ -138,10 +145,13 @@ export default async function GroupPage({
 
         {active === "settings" ? (
           <Stack spacing={2.5}>
-            <TimezoneSetting
-              timezone={group?.timezone ?? "America/Chicago"}
-              canEdit={canEdit}
-            />
+            {/* The time zone only sets the finance day, so hubs without finance skip it. */}
+            {apps.includes("finance") ? (
+              <TimezoneSetting
+                timezone={group?.timezone ?? "America/Chicago"}
+                canEdit={canEdit}
+              />
+            ) : null}
             {!group?.isDemo ? (
               <DangerZone
                 isOwner={viewerIsOwner}

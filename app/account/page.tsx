@@ -9,11 +9,12 @@ import Button from "@mui/material/Button";
 import Link from "@/components/shared/AppLink";
 import EditProfileButton from "@/components/shared/EditProfileButton";
 import SignInSection from "./SignInSection";
+import DeleteAccount from "./DeleteAccount";
 import { getSession } from "@/lib/session";
 import { isOwner } from "@/lib/auth";
-import { listGroupMembers } from "@/lib/queries/groups";
+import { getMyGroup, listGroupMembers } from "@/lib/queries/groups";
 import { listAllProfiles } from "@/lib/queries/profiles";
-import { hubApps } from "@/lib/hub-apps";
+import { currentLogin, hubApps } from "@/lib/hub-apps";
 
 export const metadata = { title: "Your account" };
 
@@ -27,12 +28,15 @@ export default async function AccountPage({
   const { nudge, next } = await searchParams;
   const session = await getSession();
   if (!session) redirect("/login?from=/account");
+  // The hub login is set up by the owner in Hub settings; it has no account page of its own.
+  if ((await currentLogin())?.isHubLogin) redirect("/");
 
-  const [members, profiles, owner, offeredApps] = await Promise.all([
+  const [members, profiles, owner, offeredApps, group] = await Promise.all([
     listGroupMembers(),
     listAllProfiles(),
     isOwner(),
     hubApps(),
+    getMyGroup(),
   ]);
   const me = members.find((m) => m.id === session.accountId);
   const mine = profiles.find((p) => p.id === me?.profileId && !p.archivedAt);
@@ -99,6 +103,10 @@ export default async function AccountPage({
           nudge={nudge === "1"}
           next={next ?? "/"}
         />
+
+        {me && !group?.isDemo ? (
+          <DeleteAccount username={me.username} alone={owner && members.length === 1} />
+        ) : null}
       </Stack>
     </Container>
   );

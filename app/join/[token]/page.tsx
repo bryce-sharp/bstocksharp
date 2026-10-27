@@ -69,7 +69,7 @@ export default async function JoinPage({
 
   return (
     <Container maxWidth="xs" sx={{ py: { xs: 6, md: 10 } }}>
-      <JoinForm token={token} groupName={invite.groupName} />
+      <JoinForm token={token} groupName={invite.groupName} personName={invite.personName} />
     </Container>
   );
 }

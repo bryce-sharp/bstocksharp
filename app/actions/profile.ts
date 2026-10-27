@@ -51,7 +51,7 @@ export async function switchProfile(id: number): Promise<void> {
 
 /** Create a new person and switch to them. (Unclaimed → open to the group; an
  *  account can claim them at /group to make their stuff hands-off.) */
-export async function addPerson(formData: FormData): Promise<void> {
+export async function addPerson(formData: FormData): Promise<{ id: number } | null> {
   await requireEditor();
 
   const name = String(formData.get("name") ?? "").trim();
@@ -65,6 +65,7 @@ export async function addPerson(formData: FormData): Promise<void> {
 
   if (created) await setActiveProfileCookie(created.id);
   revalidatePath("/", "layout");
+  return created ? { id: created.id } : null;
 }
 
 /** Update a person's display name, color, hidden-apps + owned-equipment. */

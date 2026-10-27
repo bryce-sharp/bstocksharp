@@ -13,6 +13,10 @@ import AddPersonButton from "@/components/shared/AddPersonButton";
 import EditProfileButton from "@/components/shared/EditProfileButton";
 import DeleteIconButton from "@/components/shared/DeleteIconButton";
 import ResetLinkButton from "./ResetLinkButton";
+import PersonInvite from "./PersonInvite";
+import HubLogin from "./HubLogin";
+import LoginApps from "./LoginApps";
+import { listPendingInvites } from "@/lib/queries/invites";
 import { canEditProfile } from "@/lib/auth";
 import { listGroupMembers } from "@/lib/queries/groups";
 import { listAllProfiles } from "@/lib/queries/profiles";
@@ -24,7 +28,7 @@ import {
   removeMemberAction,
 } from "@/app/actions/group";
 import { revokeResetLinkAction } from "@/app/actions/password";
-import { hubApps } from "@/lib/hub-apps";
+import { allHubApps, hubApps } from "@/lib/hub-apps";
 
 function initial(name: string) {
   return name.trim()[0]?.toUpperCase() ?? "?";
@@ -37,6 +41,11 @@ function initial(name: string) {
 // Reset password and Remove login sit right on it; logins tied to no person get
 // a short list of their own. Claiming is self-service; anyone signed in can
 // add, edit, and rename people.
+/** Days left until a date, rounded up so a fresh 7-day link says 7. */
+function daysUntil(date: Date): number {
+  return Math.max(0, Math.ceil((date.getTime() - Date.now()) / 86_400_000));
+}
+
 export default async function PeopleTab({
   accountId,
   ownerAccountId,
@@ -57,6 +66,9 @@ export default async function PeopleTab({
     getActiveProfile(),
     hubApps(),
   ]);
+  const allApps = await allHubApps();
+  const hubLogin = members.find((m) => m.isHubLogin) ?? null;
+  const manages = viewerIsOwner && canEdit;
   const canManage = await Promise.all(all.map((p) => canEditProfile(p.id)));
 
   // Live reset links, shown on each login for the owner to see or cancel.
@@ -67,7 +79,22 @@ export default async function PeopleTab({
     }
   }
   const hoursLeft = (r: PendingReset) => hoursUntil(r.expiresAt);
-  const unlinked = members.filter((m) => m.profileId === null || !all.some((p) => p.id === m.profileId));
+  // Each person's waiting sign-in link, for the owner to copy or cancel.
+  const personLinks = new Map<number, { id: number; token: string; expiresInDays: number }>();
+  if (viewerIsOwner && canEdit) {
+    for (const inv of await listPendingInvites()) {
+      if (inv.profileId !== null && !personLinks.has(inv.profileId)) {
+        personLinks.set(inv.profileId, {
+          id: inv.id,
+          token: inv.token,
+          expiresInDays: daysUntil(inv.expiresAt),
+        });
+      }
+    }
+  }
+  const unlinked = members.filter(
+    (m) => !m.isHubLogin && (m.profileId === null || !all.some((p) => p.id === m.profileId)),
+  );
 
   const activeProfiles = all.filter((p) => !p.archivedAt);
   const canDeactivate = activeProfiles.length > 1;
@@ -78,10 +105,10 @@ export default async function PeopleTab({
   return (
     <Stack spacing={2.5}>
       <Typography variant="body2" color="text.secondary">
-        Everyone here shares this hub&apos;s data. Each person can have a
-        login. Claiming a person means &ldquo;this login is me&rdquo;: signing
-        in jumps straight to them, and only that login can edit their stuff.
-        People without a login (like a kid) stay open to the whole household.
+        Everyone here shares this hub&apos;s data. Each person can have their
+        own login, made from the sign-in link on their card: signing in jumps
+        straight to them, and only that login can edit their stuff. People
+        without a login (like a young kid) stay open to the whole household.
       </Typography>
 
       <Stack spacing={1.5}>
@@ -136,7 +163,7 @@ export default async function PeopleTab({
                     offeredApps={offeredApps}
                   />
                 ) : canEdit && claim && !mine ? (
-                  <Tooltip title={`Claimed — only ${claim.username} can manage ${p.name}`}>
+                  <Tooltip title={`Only ${claim.username} can change ${p.name}'s own things`}>
                     <span>
                       <IconButton size="small" disabled aria-label={`${p.name} is claimed`}>
                         <LockOutlinedIcon fontSize="small" />
@@ -178,6 +205,7 @@ export default async function PeopleTab({
                       </Typography>
                       {viewerIsOwner && canEdit ? (
                         <>
+                          <LoginApps accountId={claim.id} username={claim.username} hubApps={allApps} apps={claim.apps} />
                           <ResetLinkButton accountId={claim.id} username={claim.username} origin={origin} />
                           <DeleteIconButton
                             action={removeMemberAction.bind(null, claim.id)}
@@ -202,6 +230,10 @@ export default async function PeopleTab({
                 </Box>
               )}
 
+              {!archived && !claim && viewerIsOwner && canEdit ? (
+                <PersonInvite profileId={p.id} name={p.name} origin={origin} pending={personLinks.get(p.id) ?? null} />
+              ) : null}
+
               {claim && pending.has(claim.id) ? (
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 0.5, pl: { xs: 0, sm: 5.5 } }}>
                   <Typography variant="caption" color="text.secondary" sx={{ flexGrow: 1 }}>
@@ -220,10 +252,17 @@ export default async function PeopleTab({
 
         {canEdit ? (
           <Box>
-            <AddPersonButton />
+            <AddPersonButton origin={viewerIsOwner ? origin : null} />
           </Box>
         ) : null}
       </Stack>
+
+      {manages && (hubLogin || activeProfiles.length > 1) ? (
+        <HubLogin
+          login={hubLogin ? { id: hubLogin.id, username: hubLogin.username, apps: hubLogin.apps } : null}
+          hubApps={allApps}
+        />
+      ) : null}
 
       {unlinked.length ? (
         <Stack spacing={1}>
@@ -246,6 +285,7 @@ export default async function PeopleTab({
               ) : null}
               {viewerIsOwner && canEdit && m.id !== accountId ? (
                 <>
+                  <LoginApps accountId={m.id} username={m.username} hubApps={allApps} apps={m.apps} />
                   <ResetLinkButton accountId={m.id} username={m.username} origin={origin} />
                   <DeleteIconButton
                     action={removeMemberAction.bind(null, m.id)}
@@ -272,10 +312,12 @@ export default async function PeopleTab({
       ) : null}
 
       <Typography variant="caption" color="text.secondary">
-        New logins join through <strong>invite links</strong>
-        {viewerIsOwner ? " from the Invites tab" : ", minted by the hub owner"}.
-        Removing a login never touches the person or their data. Locked out?
-        The owner can send a one-time reset link from that person&apos;s card.
+        To give someone their own login, add them as a person, then send them
+        the <strong>sign-in link</strong> from their card
+        {viewerIsOwner ? "" : " (the hub owner makes these)"}. Opening it makes a
+        login that is that person. Removing a login never touches the person or
+        their data. Locked out? The owner can send a one-time reset link from
+        that person&apos;s card.
       </Typography>
     </Stack>
   );

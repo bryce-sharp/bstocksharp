@@ -293,6 +293,9 @@ export const invites = pgTable("invites", {
     .notNull()
     .references(() => accounts.id, { onDelete: "cascade" }),
   note: varchar("note", { length: 120 }), // "for Val" — shown in the pending list
+  // The person this sign-in is for: joining claims them, so the new login IS
+  // that person. Null = a login with no person yet (admin own-hub invites).
+  profileId: integer("profile_id").references(() => profiles.id, { onDelete: "set null" }),
   maxUses: integer("max_uses").default(1), // null = reusable until expiry/revoke
   usedCount: integer("used_count").notNull().default(0),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
@@ -326,6 +329,13 @@ export const accounts = pgTable("accounts", {
   // signed before it are dead (lib/session liveness), so a reset signs every
   // other device out. Null = never changed since the account was made.
   passwordChangedAt: timestamp("password_changed_at", { withTimezone: true }),
+  // Which of the hub's apps this login may open (slugs); null = all of them.
+  // Set by the hub owner, e.g. a kitchen screen limited to chores and games.
+  apps: jsonb("apps").$type<string[]>(),
+  // The hub login: one shared login per hub that is no particular person (a
+  // kitchen screen). The owner sets its username, password and apps; it
+  // cannot claim a person or change its own password.
+  isHubLogin: boolean("is_hub_login").notNull().default(false),
   createdAt: createdAt(),
 });
 

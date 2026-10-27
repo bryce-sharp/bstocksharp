@@ -17,6 +17,7 @@ import CheckIcon from "@mui/icons-material/Check";
 import LinkIcon from "@mui/icons-material/Link";
 import SubmitButton from "@/components/shared/SubmitButton";
 import DeleteIconButton from "@/components/shared/DeleteIconButton";
+import { CopyLinkButton } from "./PersonInvite";
 import {
   createInviteAction,
   revokeInviteAction,
@@ -36,7 +37,7 @@ export type InviteRow = {
   expiresInDays: number; // whole days, floor 0
 };
 
-function CopyButton({ text }: { text: string }) {
+export function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = React.useState(false);
   return (
     <Tooltip title={copied ? "Copied!" : "Copy link"}>
@@ -122,12 +123,8 @@ export default function InvitesPanel({
               <Alert severity="error">{state.error}</Alert>
             ) : null}
             {created ? (
-              <Alert
-                severity="success"
-                action={<CopyButton text={created} />}
-                sx={{ wordBreak: "break-all" }}
-              >
-                Send them this link (valid 7 days): {created}
+              <Alert severity="success" action={<CopyLinkButton link={created} />}>
+                Invite link ready (valid 7 days). Copy it and send it to them.
               </Alert>
             ) : null}
             {canMintHubs ? (
