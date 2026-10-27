@@ -4,8 +4,8 @@ import { db } from "@/lib/db";
 import { type BookRef } from "@/lib/books";
 import { transactions as t } from "@/lib/db/schema";
 import { txnWhere, type TxnFilters } from "@/lib/queries/finance-transactions";
-import { BETWEEN_BOOKS, IN_CATEGORIES, REIMBURSEMENT, SPEND_CATEGORIES } from "@/lib/finance/cashflow";
-import { betweenIn, betweenOut, tagIn } from "@/lib/finance/book-rows";
+import { IN_CATEGORIES, REIMBURSEMENT, SPEND_CATEGORIES } from "@/lib/finance/cashflow";
+import { betweenIn, betweenOut, laneSql, tagIn } from "@/lib/finance/book-rows";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CASH FLOW — "what actually moved", beside the budget's "what's left to spend"
@@ -30,10 +30,6 @@ const moneyIn = (book: BookRef) =>
   sql<string>`coalesce(sum(case when ${t.needsReview} then 0 when ${t.category} in (${list(IN_CATEGORIES)}) then ${t.amount} when ${betweenIn(book)} then ${t.amount} else 0 end), 0)`;
 const moneyOut = (book: BookRef) =>
   sql<string>`coalesce(sum(case when ${t.needsReview} then 0 when ${t.category} in (${list(SPEND_CATEGORIES)}) then ${t.amount} when ${t.category} = 'fund' then greatest(${t.amount}, 0) when ${t.category} = ${REIMBURSEMENT} then -${t.amount} when ${betweenOut(book)} then ${t.amount} else 0 end), 0)`;
-/** A row's lane for this book: money between books gets its own; shared bill or fund charges are spending here (laneHere).
- *  Grouped by column position: Postgres cannot match a parameterized expression to its own copy. */
-const laneIn = (book: BookRef) =>
-  sql<string>`case when ${betweenIn(book)} or ${betweenOut(book)} then ${BETWEEN_BOOKS} when ${t.bookId} <> ${book.id} and ${t.category} in ('fixed', 'amortized', 'fund') then 'discretionary' else ${t.category} end`;
 
 const dollars = (v: string | number | null | undefined) => Math.round(Number(v ?? 0) * 100) / 100;
 
@@ -124,7 +120,7 @@ export async function incomeByTag(book: BookRef, f: TxnFilters): Promise<TagSpen
 /** Money in/out per engine category (the "by type" lanes). */
 export async function cashFlowByCategory(book: BookRef, f: TxnFilters): Promise<CategoryFlow[]> {
   const rows = await db
-    .select({ category: laneIn(book), moneyIn: moneyIn(book), moneyOut: moneyOut(book) })
+    .select({ category: laneSql(book), moneyIn: moneyIn(book), moneyOut: moneyOut(book) })
     .from(t)
     .where(txnWhere(book, f))
     .groupBy(sql`1`);
@@ -142,7 +138,7 @@ export async function cashFlowByMonthAndCategory(
 ): Promise<(CategoryFlow & { month: string })[]> {
   const month = sql<string>`to_char(${t.postedOn}, 'YYYY-MM')`;
   const rows = await db
-    .select({ month, category: laneIn(book), moneyIn: moneyIn(book), moneyOut: moneyOut(book) })
+    .select({ month, category: laneSql(book), moneyIn: moneyIn(book), moneyOut: moneyOut(book) })
     .from(t)
     .where(txnWhere(book, f))
     .groupBy(sql`1, 2`);

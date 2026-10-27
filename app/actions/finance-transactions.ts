@@ -117,3 +117,33 @@ export async function removeShareHereAction(txnId: number): Promise<{ ok: true }
   revalidatePath("/finance", "layout");
   return { ok: true };
 }
+
+/**
+ * "Always for {merchant}": make the merchant's rule count its future rows for
+ * that book (and share its existing ones), or stop, with null. Works whether it
+ * is ticked before or after the book.
+ */
+export async function setMerchantShareAction(
+  txnId: number,
+  otherBookId: number | null,
+): Promise<{ ok: true } | { error: string }> {
+  await requireApp("finance");
+  await requireEditor();
+  const book = await requireBook();
+  if (otherBookId !== null) {
+    if (otherBookId === book.id) return { error: "That is this book." };
+    await requireMemberOf(otherBookId);
+  }
+  const [row] = await db
+    .select()
+    .from(transactions)
+    .where(and(eq(transactions.id, txnId), eq(transactions.bookId, book.id)))
+    .limit(1);
+  if (!row?.merchant) return { error: "Only a charge with a merchant can have a merchant rule." };
+  const flow = flowOf(row.category);
+  if (!flow) return { error: "Only spending and money in can be counted by another book." };
+  if (!row.spendCategory) return { error: "Tag it first: a merchant rule needs a tag." };
+  await setMerchantShare(book, row.merchant, flow, row.spendCategory, otherBookId);
+  revalidatePath("/finance", "layout");
+  return { ok: true };
+}

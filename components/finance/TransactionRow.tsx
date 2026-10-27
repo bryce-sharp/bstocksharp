@@ -60,6 +60,8 @@ export type TxnRowData = {
   sharedWith?: { id: number; name: string }[];
   /** Money moved between this book and another: which way, and the other book. */
   between?: { direction: "in" | "out"; book: string } | null;
+  /** The book this row's merchant rule always counts it for ("Always for …"), if any. */
+  alwaysFor?: number | null;
 };
 
 // `flow` groups the pickers: money out vs money in (a reimbursement pays you

@@ -1,9 +1,10 @@
 import "server-only";
-import { and, desc, eq, gt, gte, ilike, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, ilike, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   books,
   financialAccounts,
+  merchantCategories,
   plaidAccounts,
   plaidItems,
   plaidTransactions,
@@ -11,8 +12,8 @@ import {
   transactions,
 } from "@/lib/db/schema";
 import { requireBook, type BookRef } from "@/lib/books";
-import { BETWEEN_BOOKS, IN_CATEGORIES, REIMBURSEMENT, SPEND_CATEGORIES, type Flow } from "@/lib/finance/cashflow";
-import { betweenIn, betweenOut, inBook, laneHere, tagIn } from "@/lib/finance/book-rows";
+import { IN_CATEGORIES, REIMBURSEMENT, SPEND_CATEGORIES, flowOf, type Flow } from "@/lib/finance/cashflow";
+import { betweenIn, betweenOut, inBook, laneHere, laneSql, tagIn } from "@/lib/finance/book-rows";
 import type { TxnRowData } from "@/components/finance/TransactionRow";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -73,8 +74,8 @@ export function txnWhere(book: BookRef, f: TxnFilters, cursor: string | null = n
   if (f.to) conds.push(lte(transactions.postedOn, f.to));
   if (f.uncategorized) conds.push(sql`${tag} is null`);
   else if (f.category) conds.push(sql`${tag} = ${f.category}`);
-  if (f.lane === BETWEEN_BOOKS) conds.push(or(betweenIn(book), betweenOut(book))!);
-  else if (f.lane) conds.push(eq(transactions.category, f.lane));
+  // The lane as this book counts it, so a filter lists exactly what that lane adds up.
+  if (f.lane) conds.push(sql`${laneSql(book)} = ${f.lane}`);
   // Mirrors the cash-flow sums, so a slice's list adds up to the slice.
   if (f.flow === "out") {
     conds.push(eq(transactions.needsReview, false));
@@ -145,6 +146,19 @@ export async function toBookRows(
         .from(financialAccounts)
         .where(inArray(financialAccounts.id, accountIds))
     : [];
+  const merchants = [...new Set(rows.map((r) => r.merchant))].filter((m): m is string => m != null);
+  const alwaysRules = merchants.length
+    ? await db
+        .select({ pattern: merchantCategories.pattern, flow: merchantCategories.flow, alsoBookId: merchantCategories.alsoBookId })
+        .from(merchantCategories)
+        .where(
+          and(
+            eq(merchantCategories.bookId, book.id),
+            inArray(merchantCategories.pattern, merchants),
+            isNotNull(merchantCategories.alsoBookId),
+          ),
+        )
+    : [];
   const bookIds = [...new Set([...rows.map((r) => r.bookId), ...accounts.map((a) => a.bookId)])];
   const names = new Map(
     (await db.select({ id: books.id, name: books.name }).from(books).where(inArray(books.id, bookIds))).map((b) => [
@@ -168,6 +182,9 @@ export async function toBookRows(
       sharedWith: mine
         ? shares.filter((s) => s.transactionId === r.id).map((s) => ({ id: s.bookId, name: s.name }))
         : [],
+      alwaysFor: mine
+        ? (alwaysRules.find((a) => a.pattern === r.merchant && a.flow === flowOf(r.category))?.alsoBookId ?? null)
+        : null,
       between: crossing
         ? mine
           ? { direction: "out", book: names.get(into.bookId) ?? "another book" }

@@ -2,6 +2,7 @@ import "server-only";
 import { eq, or, sql, type SQL } from "drizzle-orm";
 import { transactions as t } from "@/lib/db/schema";
 import type { BookRef } from "@/lib/books";
+import { BETWEEN_BOOKS } from "@/lib/finance/cashflow";
 
 // Which ledger rows a money book counts (docs/finance/money-books.md), in one
 // place so every list and total agrees:
@@ -26,6 +27,13 @@ export function tagIn(book: BookRef) {
   return sql<string | null>`case when ${t.bookId} = ${book.id} then ${t.spendCategory} else (select s.spend_category from transaction_shares s where s.transaction_id = ${t.id} and s.book_id = ${book.id}) end`;
 }
 
+/** A row's lane as this book counts it, in SQL: money between books gets its own, and a
+ *  shared bill or fund charge is spending here (laneHere). Group by column position, since
+ *  Postgres cannot match a parameterized expression to its own copy. */
+export function laneSql(book: BookRef) {
+  return sql<string>`case when ${betweenIn(book)} or ${betweenOut(book)} then ${BETWEEN_BOOKS} when ${t.bookId} <> ${book.id} and ${t.category} in ('fixed', 'amortized', 'fund') then 'discretionary' else ${t.category} end`;
+}
+
 /** Money that left this book for an account in another book. */
 export function betweenOut(book: BookRef): SQL {
   return sql`(${t.category} = 'transfer' and ${t.bookId} = ${book.id} and ${intoBookOf} <> ${book.id})`;
@@ -45,7 +53,10 @@ export function laneHere(
   book: BookRef,
   row: { bookId: number; category: string; recurringExpenseId: number | null; fundId: number | null },
 ): { category: string; recurringExpenseId: number | null; fundId: number | null } {
-  if (row.bookId === book.id) return row;
+  // Only the three lane fields: a caller spreads this over a converted row, so nothing else may leak through.
+  if (row.bookId === book.id) {
+    return { category: row.category, recurringExpenseId: row.recurringExpenseId, fundId: row.fundId };
+  }
   const borrowed = row.category === "fixed" || row.category === "amortized" || row.category === "fund";
   return { category: borrowed ? "discretionary" : row.category, recurringExpenseId: null, fundId: null };
 }

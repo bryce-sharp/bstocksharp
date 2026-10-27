@@ -30,6 +30,7 @@ import { deleteTransactionAction, updateTransactionAction } from "@/app/actions/
 import {
   getTransactionDetailAction,
   removeShareHereAction,
+  setMerchantShareAction,
   setShareAction,
 } from "@/app/actions/finance-transactions";
 import { flowOf, moneyDirection } from "@/lib/finance/cashflow";
@@ -128,7 +129,7 @@ export default function TransactionDialog({
   const [detail, setDetail] = React.useState<TxnDetail | null | undefined>(undefined);
   const [deleting, startDelete] = React.useTransition();
   const [sharedWith, setSharedWith] = React.useState(txn.sharedWith ?? []);
-  const [always, setAlways] = React.useState(false);
+  const [always, setAlways] = React.useState(txn.alwaysFor != null);
   const [, startSharing] = React.useTransition();
 
   React.useEffect(() => {
@@ -179,6 +180,21 @@ export default function TransactionDialog({
       }
       setSharedWith(result.sharedWith ?? []);
       onSaved(result);
+    });
+  }
+
+  // Saved at once in either order: ticked after a book, it makes the rule for that book now.
+  function setAlwaysFor(on: boolean) {
+    setError(null);
+    setAlways(on);
+    const target = on ? (sharedWith[0]?.id ?? null) : null;
+    if (on && target === null) return; // the rule is made when a book is ticked
+    startSharing(async () => {
+      const result = await setMerchantShareAction(txn.id, target);
+      if ("error" in result) {
+        setAlways(!on);
+        setError(result.error);
+      }
     });
   }
 
@@ -488,7 +504,7 @@ export default function TransactionDialog({
                   ))}
                   {txn.merchant ? (
                     <FormControlLabel
-                      control={<Checkbox size="small" checked={always} onChange={(e) => setAlways(e.target.checked)} />}
+                      control={<Checkbox size="small" checked={always} onChange={(e) => setAlwaysFor(e.target.checked)} />}
                       label={`Always for ${txn.merchant}`}
                       slotProps={{ typography: { variant: "body2", color: "text.secondary" } }}
                     />
