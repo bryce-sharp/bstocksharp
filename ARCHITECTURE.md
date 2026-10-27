@@ -175,21 +175,27 @@ cookie — [`lib/profile.ts`](lib/profile.ts) `getActiveProfile()`, precedence:
 [`ProfileMenu`](components/shared/ProfileMenu.tsx)); unlocked editors can add people.
 It renders in every app header, so identity is consistent hub-wide.
 
-**Profiles are NOT a security boundary (by design).** Anyone signed in may switch
-profiles freely — *viewing* another person was never gated, and their claimed
-stuff stays hands-off regardless. The real gates are the group (tenancy) and the
-claim (ownership). Two consequences:
+**Viewing is open, except what a person keeps private.** Anyone signed in may switch
+profiles freely, and a claimed person's stuff stays hands-off for editing. The gates
+are the group (tenancy), the claim (ownership), and sharing (privacy):
 
-- **Visibility = organization, not permission.** A vehicle has an **owner**
-  (`vehicles.profile_id`) and a **visibility** (`vehicles.visibility`: `shared` |
-  `private`, default `shared`). The garage grid/dashboard shows
-  `visibility = 'shared' OR owner = active profile`. Everything hanging off a vehicle
-  (maintenance, fuel, parts, builds, wishlist, journal) inherits that scope;
-  `resources` and `checklists` stay shared. A shared car (e.g. a household RAV4) shows
-  for everyone and any unlocked editor can log to it; a private car shows only in its
-  owner's garage.
-- **Editing stays gated by the one site password**, regardless of profile — any
-  unlocked person can edit any car they can see.
+- **Sharing** ([`lib/sharing.ts`](lib/sharing.ts)): in each personal app (`personal` in
+  [`lib/apps.tsx`](lib/apps.tsx): Weight, Workout) a person picks who can see their
+  data in `profiles.sharing`: everyone in the hub (the default), chosen people, or just
+  them (only once they have a login). It holds against the hub owner too. The viewer is
+  the person the login is tied to; the hub login and logins with no person see only
+  what is shared with everyone. The raw per-person reads (`lib/queries/weight`,
+  `getAssignments`) and the per-person writes call `requireView`; pages show
+  `PrivateNotice`, and the in-app switcher marks such people "private here". The person
+  sets it on **`/account`**; a person without a login is set by anyone who can edit them,
+  on **`/group`**. Games results are already readable only by their owner's login.
+- **Cars:** a vehicle has an **owner** (`vehicles.profile_id`) and a **visibility**
+  (`vehicles.visibility`: `shared` | `private`, default `shared`). A shared car shows for
+  everyone and any editor can log to it. A private car shows only to its owner's login
+  (anyone, when the owner has no login): `listVehicles`, `listAllDueRecords` and
+  `getVehicle` leave it out otherwise, so its pages 404. Everything hanging off a vehicle
+  (maintenance, fuel, parts, builds, wishlist, journal) inherits that scope; `resources`
+  and `checklists` stay shared.
 
 **Lifecycle:** all household management lives on **`/group`** (profile menu →
 *Hub settings*; `/people` redirects there): add people, rename the hub, edit a

@@ -11,6 +11,7 @@ import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import SubmitButton from "@/components/shared/SubmitButton";
 import AddPersonButton from "@/components/shared/AddPersonButton";
 import EditProfileButton from "@/components/shared/EditProfileButton";
+import SharingButton from "@/components/shared/SharingButton";
 import DeleteIconButton from "@/components/shared/DeleteIconButton";
 import ResetLinkButton from "./ResetLinkButton";
 import PersonInvite from "./PersonInvite";
@@ -105,7 +106,8 @@ export default async function PeopleTab({
   return (
     <Stack spacing={2.5}>
       <Typography variant="body2" color="text.secondary">
-        Everyone here shares this hub&apos;s data. Each person can have their
+        Everyone here shares this hub&apos;s data, except what a person keeps
+        private (the eye button). Each person can have their
         own login, made from the sign-in link on their card: signing in jumps
         straight to them, and only that login can edit their stuff. People
         without a login (like a young kid) stay open to the whole household.
@@ -151,6 +153,17 @@ export default async function PeopleTab({
                   ) : null}
                   {archived ? <Chip size="small" label="Archived" sx={{ ml: 1 }} /> : null}
                 </Box>
+                {manageable && !archived ? (
+                  <SharingButton
+                    profileId={p.id}
+                    name={p.name}
+                    self={mine}
+                    hasLogin={!!claim}
+                    sharing={p.sharing}
+                    people={heirs}
+                    hubApps={offeredApps}
+                  />
+                ) : null}
                 {manageable ? (
                   <EditProfileButton
                     profileId={p.id}

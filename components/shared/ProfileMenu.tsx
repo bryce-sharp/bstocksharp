@@ -34,6 +34,8 @@ export type ProfilePick = {
   lockedBy: string | null;
   /** This is the person your own login is. */
   you: boolean;
+  /** Their sharing keeps this app's data from you (lib/sharing). */
+  private: boolean;
 };
 
 /** "Bryce" → "B", "Bryce Stock" → "BS". */
@@ -144,10 +146,9 @@ export default function ProfileMenu({
             </ListItemIcon>
             <ListItemText>
               {p.name}
-              {p.you ? (
+              {p.you || p.private ? (
                 <Typography component="span" variant="body2" color="text.secondary">
-                  {" "}
-                  (you)
+                  {p.you ? " (you)" : " (private here)"}
                 </Typography>
               ) : null}
             </ListItemText>

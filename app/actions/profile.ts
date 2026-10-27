@@ -9,11 +9,13 @@ import {
   workouts,
   workoutAssignments,
 } from "@/lib/db/schema";
-import { requireEditor, requireEditorFor } from "@/lib/auth";
+import { claimedBy, requireEditor, requireEditorFor } from "@/lib/auth";
 import { getActiveProfile, setActiveProfileCookie } from "@/lib/profile";
 import { requireGroupId } from "@/lib/session";
-import { getProfile } from "@/lib/queries/profiles";
+import { getProfile, listProfiles } from "@/lib/queries/profiles";
 import { APPS } from "@/lib/apps";
+import { currentLogin } from "@/lib/hub-apps";
+import type { Sharing } from "@/lib/db/schema";
 import { cleanEquipment } from "@/lib/workout";
 
 /** First active profile in OUR group other than `exceptId`, or null. */
@@ -93,6 +95,34 @@ export async function updateProfile(
     .set({ name, color, hiddenApps, ...equipment })
     .where(eq(profiles.id, id));
   revalidatePath("/", "layout");
+}
+
+/**
+ * Who can see a person's data in each personal app (lib/sharing). Set by
+ * whoever may edit the person, never by the hub login. "Just me" needs a login
+ * of their own; chosen people are kept to this hub's other people.
+ */
+export async function setSharingAction(
+  id: number,
+  formData: FormData,
+): Promise<{ error: string } | { ok: true }> {
+  await requireEditorFor(id);
+  if ((await currentLogin())?.isHubLogin) return { error: "The hub login can't change sharing." };
+  const others = (await listProfiles()).map((p) => p.id).filter((pid) => pid !== id);
+  const hasLogin = (await claimedBy(id)) !== null;
+
+  const sharing: Sharing = {};
+  for (const app of APPS.filter((a) => a.personal)) {
+    const who = String(formData.get(`${app.slug}.who`) ?? "everyone");
+    if (who === "me" && hasLogin) sharing[app.slug] = { who: "me" };
+    else if (who === "chosen" || who === "me") {
+      const people = formData.getAll(`${app.slug}.people`).map(Number).filter((pid) => others.includes(pid));
+      sharing[app.slug] = { who: "chosen", people };
+    }
+  }
+  await db.update(profiles).set({ sharing }).where(eq(profiles.id, id));
+  revalidatePath("/", "layout");
+  return { ok: true };
 }
 
 /**

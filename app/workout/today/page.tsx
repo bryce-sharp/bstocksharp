@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { getAssignments } from "@/lib/queries/workout";
 import { getActiveProfile } from "@/lib/profile";
+import PrivateNotice from "@/components/shared/PrivateNotice";
+import { canView } from "@/lib/sharing";
 import TodayRedirect from "@/components/workout/TodayRedirect";
 
 export const metadata = { title: "Today — Workout" };
@@ -17,6 +19,9 @@ export default async function TodayPage({
   const { profile } = await searchParams;
   const activeProfile = await getActiveProfile(profile);
   if (!activeProfile) redirect("/workout");
+  if (!(await canView(activeProfile, "workout"))) {
+    return <PrivateNotice title={`${activeProfile.name} keeps their workouts private`} />;
+  }
 
   const assignments = await getAssignments(activeProfile.id);
   const workoutByDay: Record<number, number> = {};

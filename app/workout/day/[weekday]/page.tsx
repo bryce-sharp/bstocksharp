@@ -15,6 +15,8 @@ import LoopIcon from "@mui/icons-material/Loop";
 import { isEditor } from "@/lib/auth";
 import { getAssignments, listWorkoutsWithCreator } from "@/lib/queries/workout";
 import { getActiveProfile } from "@/lib/profile";
+import PrivateNotice from "@/components/shared/PrivateNotice";
+import { canView } from "@/lib/sharing";
 import { WEEKDAYS } from "@/lib/workout";
 import Chip from "@mui/material/Chip";
 import QuickStartList from "@/components/workout/QuickStartList";
@@ -38,6 +40,9 @@ export default async function DayPage({
     isEditor(),
   ]);
   if (!activeProfile) redirect("/workout");
+  if (!(await canView(activeProfile, "workout"))) {
+    return <PrivateNotice title={`${activeProfile.name} keeps their workouts private`} />;
+  }
 
   const assignments = await getAssignments(activeProfile.id);
   const a = assignments.find((x) => x.weekday === wd) ?? null;

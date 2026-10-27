@@ -2,6 +2,8 @@ import Container from "@mui/material/Container";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { getActiveProfile } from "@/lib/profile";
+import PrivateNotice from "@/components/shared/PrivateNotice";
+import { canView } from "@/lib/sharing";
 import { canEditProfile } from "@/lib/auth";
 import { getWeighInsWithDelta } from "@/lib/queries/weight";
 import WeightHistoryTable from "@/components/weight/WeightHistoryTable";
@@ -23,6 +25,7 @@ export default async function WeightHistoryPage({
       </Container>
     );
   }
+  if (!(await canView(active, "weight"))) return <PrivateNotice title={`${active.name} keeps their weight private`} />;
 
   const [rows, editor] = await Promise.all([
     getWeighInsWithDelta(active.id),

@@ -14,6 +14,8 @@ import { listProfiles } from "@/lib/queries/profiles";
 import { setAssignment } from "@/app/actions/workout";
 import { switchProfile } from "@/app/actions/profile";
 import { getActiveProfile } from "@/lib/profile";
+import PrivateNotice from "@/components/shared/PrivateNotice";
+import { canView } from "@/lib/sharing";
 import { WEEKDAYS } from "@/lib/workout";
 import AssignSelect from "@/components/workout/AssignSelect";
 
@@ -34,6 +36,9 @@ export default async function SchedulePage({
     getActiveProfile(profile),
   ]);
   if (!activeProfile) redirect("/workout");
+  if (!(await canView(activeProfile, "workout"))) {
+    return <PrivateNotice title={`${activeProfile.name} keeps their workouts private`} />;
+  }
 
   const [assignments, library] = await Promise.all([
     getAssignments(activeProfile.id),

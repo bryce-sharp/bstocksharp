@@ -5,6 +5,7 @@ import { weighIns, weightPlans } from "@/lib/db/schema";
 import type { WeighIn, WeightPlan } from "@/lib/db/schema";
 import { requireGroupId } from "@/lib/session";
 import { profileInGroup } from "./scope";
+import { requireView } from "@/lib/sharing";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WEIGHT — reads + all DERIVED metrics (nothing here is stored; same spirit as
@@ -48,11 +49,13 @@ function weeksBetween(startISO: string, iso: string): number {
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
 // ── Raw reads ─────────────────────────────────────────────────────────────────
-// TENANCY: these four raw reads carry the group check (profileInGroup); every
-// derived/composite function below goes through them, so it inherits the scope.
+// TENANCY: these four raw reads carry the group check (profileInGroup) and the
+// sharing check (requireView); every derived/composite function below goes
+// through them, so it inherits both.
 
 /** All weigh-ins for a profile, oldest first (chart + series order). */
 export async function listWeighIns(profileId: number): Promise<WeighIn[]> {
+  await requireView(profileId, "weight");
   const groupId = await requireGroupId();
   return db
     .select()
@@ -66,6 +69,7 @@ export async function listWeighIns(profileId: number): Promise<WeighIn[]> {
 /** The active plan for a profile: its date window contains today (end_date null
  *  = open-ended). If plans somehow overlap, the latest-starting one wins. */
 export async function getActivePlan(profileId: number): Promise<WeightPlan | null> {
+  await requireView(profileId, "weight");
   const groupId = await requireGroupId();
   const today = new Date().toISOString().slice(0, 10);
   const rows = await db
@@ -86,6 +90,7 @@ export async function getActivePlan(profileId: number): Promise<WeightPlan | nul
 
 /** All plans for a profile, oldest first (for the continuous multi-plan chart). */
 export async function listPlans(profileId: number): Promise<WeightPlan[]> {
+  await requireView(profileId, "weight");
   const groupId = await requireGroupId();
   return db
     .select()
@@ -101,6 +106,7 @@ export async function listPlans(profileId: number): Promise<WeightPlan[]> {
 
 /** A single weigh-in by (id, profile) — scoped so one person can't edit another's. */
 export async function getWeighIn(id: number, profileId: number): Promise<WeighIn | null> {
+  await requireView(profileId, "weight");
   const groupId = await requireGroupId();
   const rows = await db
     .select()
