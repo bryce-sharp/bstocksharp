@@ -1,10 +1,10 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { addDays, formatDuration, formatLongDate, formatShortDate, loadAttempt, puzzleNumber, saveAttempt, todayKey } from "../daily";
-import type { Puzzle } from "./generator";
+import { generatePuzzle, type Puzzle } from "./generator";
 import { loadPuzzle } from "./puzzles";
 import { PUZZLE_VERSION } from "./version";
 import { bounds, cellKey, rotateCCW, rotateCW, shapeClass, shapeKey, type Cell } from "./pieces";
-import { BINDING, LINEN } from "./quilt";
+import { BINDING, LINEN, YARNS } from "./quilt";
 import { StitchBorder } from "./stitches";
 import { useFloatingHeader } from "@/components/shared/SlidingHeader";
 import { QuiltCalendar } from "./calendar";
@@ -13,6 +13,7 @@ import { GAME, LAUNCH_DATE, clearStaleRecords, loadBest, playerStats, saveBest, 
 import { canvasFile, canvasFonts, drawResultPicture, quiltGrid } from "./share";
 import { SNUG_FONTS } from "./fonts";
 import { flushRemote, saveProgressRemote, saveRunRemote, syncSnug } from "./sync";
+import { sfx } from "./sounds";
 import { Basket } from "./basket";
 import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
 import { BoardSvg, Btn, FONT, HowToPlay, INK, KnitDefs, PanelStitches, PatchSvg, QuiltBackdrop, QuiltLabel, RUST_THREAD, ResultCard, SCRIPT, Stat, hintsUsed, panelStyle, plural, type Attempt, type MoreGamesLink, type PieceState, type RunSummary, type Spot } from "./parts";
@@ -163,9 +164,29 @@ const shift = (cells: readonly Cell[], s: Spot) => cells.map(([x, y]) => [x + s.
 function HelpBtn({ seen, id, ...props }: { seen: Set<string>; id: string } & Parameters<typeof Btn>[0]) {
   const [announce] = useState(() => !seen.has(id));
   useEffect(() => {
+    if (announce) sfx("unlock");
     seen.add(id);
-  }, [seen, id]);
+  }, [seen, id, announce]);
   return <Btn {...props} announce={announce} />;
+}
+
+/** A far-future Monday: the gentle level (7 patches, 1 spare), and a date no one will play for years. */
+const LAB_DATE = "2029-01-01";
+
+/** The sound lab's test quilt: a real Snug board that saves nothing. Remount it (a new `key`) to reset. */
+export function SnugPlayground({ quickHelp }: { quickHelp: boolean }) {
+  const puzzle = useMemo(() => generatePuzzle(LAB_DATE, YARNS.length), []);
+  return (
+    <SnugDay
+      dateKey={LAB_DATE}
+      puzzle={puzzle}
+      today={LAB_DATE}
+      onPickDate={() => {}}
+      shareUrl={SHARE_URL}
+      moreGames={{ href: "/games", newTab: false }}
+      lab={{ quickHelp }}
+    />
+  );
 }
 
 export function Snug({ shareUrl, profileId }: { shareUrl?: string; profileId?: number }) {
@@ -262,6 +283,7 @@ function SnugDay({
   shareUrl,
   moreGames,
   saveHref,
+  lab,
 }: {
   dateKey: string;
   puzzle: Puzzle;
@@ -270,6 +292,8 @@ function SnugDay({
   shareUrl: string;
   moreGames: MoreGamesLink;
   saveHref?: string;
+  /** The sound lab's test quilt: nothing is saved, and `quickHelp` unlocks the spare and unlimited hints at once. */
+  lab?: { quickHelp: boolean };
 }) {
   // Scoring follows the date this quilt was opened on, so a game running past midnight stays scored.
   const [openedOn] = useState(today);
@@ -278,12 +302,12 @@ function SnugDay({
   const number = puzzleNumber(dateKey, LAUNCH_DATE);
   const boardSet = useMemo(() => new Set(puzzle.board.map(([x, y]) => cellKey(x, y))), [puzzle]);
   // A finished first run is shown on any day, including past ones; only unplayed past days are fresh practice.
-  const initial = useMemo(() => loadAttempt<Attempt>(GAME, dateKey), [dateKey]);
-  const bestInit = useMemo(() => loadBest(dateKey), [dateKey]);
+  const initial = useMemo(() => (lab ? null : loadAttempt<Attempt>(GAME, dateKey)), [dateKey, lab]);
+  const bestInit = useMemo(() => (lab ? null : loadBest(dateKey)), [dateKey, lab]);
   // Opens finished on the scored run; a past day you only practiced opens on your best practice run.
   const shown = initial ?? (isArchive ? bestInit : null);
   // Any unfinished first run (today's scored game or a past day's practice) is saved as it goes and restored.
-  const progress = useMemo(() => (shown ? null : loadProgress(dateKey)), [dateKey, shown]);
+  const progress = useMemo(() => (shown || lab ? null : loadProgress(dateKey)), [dateKey, shown, lab]);
   const freshPieces = useCallback(
     (): PieceState[] => puzzle.pieces.map((p) => ({ id: p.id, cells: p.cells, color: p.color, at: null })),
     [puzzle],
@@ -311,7 +335,7 @@ function SnugDay({
   const [copied, setCopied] = useState(false);
   const [showHowTo, setShowHowTo] = useState(() => {
     try {
-      return !shown && !localStorage.getItem(HOW_TO_SEEN);
+      return !shown && !lab && !localStorage.getItem(HOW_TO_SEEN);
     } catch {
       return false;
     }
@@ -325,7 +349,7 @@ function SnugDay({
     }
   }, []);
   // Last month's quilt plays once per device, the first time Snug opens in the new month.
-  const [revealMonth, setRevealMonth] = useState<string | null>(() => revealDue(today, LAUNCH_DATE));
+  const [revealMonth, setRevealMonth] = useState<string | null>(() => (lab ? null : revealDue(today, LAUNCH_DATE)));
   const closeReveal = useCallback(() => setRevealMonth(null), []);
   const modalOpen = showHowTo || showCalendar || !!revealMonth;
   const modalRef = useRef(modalOpen);
@@ -511,6 +535,7 @@ function SnugDay({
   /** Turns a piece; a placed piece pivots on `anchor` and hovers loose if it no longer fits. */
   const transformPiece = useCallback(
     (id: string, fn: (cells: readonly Cell[]) => Cell[], anchor: number) => {
+      sfx("turn");
       commit(
         latest.current.pieces.map((p) => {
           if (p.id !== id) return p;
@@ -548,10 +573,17 @@ function SnugDay({
       }
       const next = all.map((q) => (q.id === id ? { ...q, at: spot, loose: false } : q));
       commit(next);
+      if (spot) sfx("place");
       setSaid(spot ? `Stitched down. ${plural(holesIn(next), "hole")} left.` : "Back in the basket.");
     },
     [commit, holesIn],
   );
+
+  /** For buttons with no sound of their own. */
+  const tap = (fn: () => void) => () => {
+    sfx("tap");
+    fn();
+  };
 
   const undo = () => {
     const prev = history.current.pop();
@@ -559,6 +591,7 @@ function SnugDay({
     setUndoCount(history.current.length);
     setPieces(prev);
     setCarry(null);
+    sfx("undo");
     setSaid("Undone.");
   };
 
@@ -637,6 +670,7 @@ function SnugDay({
       if (!d) return;
       const { px, py } = pointerIn(e);
       const next = { ...d, px, py, moved: d.moved || Math.hypot(px - d.sx, py - d.sy) > 5 };
+      if (next.moved && !d.moved) sfx("pickup");
       dragRef.current = next;
       setDrag(next);
     };
@@ -649,7 +683,12 @@ function SnugDay({
         transformPiece(d.id, rotateCW, d.grab);
         return;
       }
-      placeAt(d.id, snapFor(d, latest.current.pieces));
+      const spot = snapFor(d, latest.current.pieces);
+      // Let go over the quilt where it cannot go: a gentle "not quite". Dropped in the basket: no sound.
+      const { cell, board } = latest.current.layout;
+      const over = d.px >= board.x && d.px <= board.x + puzzle.cols * cell && d.py - d.lift >= board.y && d.py - d.lift <= board.y + puzzle.rows * cell;
+      if (!spot && over) sfx("nofit");
+      placeAt(d.id, spot);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
@@ -659,7 +698,7 @@ function SnugDay({
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
     };
-  }, [dragging, snapFor, transformPiece, placeAt]);
+  }, [dragging, snapFor, transformPiece, placeAt, puzzle]);
 
   const undoRef = useRef(undo);
   undoRef.current = undo;
@@ -708,6 +747,7 @@ function SnugDay({
           placeAt(id, carried.at);
           setCarry(null);
         } else {
+          sfx("nofit");
           setSaid("That patch does not fit there.");
         }
         return;
@@ -731,9 +771,9 @@ function SnugDay({
   const covered = pieces.reduce((n, p) => n + (p.at && !p.loose && p.id !== liftedId ? p.cells.length : 0), 0);
   const gaps = puzzle.board.length - covered;
 
-  const scored = !isArchive && !isReplay && !initial;
+  const scored = !lab && !isArchive && !isReplay && !initial;
   // Replays are throwaway; every other unfinished run is saved so leaving and returning keeps the clock and board.
-  const saved = !isReplay && !shown;
+  const saved = !lab && !isReplay && !shown;
   const clockMs = () => clock.current.base + (clock.current.since === null ? 0 : Date.now() - clock.current.since);
   const stopClock = useCallback(() => {
     const c = clock.current;
@@ -805,6 +845,7 @@ function SnugDay({
   }, [modalOpen, persist, runClock, stopClock]);
 
   const resume = () => {
+    sfx("pause");
     setPaused(false);
     runClock();
   };
@@ -820,6 +861,7 @@ function SnugDay({
     setCarry(null);
     history.current = [];
     setUndoCount(0);
+    sfx(holes === 0 ? "snug" : "tie");
     setSaid(holes === 0 ? "Perfectly snug!" : `Tied off with ${plural(holes, "hole")}.`);
     setFinalPieces(settledPieces);
     setResult({ gaps: holes, timeMs, hints: hintIds.length });
@@ -827,16 +869,17 @@ function SnugDay({
     setConfirming(false);
     setSelected(null);
     const run: Attempt = { gaps: holes, timeMs, pieces: settledPieces, hints: hintIds.length, v: PUZZLE_VERSION };
-    const best = saveBest(dateKey, run);
+    // The lab's test quilt keeps nothing.
+    const best = lab ? run : saveBest(dateKey, run);
     setBestRun(best);
     let scoredRun: Attempt | null = null;
-    if (!isReplay && !isArchive && saveAttempt(GAME, dateKey, run)) {
+    if (!lab && !isReplay && !isArchive && saveAttempt(GAME, dateKey, run)) {
       setRecorded(run);
       scoredRun = run;
     }
-    saveRunRemote(dateKey, scoredRun, best);
+    if (!lab) saveRunRemote(dateKey, scoredRun, best);
     window.setTimeout(() => setShowCard(true), holes === 0 ? 1500 : 250);
-  }, [isReplay, isArchive, pieces, dateKey, saved, stopClock, hintIds, holesIn]);
+  }, [isReplay, isArchive, pieces, dateKey, saved, stopClock, hintIds, holesIn, lab]);
 
   useEffect(() => {
     if (phase === "playing" && !dragging && gaps === 0) finish();
@@ -884,6 +927,7 @@ function SnugDay({
     const spares = puzzle.pieces.filter((p) => !puzzle.solution[p.id] && !spareIds.includes(p.id));
     const spare = spares.find((p) => !inFill.has(shapeClass(p.cells))) ?? spares[0];
     if (!spare) return;
+    sfx("spare");
     setSpareIds([...spareIds, spare.id]);
     setJustMarked(spare.id);
     window.setTimeout(() => setJustMarked((id) => (id === spare.id ? null : id)), 1100);
@@ -895,7 +939,7 @@ function SnugDay({
 
   /** Places one solution patch where it belongs, moving anything in its way back to the basket. */
   const applyHint = () => {
-    if (hintIds.length >= HINT_AT.length) return;
+    if (!lab?.quickHelp && hintIds.length >= HINT_AT.length) return;
     const placed = (p: PieceState) => (p.at && !p.loose ? new Set(shift(p.cells, p.at).map(([x, y]) => cellKey(x, y))) : null);
     const target = (id: string) => {
       const s = puzzle.solution[id]!;
@@ -916,6 +960,7 @@ function SnugDay({
     };
     const pick = ids.sort((a, b) => cost(a) - cost(b))[0];
     if (!pick) return;
+    sfx("hint");
     const t = target(pick);
     const sol = puzzle.solution[pick]!;
     clearHistory();
@@ -985,8 +1030,10 @@ function SnugDay({
     .filter(Boolean)
     .join(" ");
   const nextHintAt = HINT_AT[hintIds.length];
-  const canHint = phase === "playing" && !paused && nextHintAt !== undefined && clock.current.started && elapsed >= nextHintAt;
-  const canMarkSpare = phase === "playing" && !paused && spareIds.length === 0 && clock.current.started && elapsed >= SPARE_AT;
+  const canHint =
+    phase === "playing" && !paused && (lab?.quickHelp || (nextHintAt !== undefined && clock.current.started && elapsed >= nextHintAt));
+  const canMarkSpare =
+    phase === "playing" && !paused && spareIds.length === 0 && (lab?.quickHelp || (clock.current.started && elapsed >= SPARE_AT));
   const canNativeShare = coarsePointer && typeof navigator.share === "function";
   const shareText = `${shareLine}\n${shareGrid}\n${shareUrl}`;
   // The picture is made ahead of the tap, so the share sheet still opens within the tap as Safari requires.
@@ -1025,7 +1072,7 @@ function SnugDay({
     <div style={{ fontFamily: FONT, color: INK, width: "100%", userSelect: "none" }}>
       <QuiltBackdrop dateKey={dateKey} />
       <KnitDefs />
-      {showHowTo && <HowToPlay onClose={closeHowTo} touch={coarsePointer} spares={puzzle.spares} />}
+      {showHowTo && <HowToPlay onClose={tap(closeHowTo)} touch={coarsePointer} spares={puzzle.spares} />}
       <div aria-live="polite" style={visuallyHidden}>
         {said}
       </div>
@@ -1052,14 +1099,18 @@ function SnugDay({
         <div ref={topRef}>
         {(() => {
           const title = <div style={{ fontFamily: SCRIPT, fontSize: compact ? 42 : 64, lineHeight: 0.9, color: BINDING, fontWeight: 700 }}>Snug</div>;
-          const dateNav = (
+          const dateNav = lab ? (
+            <div style={{ fontSize: compact ? 12.5 : 14, marginTop: compact ? 0 : 4, opacity: 0.75 }}>
+              Sound test quilt &middot; {puzzle.level?.name}
+            </div>
+          ) : (
             <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: compact ? 12.5 : 14, marginTop: compact ? 0 : 4, whiteSpace: "nowrap" }}>
               <DayArrow label="Previous quilt" disabled={dateKey <= LAUNCH_DATE} onClick={() => onPickDate(addDays(dateKey, -1))}>
                 &lsaquo;
               </DayArrow>
               <button
                 type="button"
-                onClick={() => setShowCalendar(true)}
+                onClick={tap(() => setShowCalendar(true))}
                 title="Open the quilt calendar"
                 style={{ display: "inline-flex", alignItems: "center", gap: 5, border: 0, background: "none", padding: "2px 4px", borderRadius: 6, fontFamily: "inherit", fontSize: "inherit", color: "inherit", cursor: "pointer" }}
               >
@@ -1081,11 +1132,11 @@ function SnugDay({
           );
           const help = (
             <>
-              <Btn small onClick={() => setShowHowTo(true)} label={compact ? "How to play" : undefined}>
+              <Btn small onClick={tap(() => setShowHowTo(true))} label={compact ? "How to play" : undefined}>
                 {compact ? "?" : "How to play"}
               </Btn>
               {newQuilt && (
-                <Btn small primary onClick={() => onPickDate(today)}>
+                <Btn small primary onClick={tap(() => onPickDate(today))}>
                   New quilt
                 </Btn>
               )}
@@ -1289,7 +1340,7 @@ function SnugDay({
                   onReveal={reveal}
                   onShowMine={showMine}
                   onPlayAgain={playAgain}
-                  onClose={() => setShowCard(false)}
+                  onClose={tap(() => setShowCard(false))}
                   center={layout.side ? { x: clamp(tray.x + tray.w / 2, cardHalf, width - cardHalf), y: tray.y + tray.h / 2 } : undefined}
                   sheet={!layout.side}
                 />
@@ -1304,7 +1355,7 @@ function SnugDay({
               // Phones show only the question while it is asked, so it fits on one line.
               <>
                 <span style={{ fontSize: 14, flex: 1 }}>Tie it off with {plural(gaps, "hole")}?</span>
-                <Btn small tight onClick={() => setConfirming(false)}>
+                <Btn small tight onClick={tap(() => setConfirming(false))}>
                   Keep going
                 </Btn>
                 <Btn small tight primary disabled={paused} onClick={finish}>
@@ -1328,12 +1379,26 @@ function SnugDay({
                   disabled={paused || !pieces.some((p) => p.at && !keepOnEmpty(p))}
                   onClick={() => {
                     setCarry(null);
+                    sfx("undo");
                     commit(pieces.map((p) => (keepOnEmpty(p) ? p : { ...p, at: null, loose: false })));
                   }}
                 >
                   {compact ? "Empty" : "Empty the quilt"}
                 </Btn>
                 <span style={{ flex: 1 }} />
+                {lab && phase === "playing" && !paused && (
+                  <Btn
+                    small={compact}
+                    tight={compact}
+                    onClick={() => {
+                      stopClock();
+                      sfx("pause");
+                      setPaused(true);
+                    }}
+                  >
+                    Pause
+                  </Btn>
+                )}
                 {/* Phones offer one help at a time, the free spare first, so the row stays on one line. */}
                 {canMarkSpare && (
                   <HelpBtn seen={helpSeen} id="spare" small={compact} tight={compact} onClick={markSpare}>
@@ -1341,8 +1406,12 @@ function SnugDay({
                   </HelpBtn>
                 )}
                 {canHint && !(compact && canMarkSpare) && (
-                  <HelpBtn seen={helpSeen} id={`hint${hintIds.length}`} small={compact} tight={compact} onClick={applyHint}>
-                    {hintIds.length === 0 ? (compact ? "Hint" : "Use a hint") : compact ? "Hint 2" : "Use a second hint"}
+                  <HelpBtn seen={helpSeen} id={lab?.quickHelp ? "hint" : `hint${hintIds.length}`} small={compact} tight={compact} onClick={applyHint}>
+                    {hintIds.length === 0
+                      ? compact ? "Hint" : "Use a hint"
+                      : hintIds.length === 1
+                        ? compact ? "Hint 2" : "Use a second hint"
+                        : compact ? "Hint" : "Use another hint"}
                   </HelpBtn>
                 )}
                 {/* On phones the result card says a past quilt or replay is not scored. */}
@@ -1352,7 +1421,7 @@ function SnugDay({
                 {confirming ? (
                   <>
                     <span style={{ fontSize: 14 }}>Tie it off with {plural(gaps, "hole")}?</span>
-                    <Btn small={compact} onClick={() => setConfirming(false)}>Keep going</Btn>
+                    <Btn small={compact} onClick={tap(() => setConfirming(false))}>Keep going</Btn>
                     <Btn small={compact} primary disabled={paused} onClick={finish}>
                       Tie it off
                     </Btn>
@@ -1363,10 +1432,10 @@ function SnugDay({
                     tight={compact}
                     primary
                     disabled={covered === 0 || paused}
-                    onClick={() => {
+                    onClick={tap(() => {
                       setCarry(null);
                       setConfirming(true);
-                    }}
+                    })}
                   >
                     Tie it off
                   </Btn>
@@ -1378,23 +1447,23 @@ function SnugDay({
               {!compact && <span style={{ fontSize: 14, opacity: 0.8 }}>{revealing ? "Showing one perfect fill." : "Showing your quilt."}</span>}
               <span style={{ flex: 1 }} />
               {revealing ? (
-                <Btn small={compact} onClick={showMine}>
+                <Btn small={compact} onClick={tap(showMine)}>
                   {compact ? "My quilt" : "Show my quilt"}
                 </Btn>
               ) : (
                 result &&
                 result.gaps > 0 && (
-                  <Btn small={compact} onClick={reveal}>
+                  <Btn small={compact} onClick={tap(reveal)}>
                     {compact ? "Perfect fill" : "Show a perfect fill"}
                   </Btn>
                 )
               )}
               {!showCard && (
-                <Btn small={compact} onClick={() => setShowCard(true)}>
+                <Btn small={compact} onClick={tap(() => setShowCard(true))}>
                   {compact ? "Result" : "View result"}
                 </Btn>
               )}
-              <Btn small={compact} primary onClick={playAgain}>
+              <Btn small={compact} primary onClick={tap(playAgain)}>
                 {compact ? "Play again" : "Play again (unscored)"}
               </Btn>
             </>

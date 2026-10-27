@@ -1,11 +1,10 @@
 "use client";
 
 // Month quilt lab: generates any outline on demand (on a sample month, never a real one) and shows the month as one
-// quilt, every day's board as a player sees it, today's generator to compare, shape numbers, and the reveal.
+// quilt, every day's board as a player sees it, shape numbers, and the reveal.
 
 import { useEffect, useMemo, useState } from "react";
-import { generatePuzzle, type Puzzle } from "./generator";
-import { addDays, weekday } from "../daily";
+import { type Puzzle } from "./generator";
 import { BINDING, YARNS } from "./quilt";
 import { BoardSvg, Btn, FONT, INK, KnitDefs, QuiltBackdrop, SCRIPT, panelStyle, PanelStitches } from "./parts";
 import { SNUG_FONTS } from "./fonts";
@@ -29,8 +28,6 @@ function average(stats: BoardStats[]): StatRow {
   return Object.fromEntries(keys.map((k) => [k, +(stats.reduce((n, s) => n + s[k], 0) / stats.length).toFixed(2)])) as StatRow;
 }
 
-const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
 export function MonthLab() {
   const [outline, setOutline] = useState<Outline>(() => outlineFor("2026-10"));
   const [reroll, setReroll] = useState(0);
@@ -38,11 +35,6 @@ export function MonthLab() {
   const [busy, setBusy] = useState(true);
   const [selected, setSelected] = useState<string | null>(null);
   const [assembled, setAssembled] = useState(true);
-  const classic = useMemo(() => {
-    const out: BoardStats[] = [];
-    for (let k = "2029-01-01"; k < "2029-03-01"; k = addDays(k, 1)) out.push(boardStats(generatePuzzle(k, YARNS.length).board));
-    return average(out);
-  }, []);
 
   // Generating takes a few seconds, so the busy note paints first.
   useEffect(() => {
@@ -113,7 +105,7 @@ export function MonthLab() {
         <section style={{ ...panelStyle, width: "100%" }}>
           <PanelStitches seed="lab-stats" />
           <h2 style={{ fontFamily: SCRIPT, fontSize: 36, margin: 0, color: BINDING }}>How organic are the boards?</h2>
-          <p style={{ fontSize: 14, opacity: 0.8, margin: "6px 0 14px" }}>Averages over this month&apos;s days, against two months of today&apos;s generator.</p>
+          <p style={{ fontSize: 14, opacity: 0.8, margin: "6px 0 14px" }}>Averages over this month&apos;s days.</p>
           <table style={{ borderCollapse: "collapse", fontSize: 14 }}>
             <thead>
               <tr>
@@ -123,7 +115,7 @@ export function MonthLab() {
               </tr>
             </thead>
             <tbody>
-              {([["This month's days", stats], ["Today's boards", classic]] as const).map(([label, row]) => (
+              {([["This month's days", stats]] as const).map(([label, row]) => (
                 <tr key={label}>
                   <td style={{ padding: "4px 12px 4px 0", fontWeight: 600 }}>{label}</td>
                   <td>{row.squares}</td>
@@ -171,8 +163,6 @@ export function MonthLab() {
           </div>
         </section>
       )}
-
-      <ClassicBoards />
     </div>
   );
 }
@@ -181,29 +171,4 @@ export function MonthLab() {
 function solvedDay(d: LabDay): QuiltDay {
   const pieces = Object.entries(d.puzzle.solution).map(([id, s]) => ({ id, cells: s.cells, color: d.puzzle.pieces.find((p) => p.id === id)!.color, at: { x: s.x, y: s.y } }));
   return { dateKey: d.dateKey, puzzle: d.puzzle, offset: d.offset, pieces, scoredGaps: 0 };
-}
-
-/** Today's generator, one week of far-future dates, to compare board shapes by weekday. */
-function ClassicBoards() {
-  const week = useMemo(() => {
-    const out: Puzzle[] = [];
-    for (let k = "2029-01-01", n = 0; n < 7; k = addDays(k, 1), n++) out.push(generatePuzzle(k, YARNS.length));
-    return out;
-  }, []);
-  return (
-    <section style={{ ...panelStyle, width: "100%" }}>
-      <PanelStitches seed="lab-classic" />
-      <h2 style={{ fontFamily: SCRIPT, fontSize: 36, margin: 0, color: BINDING }}>Today&apos;s generator, for comparison</h2>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 14, marginTop: 14 }}>
-        {week.map((p) => (
-          <div key={p.dateKey} style={{ display: "grid", justifyItems: "center", gap: 4, padding: 10, borderRadius: 12, background: "rgba(123,59,46,.06)" }}>
-            <BoardSvg board={p.board} cols={p.cols} rows={p.rows} cell={13} pad={0.45} />
-            <span style={{ fontSize: 12 }}>
-              {WEEKDAY_NAMES[weekday(p.dateKey)]} &middot; {p.level?.name} &middot; {p.board.length} sq
-            </span>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
 }
