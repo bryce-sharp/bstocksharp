@@ -18,7 +18,9 @@ import {
   workouts,
 } from "@/lib/db/schema";
 import { destroySession, requireSession } from "@/lib/session";
-import { claimedBy, isSiteAdmin, requireEditor, requireOwner } from "@/lib/auth";
+import { claimedBy, hashPassword, isSiteAdmin, requireEditor, requireOwner } from "@/lib/auth";
+import { allHubApps, currentLogin } from "@/lib/hub-apps";
+import { newLoginError } from "@/lib/own-hub";
 import { getProfile } from "@/lib/queries/profiles";
 
 // Claims are SELF-service: an account claims a profile for itself ("I am this
@@ -33,6 +35,7 @@ export async function claimProfileAction(
   _formData: FormData,
 ): Promise<void> {
   const { accountId } = await requireSession();
+  if ((await currentLogin())?.isHubLogin) throw new Error("The hub login is no particular person.");
 
   const profile = await getProfile(profileId); // group-scoped
   if (!profile) throw new Error("Profile not found.");
@@ -61,6 +64,82 @@ export async function releaseClaimAction(_formData: FormData): Promise<void> {
 
   revalidatePath("/group");
   revalidatePath("/", "layout");
+}
+
+// ── The hub login and login limits ─────────────────────────────────────────────
+
+export type LoginFormState = { error: string } | { ok: true } | null;
+
+/** The chosen app slugs from a form, kept to the hub's own apps; null = all of them. */
+async function chosenApps(formData: FormData): Promise<string[] | null | { error: string }> {
+  const hub = await allHubApps();
+  const picked = formData.getAll("apps").map(String).filter((slug) => hub.includes(slug));
+  if (picked.length === 0) return { error: "Pick at least one app." };
+  return picked.length === hub.length ? null : picked;
+}
+
+/**
+ * Make the hub login: one shared login that is no particular person (a
+ * kitchen screen), limited to the apps chosen. Owner only, one per hub.
+ */
+export async function createHubLoginAction(_prev: LoginFormState, formData: FormData): Promise<LoginFormState> {
+  const session = await requireOwner();
+  const username = String(formData.get("username") ?? "").trim().toLowerCase();
+  const password = String(formData.get("password") ?? "");
+  const invalid = newLoginError(username, password, String(formData.get("confirm") ?? ""));
+  if (invalid) return { error: invalid };
+  const apps = await chosenApps(formData);
+  if (apps && "error" in apps) return apps;
+
+  try {
+    await db.insert(accounts).values({
+      username,
+      passwordHash: hashPassword(password),
+      groupId: session.groupId,
+      apps,
+      isHubLogin: true,
+    });
+  } catch {
+    // The username index or the one-hub-login-per-hub index refused it.
+    return { error: "That username is taken, or this hub already has a hub login." };
+  }
+  revalidatePath("/group");
+  return { ok: true };
+}
+
+/** The owner sets the hub login's password; every device signed in with it signs out. */
+export async function setHubLoginPasswordAction(_prev: LoginFormState, formData: FormData): Promise<LoginFormState> {
+  const session = await requireOwner();
+  const password = String(formData.get("password") ?? "");
+  if (password.length < 8) return { error: "Password must be at least 8 characters." };
+  const updated = await db
+    .update(accounts)
+    .set({ passwordHash: hashPassword(password), passwordChangedAt: new Date() })
+    .where(and(eq(accounts.groupId, session.groupId), eq(accounts.isHubLogin, true)))
+    .returning({ id: accounts.id });
+  if (!updated.length) return { error: "This hub has no hub login." };
+  revalidatePath("/group");
+  return { ok: true };
+}
+
+/** The owner limits which of the hub's apps another login may open. */
+export async function setLoginAppsAction(
+  accountId: number,
+  _prev: LoginFormState,
+  formData: FormData,
+): Promise<LoginFormState> {
+  const session = await requireOwner();
+  if (accountId === session.accountId) return { error: "You can't limit your own login." };
+  const apps = await chosenApps(formData);
+  if (apps && "error" in apps) return apps;
+  const updated = await db
+    .update(accounts)
+    .set({ apps })
+    .where(and(eq(accounts.id, accountId), eq(accounts.groupId, session.groupId)))
+    .returning({ id: accounts.id });
+  if (!updated.length) return { error: "That login isn't in this hub." };
+  revalidatePath("/group");
+  return { ok: true };
 }
 
 // ── Invites (Phase E) ─────────────────────────────────────────────────────────

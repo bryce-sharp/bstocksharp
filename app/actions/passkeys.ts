@@ -20,6 +20,7 @@ import { setActiveProfileCookie } from "@/lib/profile";
 import { relyingParty, storeChallenge, takeChallenge } from "@/lib/webauthn";
 import { listPasskeys, getPasskey } from "@/lib/queries/passkeys";
 import { afterSignIn } from "@/lib/password-reset";
+import { currentLogin } from "@/lib/hub-apps";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PASSKEYS (WebAuthn) — each flow is a two-action dance: start() makes the
@@ -36,6 +37,8 @@ export type PasskeyResult = { ok: true; next?: string } | { ok: false; error: st
 // ── Registration (signed in: add a passkey for YOUR account) ──────────────────
 export async function startPasskeyRegistration(): Promise<PublicKeyCredentialCreationOptionsJSON> {
   const { accountId } = await requireSession();
+  // A passkey on a shared screen would let anyone there in with no password.
+  if ((await currentLogin())?.isHubLogin) throw new Error("The hub login signs in with its password.");
   const [account] = await db
     .select()
     .from(accounts)

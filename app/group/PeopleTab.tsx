@@ -14,6 +14,8 @@ import EditProfileButton from "@/components/shared/EditProfileButton";
 import DeleteIconButton from "@/components/shared/DeleteIconButton";
 import ResetLinkButton from "./ResetLinkButton";
 import PersonInvite from "./PersonInvite";
+import HubLogin from "./HubLogin";
+import LoginApps from "./LoginApps";
 import { listPendingInvites } from "@/lib/queries/invites";
 import { canEditProfile } from "@/lib/auth";
 import { listGroupMembers } from "@/lib/queries/groups";
@@ -26,7 +28,7 @@ import {
   removeMemberAction,
 } from "@/app/actions/group";
 import { revokeResetLinkAction } from "@/app/actions/password";
-import { hubApps } from "@/lib/hub-apps";
+import { allHubApps, hubApps } from "@/lib/hub-apps";
 
 function initial(name: string) {
   return name.trim()[0]?.toUpperCase() ?? "?";
@@ -64,6 +66,9 @@ export default async function PeopleTab({
     getActiveProfile(),
     hubApps(),
   ]);
+  const allApps = await allHubApps();
+  const hubLogin = members.find((m) => m.isHubLogin) ?? null;
+  const manages = viewerIsOwner && canEdit;
   const canManage = await Promise.all(all.map((p) => canEditProfile(p.id)));
 
   // Live reset links, shown on each login for the owner to see or cancel.
@@ -87,7 +92,9 @@ export default async function PeopleTab({
       }
     }
   }
-  const unlinked = members.filter((m) => m.profileId === null || !all.some((p) => p.id === m.profileId));
+  const unlinked = members.filter(
+    (m) => !m.isHubLogin && (m.profileId === null || !all.some((p) => p.id === m.profileId)),
+  );
 
   const activeProfiles = all.filter((p) => !p.archivedAt);
   const canDeactivate = activeProfiles.length > 1;
@@ -198,6 +205,7 @@ export default async function PeopleTab({
                       </Typography>
                       {viewerIsOwner && canEdit ? (
                         <>
+                          <LoginApps accountId={claim.id} username={claim.username} hubApps={allApps} apps={claim.apps} />
                           <ResetLinkButton accountId={claim.id} username={claim.username} origin={origin} />
                           <DeleteIconButton
                             action={removeMemberAction.bind(null, claim.id)}
@@ -249,6 +257,13 @@ export default async function PeopleTab({
         ) : null}
       </Stack>
 
+      {manages && (hubLogin || activeProfiles.length > 1) ? (
+        <HubLogin
+          login={hubLogin ? { id: hubLogin.id, username: hubLogin.username, apps: hubLogin.apps } : null}
+          hubApps={allApps}
+        />
+      ) : null}
+
       {unlinked.length ? (
         <Stack spacing={1}>
           <Typography variant="subtitle2" color="text.secondary">
@@ -270,6 +285,7 @@ export default async function PeopleTab({
               ) : null}
               {viewerIsOwner && canEdit && m.id !== accountId ? (
                 <>
+                  <LoginApps accountId={m.id} username={m.username} hubApps={allApps} apps={m.apps} />
                   <ResetLinkButton accountId={m.id} username={m.username} origin={origin} />
                   <DeleteIconButton
                     action={removeMemberAction.bind(null, m.id)}

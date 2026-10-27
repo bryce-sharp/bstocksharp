@@ -15,6 +15,8 @@ export type GroupMember = {
   id: number;
   username: string;
   profileId: number | null; // the profile this account claims, if any
+  apps: string[] | null; // the apps this login may open; null = all the hub's
+  isHubLogin: boolean; // the hub's shared, person-less login
 };
 
 /** All accounts (logins) in the session's group, with their claims. */
@@ -25,6 +27,8 @@ export async function listGroupMembers(): Promise<GroupMember[]> {
       id: accounts.id,
       username: accounts.username,
       profileId: accounts.profileId,
+      apps: accounts.apps,
+      isHubLogin: accounts.isHubLogin,
     })
     .from(accounts)
     .where(eq(accounts.groupId, groupId))

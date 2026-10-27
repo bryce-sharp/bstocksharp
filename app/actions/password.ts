@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { accounts, groups, passwordResets } from "@/lib/db/schema";
 import { hashPassword, requireOwner, verifyPassword } from "@/lib/auth";
 import { createSession, requireSession } from "@/lib/session";
+import { currentLogin } from "@/lib/hub-apps";
 import {
   findLiveReset,
   isFreshSignIn,
@@ -108,6 +109,9 @@ export async function changePasswordAction(
   formData: FormData,
 ): Promise<ChangePasswordState> {
   const session = await requireSession();
+  if ((await currentLogin())?.isHubLogin) {
+    return { error: "Only the hub owner can change the hub login's password." };
+  }
   const current = String(formData.get("current") ?? "");
   const password = String(formData.get("password") ?? "");
   const confirm = String(formData.get("confirm") ?? "");
