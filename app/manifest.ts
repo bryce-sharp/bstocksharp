@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
-import { getActiveProfile } from "@/lib/profile";
+import { getMe } from "@/lib/profile";
+import { getHubName } from "@/lib/queries/group";
 
 // Web app manifest → makes the hub installable ("Add to Home Screen") and run
 // standalone. Name + accent follow the ACTIVE profile, so an install is
@@ -12,8 +13,8 @@ import { getActiveProfile } from "@/lib/profile";
 export const dynamic = "force-dynamic";
 
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
-  const active = await getActiveProfile();
-  const who = active?.name ?? "Hub";
+  const me = await getMe();
+  const who = me?.name ?? (await getHubName()) ?? "Hub";
 
   return {
     id: "/",
@@ -25,7 +26,7 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     scope: "/",
     display: "standalone",
     background_color: "#0e1214",
-    theme_color: active?.color ?? "#4caf7d",
+    theme_color: me?.color ?? "#4caf7d",
     icons: [
       { src: "/manifest-icon?size=192", sizes: "192x192", type: "image/png" },
       { src: "/manifest-icon?size=512", sizes: "512x512", type: "image/png" },

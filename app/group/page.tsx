@@ -6,6 +6,7 @@ import Typography from "@mui/material/Typography";
 import GroupNameEditor from "./GroupNameEditor";
 import GroupTabs, { type GroupTab } from "./GroupTabs";
 import PeopleTab from "./PeopleTab";
+import AccessTab from "./AccessTab";
 import TimezoneSetting from "./TimezoneSetting";
 import InvitesPanel, { type InviteRow } from "./InvitesPanel";
 import DangerZone from "./DangerZone";
@@ -63,6 +64,7 @@ export default async function GroupPage({
 
   const tabs: { value: GroupTab; label: string }[] = [
     { value: "people", label: "People" },
+    { value: "access", label: "Access" },
     // People's sign-in links live on their People cards; this tab is the site admin's, for starting new hubs.
     ...(manages && siteAdmin ? [{ value: "invites" as const, label: "Invites" }] : []),
     ...(viewer ? [{ value: "activity" as const, label: "Activity" }] : []),
@@ -115,6 +117,8 @@ export default async function GroupPage({
             origin={origin}
           />
         ) : null}
+
+        {active === "access" ? <AccessTab accountId={session.accountId} /> : null}
 
         {active === "invites" ? (
           <Stack spacing={2}>

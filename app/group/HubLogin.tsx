@@ -23,15 +23,18 @@ import {
   type LoginFormState,
 } from "@/app/actions/group";
 
-// The hub login (owner only): one shared login that is no particular person,
+// The shared login (owner only): one login that is no particular person,
 // for a kitchen screen or family tablet. The owner picks its username,
 // password and apps; on it, people with their own login are view-only.
 export default function HubLogin({
   login,
   hubApps,
+  hubName,
 }: {
   login: { id: number; username: string; apps: string[] | null } | null;
   hubApps: string[];
+  /** The hub's name (Home); the shared login goes by it. */
+  hubName: string;
 }) {
   const [setupOpen, setSetupOpen] = React.useState(false);
   const [passwordOpen, setPasswordOpen] = React.useState(false);
@@ -54,7 +57,7 @@ export default function HubLogin({
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: { xs: "wrap", sm: "nowrap" } }}>
           <TabletMacIcon fontSize="small" color="primary" />
           <Typography fontWeight={600} noWrap sx={{ flexGrow: 1, minWidth: 0 }}>
-            Hub login{login ? `: ${login.username}` : ""}
+            {hubName} (shared login){login ? `: ${login.username}` : ""}
           </Typography>
           {login ? (
             <>
@@ -64,8 +67,8 @@ export default function HubLogin({
               </Button>
               <DeleteIconButton
                 action={removeMemberAction.bind(null, login.id)}
-                confirmMessage={`Remove the hub login "${login.username}"? Any screen signed in with it is signed out. People and data stay.`}
-                label={`Remove hub login ${login.username}`}
+                confirmMessage={`Remove the shared login "${login.username}"? Any screen signed in with it is signed out. People and data stay.`}
+                label={`Remove shared login ${login.username}`}
               />
             </>
           ) : (
@@ -82,7 +85,7 @@ export default function HubLogin({
 
       <Dialog open={setupOpen} onClose={() => setSetupOpen(false)} maxWidth="xs" fullWidth>
         <form action={submit(createHubLoginAction, () => setSetupOpen(false))}>
-          <DialogTitle>Set up the hub login</DialogTitle>
+          <DialogTitle>Set up the shared login</DialogTitle>
           <DialogContent>
             <Stack spacing={2} sx={{ mt: 0.5 }}>
               {error ? <Alert severity="error">{error}</Alert> : null}
@@ -100,7 +103,7 @@ export default function HubLogin({
               Cancel
             </Button>
             <SubmitButton variant="contained" pendingLabel="Creating…">
-              Create hub login
+              Create shared login
             </SubmitButton>
           </DialogActions>
         </form>

@@ -29,7 +29,6 @@ import {
   spendByTag,
   summarizeCashFlow,
 } from "@/lib/queries/finance-cashflow";
-import { listProfiles } from "@/lib/queries/profiles";
 import { listBankAlerts } from "@/lib/queries/finance-plaid";
 import { listPriceSuggestions } from "@/lib/queries/finance-bills";
 import { plaidConfigured } from "@/lib/plaid/client";
@@ -44,7 +43,7 @@ import BudgetInsights from "@/components/finance/BudgetInsights";
 import TransactionsTable from "@/components/finance/TransactionsTable";
 import FundsPanel from "@/components/finance/FundsPanel";
 import RefreshAfterSync from "@/components/finance/RefreshAfterSync";
-import { requireBook } from "@/lib/books";
+import { listBookMembers, requireBook } from "@/lib/books";
 
 export const metadata = { title: "Budget" };
 
@@ -80,7 +79,7 @@ export default async function BudgetPage({
       listFinancialAccounts(),
       listBudgetMonths(),
       listBillsForMonth(month),
-      listProfiles(),
+      requireBook().then((b) => listBookMembers(b.id)),
       listRecentMonths(month, 3),
       getSpendTrend(month),
       listMerchantSuggestions(),

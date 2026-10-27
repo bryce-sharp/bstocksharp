@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { groups } from "@/lib/db/schema";
 import { DEFAULT_TZ } from "@/lib/finance/parse";
+import { getSessionGroupId } from "@/lib/session";
 
 /**
  * The household's IANA timezone, memoized per request (React cache) so the many
@@ -18,4 +19,12 @@ export const getGroupTimezone = cache(async (groupId: number): Promise<string> =
     .where(eq(groups.id, groupId))
     .limit(1);
   return g?.tz || DEFAULT_TZ;
+});
+
+/** The signed-in hub's name (Home, …), or null when signed out. The shared login goes by it. */
+export const getHubName = cache(async (): Promise<string | null> => {
+  const groupId = await getSessionGroupId();
+  if (groupId === null) return null;
+  const [g] = await db.select({ name: groups.name }).from(groups).where(eq(groups.id, groupId)).limit(1);
+  return g?.name ?? null;
 });

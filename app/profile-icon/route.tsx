@@ -1,16 +1,16 @@
 import { ImageResponse } from "next/og";
-import { getActiveProfile } from "@/lib/profile";
+import { getMe } from "@/lib/profile";
 import { iconInitial, textOn } from "@/lib/icon";
 
-// Dynamic browser-tab favicon: the active profile's color + initial. The root
+// Dynamic browser-tab favicon: your color + initial. The root
 // layout references it as `/profile-icon?v=<profileId>` — browsers cache favicons
-// hard, so the changing URL is what forces a repaint when you switch profiles.
+// hard, so the changing URL is what forces a repaint when a different login signs in.
 // Separate from apple-icon.tsx (the larger, iOS home-screen icon).
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const active = await getActiveProfile();
-  const bg = active?.color ?? "#4caf7d";
+  const me = await getMe();
+  const bg = me?.color ?? "#4caf7d";
 
   return new ImageResponse(
     (
@@ -28,7 +28,7 @@ export async function GET() {
           fontFamily: "sans-serif",
         }}
       >
-        {iconInitial(active?.name)}
+        {iconInitial(me?.name)}
       </div>
     ),
     { width: 48, height: 48 },

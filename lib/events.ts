@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, isNull, lt, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { eventLog } from "@/lib/db/schema";
 
@@ -63,12 +63,14 @@ export function isProblem(e: Pick<EventView, "kind" | "data">): boolean {
  * Events in a scope, newest first, a page at a time: pass the last id of the
  * previous page as `before` for the next one.
  */
+const itemOf = sql<number>`(${eventLog.data}->>'item')::int`;
+
 export async function listEvents(
   scope: EventScope,
-  opts: { source?: string; before?: number; limit?: number } = {},
+  opts: { source?: string; before?: number; limit?: number; items?: number[]; plaidItems?: number[] } = {},
 ): Promise<EventView[]> {
   const who = scopeFilter(scope);
-  if (!who) return [];
+  if (!who || opts.items?.length === 0) return [];
   const rows = await db
     .select()
     .from(eventLog)
@@ -77,6 +79,16 @@ export async function listEvents(
         who,
         opts.source ? eq(eventLog.source, opts.source) : undefined,
         opts.before !== undefined ? lt(eventLog.id, opts.before) : undefined,
+        // Only these bank connections' events (a money book's own banks).
+        opts.items ? inArray(itemOf, opts.items) : undefined,
+        // A hub's bank events only for these connections; its other events and site events stay.
+        opts.plaidItems
+          ? or(
+              isNull(eventLog.groupId),
+              ne(eventLog.source, "plaid"),
+              opts.plaidItems.length ? inArray(itemOf, opts.plaidItems) : sql`false`,
+            )
+          : undefined,
       ),
     )
     .orderBy(desc(eventLog.id))

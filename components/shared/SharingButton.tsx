@@ -23,25 +23,26 @@ import { setSharingAction } from "@/app/actions/profile";
 import type { ShareRule, Sharing } from "@/lib/db/schema";
 
 // Who can see a person's data in each personal app: everyone in the hub,
-// chosen people, or just them (only once they have their own login).
+// chosen people, or just them. Only people with a login of their own have this.
 export default function SharingButton({
   profileId,
   name,
   self,
-  hasLogin,
   sharing,
   people,
   hubApps,
+  hubName,
 }: {
   profileId: number;
   name: string;
   /** Editing your own person: the wording says "your" and "Just me". */
   self: boolean;
-  hasLogin: boolean;
   sharing: Sharing;
   /** The hub's other people, to pick from. */
   people: { id: number; name: string }[];
   hubApps: string[];
+  /** The hub's name when it has a shared login, which can then be one of the chosen. */
+  hubName: string | null;
 }) {
   const apps = APPS.filter((a) => a.personal && hubApps.includes(a.slug));
   const [open, setOpen] = React.useState(false);
@@ -103,21 +104,32 @@ export default function SharingButton({
                             label={p.name}
                           />
                         ))}
+                        {hubName ? (
+                          <FormControlLabel
+                            control={
+                              <Checkbox
+                                size="small"
+                                name={`${a.slug}.hub`}
+                                value="1"
+                                defaultChecked={sharing[a.slug]?.hub === true}
+                              />
+                            }
+                            label={`${hubName} (shared login)`}
+                          />
+                        ) : null}
                       </FormGroup>
                     ) : null}
-                    {hasLogin ? (
-                      <FormControlLabel
-                        value="me"
-                        control={<Radio size="small" />}
-                        label={self ? "Just me" : `Just ${name}`}
-                      />
-                    ) : null}
+                    <FormControlLabel
+                      value="me"
+                      control={<Radio size="small" />}
+                      label={self ? "Just me" : `Just ${name}`}
+                    />
                   </RadioGroup>
                 </FormControl>
               ))}
               <Typography variant="caption" color="text.secondary">
-                This holds for the hub owner too. The shared hub login only sees what is shared with
-                everyone.
+                This holds for the hub owner too. {hubName ? `${hubName} (the shared login)` : "A shared login"}{" "}
+                sees what is shared with everyone, and what you tick it for.
               </Typography>
             </Stack>
           </DialogContent>

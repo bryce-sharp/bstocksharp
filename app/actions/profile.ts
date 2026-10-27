@@ -15,6 +15,7 @@ import { requireGroupId } from "@/lib/session";
 import { getProfile, listProfiles } from "@/lib/queries/profiles";
 import { APPS } from "@/lib/apps";
 import { currentLogin } from "@/lib/hub-apps";
+import { wouldStrandBook } from "@/lib/books";
 import type { Sharing } from "@/lib/db/schema";
 import { cleanEquipment } from "@/lib/workout";
 
@@ -65,7 +66,6 @@ export async function addPerson(formData: FormData): Promise<{ id: number } | nu
     .values({ groupId: await requireGroupId(), name, color })
     .returning();
 
-  if (created) await setActiveProfileCookie(created.id);
   revalidatePath("/", "layout");
   return created ? { id: created.id } : null;
 }
@@ -98,26 +98,26 @@ export async function updateProfile(
 }
 
 /**
- * Who can see a person's data in each personal app (lib/sharing). Set by
- * whoever may edit the person, never by the hub login. "Just me" needs a login
- * of their own; chosen people are kept to this hub's other people.
+ * Who can see a person's data in each personal app (lib/sharing). Only people
+ * with a login of their own have sharing, set from that login; chosen people
+ * are kept to this hub's other people.
  */
 export async function setSharingAction(
   id: number,
   formData: FormData,
 ): Promise<{ error: string } | { ok: true }> {
   await requireEditorFor(id);
-  if ((await currentLogin())?.isHubLogin) return { error: "The hub login can't change sharing." };
+  if ((await currentLogin())?.isHubLogin) return { error: "The shared login can't change sharing." };
+  if ((await claimedBy(id)) === null) return { error: "Someone without a login has no sharing: everyone in the hub sees their stuff." };
   const others = (await listProfiles()).map((p) => p.id).filter((pid) => pid !== id);
-  const hasLogin = (await claimedBy(id)) !== null;
 
   const sharing: Sharing = {};
   for (const app of APPS.filter((a) => a.personal)) {
     const who = String(formData.get(`${app.slug}.who`) ?? "everyone");
-    if (who === "me" && hasLogin) sharing[app.slug] = { who: "me" };
+    if (who === "me") sharing[app.slug] = { who: "me" };
     else if (who === "chosen" || who === "me") {
       const people = formData.getAll(`${app.slug}.people`).map(Number).filter((pid) => others.includes(pid));
-      sharing[app.slug] = { who: "chosen", people };
+      sharing[app.slug] = { who: "chosen", people, hub: formData.get(`${app.slug}.hub`) === "1" };
     }
   }
   await db.update(profiles).set({ sharing }).where(eq(profiles.id, id));
@@ -225,6 +225,9 @@ export async function deleteProfileForever(
   await requireEditorFor(id); // delete a person you've unlocked
 
   if (heirId === id) throw new Error("Pick a different profile to inherit.");
+  if (await wouldStrandBook(id)) {
+    throw new Error("They are the only member with a login in a money book. Someone in that book must add another member first.");
+  }
   // Heir must be one of OUR active profiles — shared cars/workouts must never
   // transfer across the group boundary.
   const [heir] = await db

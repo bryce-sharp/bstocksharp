@@ -167,28 +167,33 @@ you are, so the claim does that job. `hashPassword`/`verifyPassword` in
 
 ## Profiles, visibility & access
 
-**Profiles are hub-wide "who's using it" identities** (the `profiles` table — Bryce,
-Lauren), not accounts. The active profile is a persisted preference (`active_profile`
-cookie — [`lib/profile.ts`](lib/profile.ts) `getActiveProfile()`, precedence:
-`?profile` override → cookie → first profile). The header shows and switches it
-([`ProfileControl`](components/shared/ProfileControl.tsx) →
-[`ProfileMenu`](components/shared/ProfileMenu.tsx)); unlocked editors can add people.
-It renders in every app header, so identity is consistent hub-wide.
+**Two "who"s, kept apart.** Profiles are the household's people (the `profiles` table:
+Bryce, Lauren, a kid), not accounts.
 
-**Viewing is open, except what a person keeps private.** Anyone signed in may switch
-profiles freely, and a claimed person's stuff stays hands-off for editing. The gates
-are the group (tenancy), the claim (ownership), and sharing (privacy):
+- **You** is the person the signed-in login is tied to ([`lib/profile.ts`](lib/profile.ts)
+  `getMe()`), or the hub's shared login (named after the hub, like "Home"), which is no
+  one. The top-right menu ([`AccountControl`](components/shared/AccountControl.tsx)) is
+  always you, and so are the app's name, color, icons and hidden apps. What a login may
+  see and change follows you, never what is being viewed.
+- **Viewing** is whose stuff an app shows: the `active_profile` cookie
+  (`getActiveProfile()`: `?profile` override, then the cookie, then the first person). Only
+  apps with per-person pages show the picker ([`ViewingControl`](components/shared/ViewingControl.tsx):
+  Weight, Workout, Games, Garage); Finance and the home page ignore it.
+- **Hub settings, Access** shows what each login can open: apps, money books, and whose
+  stuff is kept from it.
+
+**Viewing is open, except what a person keeps private.** The gates are the group
+(tenancy), the claim (ownership), and sharing (privacy):
 
 - **Sharing** ([`lib/sharing.ts`](lib/sharing.ts)): in each personal app (`personal` in
-  [`lib/apps.tsx`](lib/apps.tsx): Weight, Workout) a person picks who can see their
-  data in `profiles.sharing`: everyone in the hub (the default), chosen people, or just
-  them (only once they have a login). It holds against the hub owner too. The viewer is
-  the person the login is tied to; the hub login and logins with no person see only
-  what is shared with everyone. The raw per-person reads (`lib/queries/weight`,
-  `getAssignments`) and the per-person writes call `requireView`; pages show
-  `PrivateNotice`, and the in-app switcher marks such people "private here". The person
-  sets it on **`/account`**; a person without a login is set by anyone who can edit them,
-  on **`/group`**. Games results are already readable only by their owner's login.
+  [`lib/apps.tsx`](lib/apps.tsx): Weight, Workout) a person with a login picks who can see
+  their data in `profiles.sharing`: everyone in the hub (the default), chosen people (which
+  can include the shared login), or just them. It holds against the hub owner too. A
+  person without a login has no sharing: everyone in the hub sees and changes their stuff.
+  The raw per-person reads (`lib/queries/weight`, `getAssignments`) and the per-person
+  writes call `requireView`; pages show `PrivateNotice`, and the Viewing picker marks such
+  people "private here". A person sets it on **`/account`**. Games results are readable
+  only by their owner's login (or anyone, for a person without one).
 - **Cars:** a vehicle has an **owner** (`vehicles.profile_id`) and a **visibility**
   (`vehicles.visibility`: `shared` | `private`, default `shared`). A shared car shows for
   everyone and any editor can log to it. A private car shows only to its owner's login
@@ -197,10 +202,10 @@ are the group (tenancy), the claim (ownership), and sharing (privacy):
   (maintenance, fuel, parts, builds, wishlist, journal) inherits that scope; `resources`
   and `checklists` stay shared.
 
-**Lifecycle:** all household management lives on **`/group`** (profile menu →
+**Lifecycle:** all household management lives on **`/group`** (account menu →
 *Hub settings*; `/people` redirects there): add people, rename the hub, edit a
 person, claim/release. Your own login (your person, password, passkeys) is on
-**`/account`** (profile menu → *Your account*). *Deactivate* soft-deletes
+**`/account`** (account menu → *Your account*). *Deactivate* soft-deletes
 (`profiles.archived_at`) — hidden from the switcher, can't be active, **all data
 kept**; *Reactivate* restores. *Delete forever* is irreversible: it reassigns the
 person's **shared** cars + authored workouts to a chosen **heir**, then deletes their

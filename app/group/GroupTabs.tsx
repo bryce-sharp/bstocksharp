@@ -8,7 +8,7 @@ import Tab from "@mui/material/Tab";
 // param on /group, so switching is a server navigation that loads only that
 // tab's data and can be bookmarked. `active` comes from the server.
 
-export type GroupTab = "people" | "invites" | "activity" | "settings";
+export type GroupTab = "people" | "access" | "invites" | "activity" | "settings";
 
 export default function GroupTabs({
   active,

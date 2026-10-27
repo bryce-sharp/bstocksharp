@@ -12,7 +12,7 @@ import {
   type IncomeDeduction,
   type RecurringExpense,
 } from "@/lib/db/schema";
-import { requireBook, type BookRef } from "@/lib/books";
+import { listBookMembers, requireBook, type BookRef } from "@/lib/books";
 import { getGroupTimezone } from "@/lib/queries/group";
 import { lastDayOfMonth, todayISO } from "@/lib/finance/parse";
 import { goalForMonth } from "@/lib/finance/savings-goal";
@@ -174,13 +174,14 @@ export async function getAtlasViewForBook(
   // current month reads as of today (a raise landing Aug 15 shows from Aug 15).
   const asOf = isCurrentMonth ? today : lastDayOfMonth(month);
 
-  const [groupProfiles, allPlans, allDeductions, allExpenses, accounts, goals] =
+  const [hubPeople, members, allPlans, allDeductions, allExpenses, accounts, goals] =
     await Promise.all([
       db
         .select()
         .from(profiles)
         .where(and(eq(profiles.groupId, book.groupId), isNull(profiles.archivedAt)))
         .orderBy(asc(profiles.sortOrder), asc(profiles.id)),
+      listBookMembers(book.id),
       db
         .select()
         .from(compensationPlans)
@@ -215,6 +216,9 @@ export async function getAtlasViewForBook(
         .where(eq(savingsGoals.bookId, book.id))
         .orderBy(asc(savingsGoals.startMonth), asc(savingsGoals.id)),
     ]);
+  // The book's members, plus anyone whose pay still lands in this book.
+  const inBook = new Set([...members.map((m) => m.id), ...allPlans.map((p) => p.profileId)]);
+  const groupProfiles = hubPeople.filter((p) => inBook.has(p.id));
   const accountById = new Map(accounts.map((a) => [a.id, a]));
 
   const earliest = [...allPlans, ...allDeductions, ...allExpenses]

@@ -408,7 +408,7 @@ export const passwordResets = pgTable(
 // security boundary (no passwords, free switching) — see ARCHITECTURE. First used
 // by the workout app; now hub-wide (vehicles.profile_id, active_profile cookie).
 // ─────────────────────────────────────────────────────────────────────────────
-export type ShareRule = { who: "everyone" | "chosen" | "me"; people?: number[] };
+export type ShareRule = { who: "everyone" | "chosen" | "me"; people?: number[]; hub?: boolean };
 export type Sharing = Record<string, ShareRule>;
 
 export const profiles = pgTable("profiles", {
@@ -633,6 +633,8 @@ export const books = pgTable(
     name: varchar("name", { length: 80 }).notNull(),
     // The hub's first book, made with every active person in it; one per hub.
     starter: boolean("starter").notNull().default(false),
+    // The hub's shared login (tied to no person) can open this book too.
+    hubLogin: boolean("hub_login").notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [
