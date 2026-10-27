@@ -14,7 +14,7 @@ import { getSession } from "@/lib/session";
 import { isOwner } from "@/lib/auth";
 import { getMyGroup, listGroupMembers } from "@/lib/queries/groups";
 import { listAllProfiles } from "@/lib/queries/profiles";
-import { hubApps } from "@/lib/hub-apps";
+import { currentLogin, hubApps } from "@/lib/hub-apps";
 
 export const metadata = { title: "Your account" };
 
@@ -28,6 +28,8 @@ export default async function AccountPage({
   const { nudge, next } = await searchParams;
   const session = await getSession();
   if (!session) redirect("/login?from=/account");
+  // The hub login is set up by the owner in Hub settings; it has no account page of its own.
+  if ((await currentLogin())?.isHubLogin) redirect("/");
 
   const [members, profiles, owner, offeredApps, group] = await Promise.all([
     listGroupMembers(),

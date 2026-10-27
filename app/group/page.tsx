@@ -12,7 +12,7 @@ import DangerZone from "./DangerZone";
 import ActivityLog from "./ActivityLog";
 import { getSession } from "@/lib/session";
 import { isEditor, isSiteAdmin } from "@/lib/auth";
-import { hubApps } from "@/lib/hub-apps";
+import { allHubApps, currentLogin } from "@/lib/hub-apps";
 import { getMyGroup, listGroupMembers } from "@/lib/queries/groups";
 import { listPendingInvites } from "@/lib/queries/invites";
 import { activityViewer, listActivity, listActivitySources } from "@/lib/queries/activity";
@@ -39,6 +39,7 @@ export default async function GroupPage({
   const { tab, nudge, next } = await searchParams;
   const session = await getSession();
   if (!session) redirect("/login"); // proxy already gates; belt anyway
+  if ((await currentLogin())?.isHubLogin) redirect("/");
   // The old Sign-in tab, still linked from bookmarks and older sign-in redirects.
   if (tab === "sign-in" || nudge === "1") {
     const query = new URLSearchParams({
@@ -53,7 +54,7 @@ export default async function GroupPage({
     isEditor(),
     activityViewer(),
     isSiteAdmin(),
-    hubApps(),
+    allHubApps(),
   ]);
   // Membership controls (invites, removal, reset links) are the OWNER's.
   const viewerIsOwner =

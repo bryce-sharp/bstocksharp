@@ -145,7 +145,13 @@ export async function afterSignIn(accountId: number, from: string, method: "pass
     )
     .limit(1);
   if (unseen) return "/account";
-  if (method === "password") {
+  const [login] = await db
+    .select({ isHubLogin: accounts.isHubLogin })
+    .from(accounts)
+    .where(eq(accounts.id, accountId))
+    .limit(1);
+  // A shared screen's hub login is never nudged to add Face ID.
+  if (method === "password" && !login?.isHubLogin) {
     const [key] = await db
       .select({ id: passkeys.id })
       .from(passkeys)

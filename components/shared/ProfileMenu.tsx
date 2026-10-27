@@ -74,11 +74,14 @@ export default function ProfileMenu({
   active,
   profiles,
   hubSettings,
+  accountSettings,
 }: {
   active: ProfilePick | null;
   profiles: ProfilePick[];
   /** False for a games-only hub with one login, which has nothing to manage there. */
   hubSettings: boolean;
+  /** False for the hub login, which the owner manages from Hub settings. */
+  accountSettings: boolean;
 }) {
   const [anchor, setAnchor] = React.useState<null | HTMLElement>(null);
   const [, startTransition] = React.useTransition();
@@ -194,12 +197,14 @@ export default function ProfileMenu({
         <Divider />
 
         {/* Your own login, then the household's settings. */}
-        <MenuItem component={Link} href="/account" onClick={closeMenu}>
-          <ListItemIcon>
-            <ManageAccountsIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Your account…</ListItemText>
-        </MenuItem>
+        {accountSettings ? (
+          <MenuItem component={Link} href="/account" onClick={closeMenu}>
+            <ListItemIcon>
+              <ManageAccountsIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Your account…</ListItemText>
+          </MenuItem>
+        ) : null}
         {hubSettings ? (
           <MenuItem component={Link} href="/group" onClick={closeMenu}>
             <ListItemIcon>
