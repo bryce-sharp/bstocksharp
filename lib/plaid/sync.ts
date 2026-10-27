@@ -14,6 +14,7 @@ import {
 import { decryptToken } from "@/lib/plaid/crypto";
 import { applyPlaidItem, type ApplyStats } from "@/lib/plaid/apply";
 import { logEvent } from "@/lib/events";
+import { type BookRef } from "@/lib/books";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SYNC — one bank login's changes since the saved cursor, staged into
@@ -277,12 +278,12 @@ const STALE_MS = 3 * 60 * 60 * 1000;
 const RETRY_MS = 30 * 60 * 1000;
 
 /**
- * This household's banks worth syncing because someone is looking: data older
+ * This book's banks worth syncing because someone is looking: data older
  * than 3 hours, no sync running, and no try in the last half hour (so a broken
  * connection is not retried on every page view). A missed webhook then costs
  * at most one page load, not a day.
  */
-export async function staleBanks(groupId: number): Promise<number[]> {
+export async function staleBanks(book: BookRef): Promise<number[]> {
   if (!plaidConfigured()) return [];
   const now = Date.now();
   const items = await db
@@ -293,7 +294,7 @@ export async function staleBanks(groupId: number): Promise<number[]> {
       lockedUntil: plaidItems.syncLockedUntil,
     })
     .from(plaidItems)
-    .where(and(eq(plaidItems.groupId, groupId), eq(plaidItems.environment, plaidEnv())));
+    .where(and(eq(plaidItems.bookId, book.id), eq(plaidItems.environment, plaidEnv())));
   const candidates = items.filter(
     (i) =>
       SYNCABLE.has(i.status) &&
@@ -306,7 +307,7 @@ export async function staleBanks(groupId: number): Promise<number[]> {
     .from(eventLog)
     .where(
       and(
-        eq(eventLog.groupId, groupId),
+        eq(eventLog.groupId, book.groupId),
         eq(eventLog.source, "plaid"),
         eq(eventLog.kind, "sync"),
         gte(eventLog.createdAt, new Date(now - RETRY_MS)),

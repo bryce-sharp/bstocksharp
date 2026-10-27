@@ -44,6 +44,7 @@ import BudgetInsights from "@/components/finance/BudgetInsights";
 import TransactionsTable from "@/components/finance/TransactionsTable";
 import FundsPanel from "@/components/finance/FundsPanel";
 import RefreshAfterSync from "@/components/finance/RefreshAfterSync";
+import { requireBook } from "@/lib/books";
 
 export const metadata = { title: "Budget" };
 
@@ -68,7 +69,7 @@ export default async function BudgetPage({
 
   // The All-money lens reads the shared cash-flow definition for this month.
   const monthRange = { from: month, to: lastDayOfMonth(month) };
-  const groupId = session.groupId;
+  const book = await requireBook();
   const [
     [view, txns, accounts, monthsWithData, bills, groupProfiles, recentMonths, trend, suggest, categories, editor],
     [flow, allTrend, tagSpend, lanes, sources, incomeCategories, bankAlerts, stale, priceSuggestions],
@@ -87,15 +88,15 @@ export default async function BudgetPage({
       isEditor(),
     ]),
     Promise.all([
-      summarizeCashFlow(groupId, monthRange),
+      summarizeCashFlow(book, monthRange),
       getSpendTrend(month, "all"),
-      spendByTag(groupId, monthRange),
-      cashFlowByCategory(groupId, monthRange),
-      moneyInBySource(groupId, monthRange),
+      spendByTag(book, monthRange),
+      cashFlowByCategory(book, monthRange),
+      moneyInBySource(book, monthRange),
       listIncomeCategories(),
       plaidConfigured() ? listBankAlerts() : Promise.resolve([]),
-      staleBanks(groupId),
-      month === currentMonth ? listPriceSuggestions(groupId, currentMonth) : Promise.resolve([]),
+      staleBanks(book),
+      month === currentMonth ? listPriceSuggestions(book, currentMonth) : Promise.resolve([]),
     ]),
   ]);
   // Bank data a few hours old (a webhook that never came): sync once this page

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireEditor } from "@/lib/auth";
-import { requireGroupId } from "@/lib/session";
+import { requireBook } from "@/lib/books";
 import {
   getTransactionDetail,
   searchTransactions,
@@ -11,7 +11,7 @@ import {
   type TxnPage,
 } from "@/lib/queries/finance-transactions";
 import {
-  setSpendCategoryForGroup,
+  setSpendCategoryForBook,
   type SetCategoryResult,
 } from "@/lib/queries/finance-categories";
 import { requireApp } from "@/lib/hub-apps";
@@ -30,7 +30,7 @@ export async function loadMoreTransactionsAction(
 /** One transaction's details for its popup: where it came from, when, and the bank's wording. */
 export async function getTransactionDetailAction(id: number): Promise<TxnDetail | null> {
   await requireApp("finance");
-  return getTransactionDetail(await requireGroupId(), id);
+  return getTransactionDetail(await requireBook(), id);
 }
 
 /**
@@ -46,9 +46,9 @@ export async function setSpendCategoryAction(
 ): Promise<SetCategoryResult> {
   await requireApp("finance");
   await requireEditor();
-  const groupId = await requireGroupId();
+  const book = await requireBook();
   const clean = category && category.trim() ? category.trim().slice(0, 40) : null;
-  const result = await setSpendCategoryForGroup(groupId, txnId, clean, applyToMerchant);
+  const result = await setSpendCategoryForBook(book, txnId, clean, applyToMerchant);
   revalidatePath("/finance");
   revalidatePath("/finance/transactions");
   return result;

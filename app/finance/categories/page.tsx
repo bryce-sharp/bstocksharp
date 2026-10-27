@@ -7,8 +7,9 @@ import Button from "@mui/material/Button";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { getSession } from "@/lib/session";
 import { isEditor } from "@/lib/auth";
-import { getMerchantGroupsForGroup } from "@/lib/queries/finance-categories";
+import { getMerchantGroupsForBook } from "@/lib/queries/finance-categories";
 import MerchantGroups from "@/components/finance/MerchantGroups";
+import { requireBook } from "@/lib/books";
 
 export const metadata = { title: "Categories" };
 
@@ -26,7 +27,7 @@ export default async function CategoriesPage({
 
   const flow = (await searchParams).flow === "in" ? "in" : "out";
   const [view, editor] = await Promise.all([
-    getMerchantGroupsForGroup(session.groupId, flow),
+    getMerchantGroupsForBook(await requireBook(), flow),
     isEditor(),
   ]);
 

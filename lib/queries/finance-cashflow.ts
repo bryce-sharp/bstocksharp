@@ -1,6 +1,7 @@
 import "server-only";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { type BookRef } from "@/lib/books";
 import { transactions as t } from "@/lib/db/schema";
 import { txnWhere, type TxnFilters } from "@/lib/queries/finance-transactions";
 import { IN_CATEGORIES, REIMBURSEMENT, SPEND_CATEGORIES } from "@/lib/finance/cashflow";
@@ -38,11 +39,11 @@ export type CategoryFlow = CashFlow & { category: string };
 export type SourceIn = { source: string | null; category: string; amount: number };
 
 /** Row count plus money in/out for exactly the rows these filters match. */
-export async function summarizeCashFlow(groupId: number, f: TxnFilters): Promise<CashFlowSummary> {
+export async function summarizeCashFlow(book: BookRef, f: TxnFilters): Promise<CashFlowSummary> {
   const [row] = await db
     .select({ count: sql<number>`count(*)::int`, moneyIn: moneyIn(), moneyOut: moneyOut() })
     .from(t)
-    .where(txnWhere(groupId, f));
+    .where(txnWhere(book, f));
   return {
     count: Number(row?.count ?? 0),
     moneyIn: dollars(row?.moneyIn),
@@ -69,12 +70,12 @@ function monthsBetween(first: string, last: string): string[] {
 }
 
 /** Money in/out per month, every month in the span present (quiet months = 0). */
-export async function cashFlowByMonth(groupId: number, f: TxnFilters): Promise<MonthFlow[]> {
+export async function cashFlowByMonth(book: BookRef, f: TxnFilters): Promise<MonthFlow[]> {
   const month = sql<string>`to_char(${t.postedOn}, 'YYYY-MM')`;
   const rows = await db
     .select({ month, moneyIn: moneyIn(), moneyOut: moneyOut() })
     .from(t)
-    .where(txnWhere(groupId, f))
+    .where(txnWhere(book, f))
     .groupBy(month)
     .orderBy(asc(month));
   if (rows.length === 0) return [];
@@ -89,11 +90,11 @@ export async function cashFlowByMonth(groupId: number, f: TxnFilters): Promise<M
 }
 
 /** Money out per spend tag (null = untagged), biggest first; refund-only tags drop. */
-export async function spendByTag(groupId: number, f: TxnFilters): Promise<TagSpend[]> {
+export async function spendByTag(book: BookRef, f: TxnFilters): Promise<TagSpend[]> {
   const rows = await db
     .select({ tag: t.spendCategory, amount: moneyOut() })
     .from(t)
-    .where(txnWhere(groupId, f))
+    .where(txnWhere(book, f))
     .groupBy(t.spendCategory)
     .orderBy(desc(moneyOut()));
   return rows
@@ -102,11 +103,11 @@ export async function spendByTag(groupId: number, f: TxnFilters): Promise<TagSpe
 }
 
 /** Money in per income tag (null = untagged), biggest first. */
-export async function incomeByTag(groupId: number, f: TxnFilters): Promise<TagSpend[]> {
+export async function incomeByTag(book: BookRef, f: TxnFilters): Promise<TagSpend[]> {
   const rows = await db
     .select({ tag: t.spendCategory, amount: moneyIn() })
     .from(t)
-    .where(txnWhere(groupId, f))
+    .where(txnWhere(book, f))
     .groupBy(t.spendCategory)
     .orderBy(desc(moneyIn()));
   return rows
@@ -115,11 +116,11 @@ export async function incomeByTag(groupId: number, f: TxnFilters): Promise<TagSp
 }
 
 /** Money in/out per engine category (the "by type" lanes). */
-export async function cashFlowByCategory(groupId: number, f: TxnFilters): Promise<CategoryFlow[]> {
+export async function cashFlowByCategory(book: BookRef, f: TxnFilters): Promise<CategoryFlow[]> {
   const rows = await db
     .select({ category: t.category, moneyIn: moneyIn(), moneyOut: moneyOut() })
     .from(t)
-    .where(txnWhere(groupId, f))
+    .where(txnWhere(book, f))
     .groupBy(t.category);
   return rows.map((r) => ({
     category: r.category,
@@ -130,14 +131,14 @@ export async function cashFlowByCategory(groupId: number, f: TxnFilters): Promis
 
 /** Money in/out per month (YYYY-MM-01) per engine category — a range's lanes in one query. */
 export async function cashFlowByMonthAndCategory(
-  groupId: number,
+  book: BookRef,
   f: TxnFilters,
 ): Promise<(CategoryFlow & { month: string })[]> {
   const month = sql<string>`to_char(${t.postedOn}, 'YYYY-MM')`;
   const rows = await db
     .select({ month, category: t.category, moneyIn: moneyIn(), moneyOut: moneyOut() })
     .from(t)
-    .where(txnWhere(groupId, f))
+    .where(txnWhere(book, f))
     .groupBy(month, t.category);
   return rows.map((r) => ({
     month: `${r.month}-01`,
@@ -148,13 +149,13 @@ export async function cashFlowByMonthAndCategory(
 }
 
 /** Money in by source (the merchant field on income rows). */
-export async function moneyInBySource(groupId: number, f: TxnFilters): Promise<SourceIn[]> {
+export async function moneyInBySource(book: BookRef, f: TxnFilters): Promise<SourceIn[]> {
   const amount = sql<string>`coalesce(sum(${t.amount}), 0)`;
   const rows = await db
     .select({ source: t.merchant, category: t.category, amount })
     .from(t)
     .where(
-      and(txnWhere(groupId, f), eq(t.needsReview, false), inArray(t.category, [...IN_CATEGORIES])),
+      and(txnWhere(book, f), eq(t.needsReview, false), inArray(t.category, [...IN_CATEGORIES])),
     )
     .groupBy(t.merchant, t.category)
     .orderBy(desc(amount));
@@ -165,14 +166,14 @@ export async function moneyInBySource(groupId: number, f: TxnFilters): Promise<S
 
 /** Money out per posted day (for the cumulative "so far" curve). */
 export async function dailyMoneyOut(
-  groupId: number,
+  book: BookRef,
   from: string,
   to: string,
 ): Promise<{ postedOn: string; amount: number }[]> {
   const rows = await db
     .select({ postedOn: t.postedOn, amount: moneyOut() })
     .from(t)
-    .where(txnWhere(groupId, { from, to }))
+    .where(txnWhere(book, { from, to }))
     .groupBy(t.postedOn);
   return rows.map((r) => ({ postedOn: r.postedOn, amount: dollars(r.amount) }));
 }

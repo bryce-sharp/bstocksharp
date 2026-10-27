@@ -20,8 +20,10 @@ import {
   jsonb,
   index,
   uniqueIndex,
+  primaryKey,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 const createdAt = () =>
   timestamp("created_at", { withTimezone: true }).defaultNow().notNull();
@@ -617,6 +619,44 @@ export const weightPlans = pgTable(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
+// FINANCE — Money books (docs/finance/money-books.md). A book is one set of money
+// tracked together (Family, a business, a kid's allowance). Every finance row
+// belongs to one; its members are the only people who can see it.
+// ─────────────────────────────────────────────────────────────────────────────
+export const books = pgTable(
+  "books",
+  {
+    id: serial("id").primaryKey(),
+    groupId: integer("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 80 }).notNull(),
+    // The hub's first book, made with every active person in it; one per hub.
+    starter: boolean("starter").notNull().default(false),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("idx_books_group").on(t.groupId),
+    uniqueIndex("uniq_books_starter").on(t.groupId).where(sql`${t.starter}`),
+  ],
+);
+
+export const bookMembers = pgTable(
+  "book_members",
+  {
+    bookId: integer("book_id")
+      .notNull()
+      .references(() => books.id, { onDelete: "cascade" }),
+    profileId: integer("profile_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.bookId, t.profileId] })],
+);
+
+export type Book = typeof books.$inferSelect;
+
+// ─────────────────────────────────────────────────────────────────────────────
 // FINANCE — Net worth (F1 of the finance roadmap; ATLAS + budget follow).
 // Accounts are the group's money places; snapshots are the first-of-the-month
 // ritual (log every balance once a month). Everything derived — totals, MoM,
@@ -630,6 +670,9 @@ export const financialAccounts = pgTable(
     groupId: integer("group_id")
       .notNull()
       .references(() => groups.id, { onDelete: "cascade" }),
+    bookId: integer("book_id")
+      .notNull()
+      .references(() => books.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 120 }).notNull(),
     // Display grouping + chart stacking:
     // checking | savings | brokerage | retirement | crypto | hsa | credit_card |
@@ -657,7 +700,7 @@ export const financialAccounts = pgTable(
     notes: text("notes"),
     createdAt: createdAt(),
   },
-  (t) => [index("idx_fin_accounts_group").on(t.groupId)],
+  (t) => [index("idx_fin_accounts_group").on(t.groupId), index("idx_fin_accounts_book").on(t.bookId)],
 );
 
 // One row per account per month; re-logging a month UPDATES it (same unique-
@@ -686,6 +729,9 @@ export const savingsGoals = pgTable("savings_goals", {
   groupId: integer("group_id")
     .notNull()
     .references(() => groups.id, { onDelete: "cascade" }),
+  bookId: integer("book_id")
+    .notNull()
+    .references(() => books.id, { onDelete: "cascade" }),
   monthlyGoal: numeric("monthly_goal", { precision: 10, scale: 2 }).notNull(),
   startMonth: date("start_month").notNull(),
   endMonth: date("end_month"),
@@ -719,6 +765,10 @@ export const compensationPlans = pgTable(
     profileId: integer("profile_id")
       .notNull()
       .references(() => profiles.id, { onDelete: "cascade" }),
+    // The book this pay lands in (one book per plan).
+    bookId: integer("book_id")
+      .notNull()
+      .references(() => books.id, { onDelete: "cascade" }),
     // semimonthly (24/yr) | biweekly (26/yr) | monthly (12/yr) — paychecks/year derived.
     payFrequency: varchar("pay_frequency", { length: 20 })
       .notNull()
@@ -746,6 +796,10 @@ export const incomeDeductions = pgTable(
     profileId: integer("profile_id")
       .notNull()
       .references(() => profiles.id, { onDelete: "cascade" }),
+    // The book whose pay this comes out of.
+    bookId: integer("book_id")
+      .notNull()
+      .references(() => books.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 120 }).notNull(),
     // insurance | retirement | health | tax | employer_benefit — display grouping.
     type: varchar("type", { length: 30 }),
@@ -782,6 +836,9 @@ export const recurringExpenses = pgTable(
     groupId: integer("group_id")
       .notNull()
       .references(() => groups.id, { onDelete: "cascade" }),
+    bookId: integer("book_id")
+      .notNull()
+      .references(() => books.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 120 }).notNull(),
     // Freeform label (Subscriptions, Utilities, Housing…) — suggested via
     // autocomplete, never a locked enum, so each household grows its own set.
@@ -815,7 +872,10 @@ export const recurringExpenses = pgTable(
     ignoredPrice: numeric("ignored_price", { precision: 10, scale: 2 }),
     createdAt: createdAt(),
   },
-  (t) => [index("idx_recurring_group").on(t.groupId, t.startDate)],
+  (t) => [
+    index("idx_recurring_group").on(t.groupId, t.startDate),
+    index("idx_recurring_book").on(t.bookId, t.startDate),
+  ],
 );
 
 export type CompensationPlan = typeof compensationPlans.$inferSelect;
@@ -848,6 +908,9 @@ export const transactions = pgTable(
     groupId: integer("group_id")
       .notNull()
       .references(() => groups.id, { onDelete: "cascade" }),
+    bookId: integer("book_id")
+      .notNull()
+      .references(() => books.id, { onDelete: "cascade" }),
     // Which account the charge hit (per-card analytics; per-bank feeds).
     accountId: integer("account_id").references(() => financialAccounts.id, {
       onDelete: "set null",
@@ -894,6 +957,7 @@ export const transactions = pgTable(
   },
   (t) => [
     index("idx_txn_group_posted").on(t.groupId, t.postedOn),
+    index("idx_txn_book_posted").on(t.bookId, t.postedOn),
     index("idx_txn_recurring").on(t.recurringExpenseId),
   ],
 );
@@ -910,6 +974,9 @@ export const merchantCategories = pgTable(
     groupId: integer("group_id")
       .notNull()
       .references(() => groups.id, { onDelete: "cascade" }),
+    bookId: integer("book_id")
+      .notNull()
+      .references(() => books.id, { onDelete: "cascade" }),
     pattern: varchar("pattern", { length: 100 }).notNull(),
     category: varchar("category", { length: 40 }).notNull(),
     // The named merchant GROUP this pattern belongs to (F4d) — several patterns
@@ -923,7 +990,7 @@ export const merchantCategories = pgTable(
     flow: varchar("flow", { length: 3 }).notNull().default("out"),
     createdAt: createdAt(),
   },
-  (t) => [index("idx_merchcat_group").on(t.groupId)],
+  (t) => [index("idx_merchcat_group").on(t.groupId), index("idx_merchcat_book").on(t.bookId)],
 );
 
 // One-time pools (Lauren's fund, Bryce's fund, a shared vacation pot…) — a txn
@@ -935,6 +1002,9 @@ export const funds = pgTable("funds", {
   groupId: integer("group_id")
     .notNull()
     .references(() => groups.id, { onDelete: "cascade" }),
+  bookId: integer("book_id")
+    .notNull()
+    .references(() => books.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 120 }).notNull(),
   ownerProfileId: integer("owner_profile_id").references(() => profiles.id, {
     onDelete: "set null",
@@ -960,6 +1030,9 @@ export const apiTokens = pgTable("api_tokens", {
   groupId: integer("group_id")
     .notNull()
     .references(() => groups.id, { onDelete: "cascade" }),
+  bookId: integer("book_id")
+    .notNull()
+    .references(() => books.id, { onDelete: "cascade" }),
   tokenHash: varchar("token_hash", { length: 64 }).notNull().unique(),
   label: varchar("label", { length: 120 }).notNull(),
   scope: varchar("scope", { length: 20 }).notNull(), // ingest | widget
@@ -997,6 +1070,9 @@ export const plaidItems = pgTable(
     groupId: integer("group_id")
       .notNull()
       .references(() => groups.id, { onDelete: "cascade" }),
+    bookId: integer("book_id")
+      .notNull()
+      .references(() => books.id, { onDelete: "cascade" }),
     itemId: varchar("item_id", { length: 100 }).notNull().unique(),
     // The Plaid environment the login was made in: sandbox | production. Dev is
     // reset from live and so holds live's real logins; each deployment syncs
@@ -1022,7 +1098,7 @@ export const plaidItems = pgTable(
     syncLockedUntil: timestamp("sync_locked_until", { withTimezone: true }),
     createdAt: createdAt(),
   },
-  (t) => [index("idx_plaid_items_group").on(t.groupId)],
+  (t) => [index("idx_plaid_items_group").on(t.groupId), index("idx_plaid_items_book").on(t.bookId)],
 );
 
 export const plaidAccounts = pgTable(

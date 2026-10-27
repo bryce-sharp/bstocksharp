@@ -37,7 +37,9 @@ import {
   recurringExpenses,
   compensationPlans,
   incomeDeductions,
+  books,
 } from "@/lib/db/schema";
+import { ensureStarterBook } from "@/lib/books";
 
 // ── Date helpers (all ISO YYYY-MM-DD, anchored at noon UTC) ───────────────────
 function daysAgo(n: number): string {
@@ -82,6 +84,7 @@ export async function reseedDemoGroup(groupId: number): Promise<void> {
   // ATLAS: comp plans + deductions cascade with profiles above; the household
   // expense registry carries groupId directly, so wipe it explicitly.
   await db.delete(recurringExpenses).where(eq(recurringExpenses.groupId, groupId));
+  await db.delete(books).where(eq(books.groupId, groupId)); // cascades every book's rows
 
   // ── People ───────────────────────────────────────────────────────────────────
   const [alex, sam] = await db
@@ -91,6 +94,7 @@ export async function reseedDemoGroup(groupId: number): Promise<void> {
       { groupId, name: "Sam", color: "#7d6bd4", sortOrder: 1 },
     ])
     .returning({ id: profiles.id });
+  const book = await ensureStarterBook(groupId); // Alex and Sam are its members
 
   // ── Garage: the project Miata + the daily ───────────────────────────────────
   const [miata, daily] = await db
@@ -418,12 +422,14 @@ export async function reseedDemoGroup(groupId: number): Promise<void> {
     .values([
       ...accountDefs.map((a, i) => ({
         groupId,
+        bookId: book.id,
         name: a.name,
         kind: a.kind,
         sortOrder: i,
       })),
       {
         groupId,
+        bookId: book.id,
         name: "Rewards Card",
         kind: "credit_card",
         trackBalance: false,
@@ -454,6 +460,7 @@ export async function reseedDemoGroup(groupId: number): Promise<void> {
 
   await db.insert(savingsGoals).values({
     groupId,
+    bookId: book.id,
     monthlyGoal: "1000.00",
     startMonth: monthsAgo(NW_MONTHS - 1),
   });
@@ -467,6 +474,7 @@ export async function reseedDemoGroup(groupId: number): Promise<void> {
 
   await db.insert(compensationPlans).values({
     profileId: alex.id,
+    bookId: book.id,
     payFrequency: "semimonthly",
     grossPerPaycheck: "4200.00",
     baseSalary: "100800.00",
@@ -476,26 +484,26 @@ export async function reseedDemoGroup(groupId: number): Promise<void> {
   });
 
   await db.insert(incomeDeductions).values([
-    { profileId: alex.id, name: "Federal Tax", type: "tax", source: "payroll", amountPerPaycheck: "520.00", startDate: finStart },
-    { profileId: alex.id, name: "Social Security", type: "tax", source: "payroll", percentOfGross: "6.20", startDate: finStart },
-    { profileId: alex.id, name: "Medicare", type: "tax", source: "payroll", percentOfGross: "1.45", startDate: finStart },
-    { profileId: alex.id, name: "Medical", type: "insurance", source: "payroll", amountPerPaycheck: "180.00", startDate: finStart },
-    { profileId: alex.id, name: "401(k)", type: "retirement", source: "payroll", percentOfGross: "8.00", depositAccountId: idByName["401(k)"], startDate: finStart },
-    { profileId: alex.id, name: "HSA", type: "health", source: "payroll", amountPerPaycheck: "75.00", startDate: finStart },
-    { profileId: alex.id, name: "401(k) match", type: "retirement", source: "employer", percentOfGross: "4.00", depositAccountId: idByName["401(k)"], startDate: finStart },
-    { profileId: alex.id, name: "HSA contribution", type: "health", source: "employer", amountPerPaycheck: "40.00", startDate: finStart },
+    { profileId: alex.id, bookId: book.id, name: "Federal Tax", type: "tax", source: "payroll", amountPerPaycheck: "520.00", startDate: finStart },
+    { profileId: alex.id, bookId: book.id, name: "Social Security", type: "tax", source: "payroll", percentOfGross: "6.20", startDate: finStart },
+    { profileId: alex.id, bookId: book.id, name: "Medicare", type: "tax", source: "payroll", percentOfGross: "1.45", startDate: finStart },
+    { profileId: alex.id, bookId: book.id, name: "Medical", type: "insurance", source: "payroll", amountPerPaycheck: "180.00", startDate: finStart },
+    { profileId: alex.id, bookId: book.id, name: "401(k)", type: "retirement", source: "payroll", percentOfGross: "8.00", depositAccountId: idByName["401(k)"], startDate: finStart },
+    { profileId: alex.id, bookId: book.id, name: "HSA", type: "health", source: "payroll", amountPerPaycheck: "75.00", startDate: finStart },
+    { profileId: alex.id, bookId: book.id, name: "401(k) match", type: "retirement", source: "employer", percentOfGross: "4.00", depositAccountId: idByName["401(k)"], startDate: finStart },
+    { profileId: alex.id, bookId: book.id, name: "HSA contribution", type: "health", source: "employer", amountPerPaycheck: "40.00", startDate: finStart },
   ]);
 
   const checkingId = idByName["Everyday Checking"];
   const cardId = idByName["Rewards Card"];
   await db.insert(recurringExpenses).values([
-    { groupId, name: "Rent", category: "Housing", necessity: "essential", amount: "1850.00", paymentsPerYear: 12, paidFromAccountId: checkingId, dueDay: "1st", startDate: finStart },
-    { groupId, name: "Electric", category: "Utilities", necessity: "essential", amount: "140.00", paymentsPerYear: 12, paidFromAccountId: cardId, dueDay: "20th", isEstimate: true, merchantPatterns: ["POWER", "ELECTRIC"], startDate: finStart },
-    { groupId, name: "Internet", category: "Utilities", necessity: "essential", amount: "75.00", paymentsPerYear: 12, paidFromAccountId: cardId, dueDay: "13th", merchantPatterns: ["FIBERNET"], startDate: finStart },
-    { groupId, name: "Netflix", category: "Subscriptions", necessity: "lifestyle", amount: "19.99", paymentsPerYear: 12, paidFromAccountId: cardId, dueDay: "15th", merchantPatterns: ["NETFLIX"], startDate: finStart },
-    { groupId, name: "Spotify", category: "Subscriptions", necessity: "lifestyle", amount: "11.99", paymentsPerYear: 12, paidFromAccountId: cardId, dueDay: "8th", merchantPatterns: ["SPOTIFY"], startDate: finStart },
-    { groupId, name: "Car Insurance", category: "Car", necessity: "essential", amount: "1180.00", paymentsPerYear: 2, dueMonths: [3, 9], dueDay: "Mar / Sep", paidFromAccountId: cardId, startDate: finStart },
-    { groupId, name: "Amazon Prime", category: "Subscriptions", necessity: "lifestyle", amount: "139.00", paymentsPerYear: 1, dueMonths: [2], dueDay: "Feb", paidFromAccountId: cardId, startDate: finStart },
-    { groupId, name: "Giving", category: "Financial Commitment", necessity: "commitment", amount: "400.00", paymentsPerYear: 12, paidFromAccountId: checkingId, dueDay: "1st", startDate: finStart },
+    { groupId, bookId: book.id, name: "Rent", category: "Housing", necessity: "essential", amount: "1850.00", paymentsPerYear: 12, paidFromAccountId: checkingId, dueDay: "1st", startDate: finStart },
+    { groupId, bookId: book.id, name: "Electric", category: "Utilities", necessity: "essential", amount: "140.00", paymentsPerYear: 12, paidFromAccountId: cardId, dueDay: "20th", isEstimate: true, merchantPatterns: ["POWER", "ELECTRIC"], startDate: finStart },
+    { groupId, bookId: book.id, name: "Internet", category: "Utilities", necessity: "essential", amount: "75.00", paymentsPerYear: 12, paidFromAccountId: cardId, dueDay: "13th", merchantPatterns: ["FIBERNET"], startDate: finStart },
+    { groupId, bookId: book.id, name: "Netflix", category: "Subscriptions", necessity: "lifestyle", amount: "19.99", paymentsPerYear: 12, paidFromAccountId: cardId, dueDay: "15th", merchantPatterns: ["NETFLIX"], startDate: finStart },
+    { groupId, bookId: book.id, name: "Spotify", category: "Subscriptions", necessity: "lifestyle", amount: "11.99", paymentsPerYear: 12, paidFromAccountId: cardId, dueDay: "8th", merchantPatterns: ["SPOTIFY"], startDate: finStart },
+    { groupId, bookId: book.id, name: "Car Insurance", category: "Car", necessity: "essential", amount: "1180.00", paymentsPerYear: 2, dueMonths: [3, 9], dueDay: "Mar / Sep", paidFromAccountId: cardId, startDate: finStart },
+    { groupId, bookId: book.id, name: "Amazon Prime", category: "Subscriptions", necessity: "lifestyle", amount: "139.00", paymentsPerYear: 1, dueMonths: [2], dueDay: "Feb", paidFromAccountId: cardId, startDate: finStart },
+    { groupId, bookId: book.id, name: "Giving", category: "Financial Commitment", necessity: "commitment", amount: "400.00", paymentsPerYear: 12, paidFromAccountId: checkingId, dueDay: "1st", startDate: finStart },
   ]);
 }

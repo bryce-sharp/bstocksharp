@@ -2,7 +2,7 @@ import "server-only";
 import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { merchantCategories, transactions } from "@/lib/db/schema";
-import { requireGroupId } from "@/lib/session";
+import { requireBook, type BookRef } from "@/lib/books";
 import { longestMatchingRule, type SpendRule } from "@/lib/finance/categorize";
 import {
   IN_CATEGORIES,
@@ -39,7 +39,7 @@ export const STARTER_INCOME_CATEGORIES = [
 const FLOW_CATEGORIES: Record<Flow, readonly string[]> = { out: OUT_CATEGORIES, in: IN_CATEGORIES };
 
 /** A group's merchant → tag rules (both flows), for ingest + the backfill. */
-export async function spendRulesFor(groupId: number): Promise<SpendRule[]> {
+export async function spendRulesFor(book: BookRef): Promise<SpendRule[]> {
   const rows = await db
     .select({
       pattern: merchantCategories.pattern,
@@ -47,19 +47,19 @@ export async function spendRulesFor(groupId: number): Promise<SpendRule[]> {
       flow: merchantCategories.flow,
     })
     .from(merchantCategories)
-    .where(eq(merchantCategories.groupId, groupId));
+    .where(eq(merchantCategories.bookId, book.id));
   return rows.map((r) => ({ ...r, flow: r.flow === "in" ? "in" : "out" }));
 }
 
 /** Tags in use for one flow — on its transactions and its rules — plus starters. */
-async function tagsForFlow(groupId: number, flow: Flow): Promise<string[]> {
+async function tagsForFlow(book: BookRef, flow: Flow): Promise<string[]> {
   const [used, ruled] = await Promise.all([
     db
       .selectDistinct({ c: transactions.spendCategory })
       .from(transactions)
       .where(
         and(
-          eq(transactions.groupId, groupId),
+          eq(transactions.bookId, book.id),
           isNotNull(transactions.spendCategory),
           inArray(transactions.category, [...FLOW_CATEGORIES[flow]]),
         ),
@@ -67,7 +67,7 @@ async function tagsForFlow(groupId: number, flow: Flow): Promise<string[]> {
     db
       .selectDistinct({ c: merchantCategories.category })
       .from(merchantCategories)
-      .where(and(eq(merchantCategories.groupId, groupId), eq(merchantCategories.flow, flow))),
+      .where(and(eq(merchantCategories.bookId, book.id), eq(merchantCategories.flow, flow))),
   ]);
   const set = new Set<string>(flow === "in" ? STARTER_INCOME_CATEGORIES : STARTER_SPEND_CATEGORIES);
   for (const r of [...used, ...ruled]) if (r.c) set.add(r.c);
@@ -75,21 +75,21 @@ async function tagsForFlow(groupId: number, flow: Flow): Promise<string[]> {
 }
 
 /** Spending tags (money-out rows), sorted. */
-export async function listSpendCategoriesForGroup(groupId: number): Promise<string[]> {
-  return tagsForFlow(groupId, "out");
+export async function listSpendCategoriesForBook(book: BookRef): Promise<string[]> {
+  return tagsForFlow(book, "out");
 }
 
 /** Income tags (money-in rows), sorted. */
-export async function listIncomeCategoriesForGroup(groupId: number): Promise<string[]> {
-  return tagsForFlow(groupId, "in");
+export async function listIncomeCategoriesForBook(book: BookRef): Promise<string[]> {
+  return tagsForFlow(book, "in");
 }
 
 export async function listSpendCategories(): Promise<string[]> {
-  return listSpendCategoriesForGroup(await requireGroupId());
+  return listSpendCategoriesForBook(await requireBook());
 }
 
 export async function listIncomeCategories(): Promise<string[]> {
-  return listIncomeCategoriesForGroup(await requireGroupId());
+  return listIncomeCategoriesForBook(await requireBook());
 }
 
 export type SetCategoryResult = { merchant: string | null; affected: number };
@@ -103,8 +103,8 @@ export type SetCategoryResult = { merchant: string | null; affected: number };
  * lets it override any broader group rule (e.g. `WM SUPERCENTER #4279` beats
  * `WALMART`). Excluded rows are never tagged.
  */
-export async function setSpendCategoryForGroup(
-  groupId: number,
+export async function setSpendCategoryForBook(
+  book: BookRef,
   txnId: number,
   category: string | null,
   applyToMerchant: boolean,
@@ -112,7 +112,7 @@ export async function setSpendCategoryForGroup(
   const [txn] = await db
     .select({ merchant: transactions.merchant, category: transactions.category })
     .from(transactions)
-    .where(and(eq(transactions.id, txnId), eq(transactions.groupId, groupId)))
+    .where(and(eq(transactions.id, txnId), eq(transactions.bookId, book.id)))
     .limit(1);
   if (!txn) return { merchant: null, affected: 0 };
   const flow = flowOf(txn.category);
@@ -123,7 +123,7 @@ export async function setSpendCategoryForGroup(
   await db
     .update(transactions)
     .set({ spendCategory: category })
-    .where(and(eq(transactions.id, txnId), eq(transactions.groupId, groupId)));
+    .where(and(eq(transactions.id, txnId), eq(transactions.bookId, book.id)));
 
   if (applyToMerchant && txn.merchant && category) {
     const [rule] = await db
@@ -131,7 +131,7 @@ export async function setSpendCategoryForGroup(
       .from(merchantCategories)
       .where(
         and(
-          eq(merchantCategories.groupId, groupId),
+          eq(merchantCategories.bookId, book.id),
           eq(merchantCategories.pattern, txn.merchant),
           eq(merchantCategories.flow, flow),
         ),
@@ -142,7 +142,8 @@ export async function setSpendCategoryForGroup(
     } else {
       // New inline rule starts as its own group (name = the merchant).
       await db.insert(merchantCategories).values({
-        groupId,
+        groupId: book.groupId,
+        bookId: book.id,
         pattern: txn.merchant,
         category,
         groupName: txn.merchant,
@@ -151,7 +152,7 @@ export async function setSpendCategoryForGroup(
     }
 
     const scope = and(
-      eq(transactions.groupId, groupId),
+      eq(transactions.bookId, book.id),
       eq(transactions.merchant, txn.merchant),
       inArray(transactions.category, [...FLOW_CATEGORIES[flow]]),
     );
@@ -196,7 +197,7 @@ function groupMatch(name: string, flow: Flow) {
   );
 }
 
-async function allRules(groupId: number, flow: Flow) {
+async function allRules(book: BookRef, flow: Flow) {
   const rows = await db
     .select({
       id: merchantCategories.id,
@@ -205,7 +206,7 @@ async function allRules(groupId: number, flow: Flow) {
       groupName: merchantCategories.groupName,
     })
     .from(merchantCategories)
-    .where(and(eq(merchantCategories.groupId, groupId), eq(merchantCategories.flow, flow)));
+    .where(and(eq(merchantCategories.bookId, book.id), eq(merchantCategories.flow, flow)));
   return rows.map((r) => ({ ...r, groupName: r.groupName ?? r.pattern }));
 }
 
@@ -214,10 +215,10 @@ async function allRules(groupId: number, flow: Flow) {
 // over ALL current rules of the flow, and update the ones that changed. Scoped
 // so unrelated (incl. manual) tags are left alone; longest-match-aware so a
 // more-specific override still wins.
-async function sweepForPatterns(groupId: number, patterns: string[], flow: Flow): Promise<void> {
+async function sweepForPatterns(book: BookRef, patterns: string[], flow: Flow): Promise<void> {
   const lows = patterns.map((p) => p.toLowerCase()).filter(Boolean);
   if (!lows.length) return;
-  const rules = await allRules(groupId, flow);
+  const rules = await allRules(book, flow);
   const txns = await db
     .select({
       id: transactions.id,
@@ -227,7 +228,7 @@ async function sweepForPatterns(groupId: number, patterns: string[], flow: Flow)
     .from(transactions)
     .where(
       and(
-        eq(transactions.groupId, groupId),
+        eq(transactions.bookId, book.id),
         inArray(transactions.category, [...RULE_CATEGORIES[flow]]),
         isNotNull(transactions.merchant),
       ),
@@ -251,17 +252,17 @@ async function sweepForPatterns(groupId: number, patterns: string[], flow: Flow)
 }
 
 /** Groups that actually catch a merchant, biggest first, + the ungrouped tail. */
-export async function getMerchantGroupsForGroup(
-  groupId: number,
+export async function getMerchantGroupsForBook(
+  book: BookRef,
   flow: Flow = "out",
 ): Promise<MerchantGroupsView> {
-  const rules = await allRules(groupId, flow);
+  const rules = await allRules(book, flow);
   const merchants = await db
     .select({ merchant: transactions.merchant, n: sql<number>`count(*)::int` })
     .from(transactions)
     .where(
       and(
-        eq(transactions.groupId, groupId),
+        eq(transactions.bookId, book.id),
         inArray(transactions.category, [...RULE_CATEGORIES[flow]]),
         isNotNull(transactions.merchant),
       ),
@@ -299,12 +300,12 @@ export async function getMerchantGroupsForGroup(
   for (const g of groups) g.merchants.sort((a, b) => b.count - a.count);
   ungrouped.sort((a, b) => b.count - a.count);
 
-  return { flow, groups, ungrouped, categories: await tagsForFlow(groupId, flow) };
+  return { flow, groups, ungrouped, categories: await tagsForFlow(book, flow) };
 }
 
 /** Retag a whole group (all its names) and sweep its merchants. */
-export async function retagGroupForGroup(
-  groupId: number,
+export async function retagGroupForBook(
+  book: BookRef,
   flow: Flow,
   name: string,
   category: string,
@@ -314,18 +315,18 @@ export async function retagGroupForGroup(
   const rows = await db
     .select({ pattern: merchantCategories.pattern })
     .from(merchantCategories)
-    .where(and(eq(merchantCategories.groupId, groupId), groupMatch(name, flow)));
+    .where(and(eq(merchantCategories.bookId, book.id), groupMatch(name, flow)));
   await db
     .update(merchantCategories)
     .set({ category: cat })
-    .where(and(eq(merchantCategories.groupId, groupId), groupMatch(name, flow)));
-  await sweepForPatterns(groupId, rows.map((r) => r.pattern), flow);
+    .where(and(eq(merchantCategories.bookId, book.id), groupMatch(name, flow)));
+  await sweepForPatterns(book, rows.map((r) => r.pattern), flow);
 }
 
 /** Add/move a match-name into a group (also: adopt a merchant, or create a
  *  group when `name` is new). Upserts by pattern, then sweeps that pattern. */
-export async function upsertNameForGroup(
-  groupId: number,
+export async function upsertNameForBook(
+  book: BookRef,
   flow: Flow,
   name: string,
   category: string,
@@ -340,7 +341,7 @@ export async function upsertNameForGroup(
     .from(merchantCategories)
     .where(
       and(
-        eq(merchantCategories.groupId, groupId),
+        eq(merchantCategories.bookId, book.id),
         eq(merchantCategories.pattern, pat),
         eq(merchantCategories.flow, flow),
       ),
@@ -354,29 +355,29 @@ export async function upsertNameForGroup(
   } else {
     await db
       .insert(merchantCategories)
-      .values({ groupId, pattern: pat, category: cat, groupName: nm, flow });
+      .values({ groupId: book.groupId, bookId: book.id, pattern: pat, category: cat, groupName: nm, flow });
   }
-  await sweepForPatterns(groupId, [pat], flow);
+  await sweepForPatterns(book, [pat], flow);
 }
 
 /** Remove a single match-name; its merchants re-fall to whatever now matches. */
-export async function removeNameForGroup(groupId: number, ruleId: number): Promise<void> {
+export async function removeNameForBook(book: BookRef, ruleId: number): Promise<void> {
   const [rule] = await db
     .select({ pattern: merchantCategories.pattern, flow: merchantCategories.flow })
     .from(merchantCategories)
-    .where(and(eq(merchantCategories.id, ruleId), eq(merchantCategories.groupId, groupId)))
+    .where(and(eq(merchantCategories.id, ruleId), eq(merchantCategories.bookId, book.id)))
     .limit(1);
   if (!rule) return;
   await db
     .delete(merchantCategories)
-    .where(and(eq(merchantCategories.id, ruleId), eq(merchantCategories.groupId, groupId)));
-  await sweepForPatterns(groupId, [rule.pattern], rule.flow === "in" ? "in" : "out");
+    .where(and(eq(merchantCategories.id, ruleId), eq(merchantCategories.bookId, book.id)));
+  await sweepForPatterns(book, [rule.pattern], rule.flow === "in" ? "in" : "out");
 }
 
 /** Rename a group. If `newName` already exists, the two MERGE (moved names adopt
  *  the target's tag, which sweeps their merchants). */
-export async function renameGroupForGroup(
-  groupId: number,
+export async function renameGroupForBook(
+  book: BookRef,
   flow: Flow,
   oldName: string,
   newName: string,
@@ -386,27 +387,27 @@ export async function renameGroupForGroup(
   const [target] = await db
     .select({ category: merchantCategories.category })
     .from(merchantCategories)
-    .where(and(eq(merchantCategories.groupId, groupId), groupMatch(nm, flow)))
+    .where(and(eq(merchantCategories.bookId, book.id), groupMatch(nm, flow)))
     .limit(1);
   const rows = await db
     .select({ pattern: merchantCategories.pattern })
     .from(merchantCategories)
-    .where(and(eq(merchantCategories.groupId, groupId), groupMatch(oldName, flow)));
+    .where(and(eq(merchantCategories.bookId, book.id), groupMatch(oldName, flow)));
   await db
     .update(merchantCategories)
     .set(target ? { groupName: nm, category: target.category } : { groupName: nm })
-    .where(and(eq(merchantCategories.groupId, groupId), groupMatch(oldName, flow)));
-  if (target) await sweepForPatterns(groupId, rows.map((r) => r.pattern), flow);
+    .where(and(eq(merchantCategories.bookId, book.id), groupMatch(oldName, flow)));
+  if (target) await sweepForPatterns(book, rows.map((r) => r.pattern), flow);
 }
 
 /** Delete a whole group (all its names); its merchants re-fall or go ungrouped. */
-export async function deleteGroupForGroup(groupId: number, flow: Flow, name: string): Promise<void> {
+export async function deleteGroupForBook(book: BookRef, flow: Flow, name: string): Promise<void> {
   const rows = await db
     .select({ pattern: merchantCategories.pattern })
     .from(merchantCategories)
-    .where(and(eq(merchantCategories.groupId, groupId), groupMatch(name, flow)));
+    .where(and(eq(merchantCategories.bookId, book.id), groupMatch(name, flow)));
   await db
     .delete(merchantCategories)
-    .where(and(eq(merchantCategories.groupId, groupId), groupMatch(name, flow)));
-  await sweepForPatterns(groupId, rows.map((r) => r.pattern), flow);
+    .where(and(eq(merchantCategories.bookId, book.id), groupMatch(name, flow)));
+  await sweepForPatterns(book, rows.map((r) => r.pattern), flow);
 }

@@ -8,6 +8,7 @@ import { longestMatchingRule, spendCategoryFor } from "@/lib/finance/categorize"
 import { spendRulesFor } from "@/lib/queries/finance-categories";
 import { todayISO, dateInTz } from "@/lib/finance/parse";
 import { getGroupTimezone } from "@/lib/queries/group";
+import { type BookRef } from "@/lib/books";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // INGEST — the shared "an alert text becomes a transaction row" pipeline, used
@@ -31,7 +32,7 @@ const MAX_ALERT_CHARS = 2000;
 
 /** Recurring-bill matching rules effective on a given date, for this group.
  *  Exported so manual "Auto-detect" add can categorize like the SMS path. */
-export async function merchantRulesFor(groupId: number, onDate: string): Promise<MerchantRule[]> {
+export async function merchantRulesFor(book: BookRef, onDate: string): Promise<MerchantRule[]> {
   const rows = await db
     .select({
       id: recurringExpenses.id,
@@ -44,7 +45,7 @@ export async function merchantRulesFor(groupId: number, onDate: string): Promise
     .from(recurringExpenses)
     .where(
       and(
-        eq(recurringExpenses.groupId, groupId),
+        eq(recurringExpenses.bookId, book.id),
         lte(recurringExpenses.startDate, onDate),
         or(isNull(recurringExpenses.endDate), gte(recurringExpenses.endDate, onDate)),
       ),
@@ -63,7 +64,7 @@ export type TransferRule = { pattern: string; category: string; accountId: numbe
 
 /** Each open account's transfer words. Wallets are spending money, so money
  *  moved into one is never a transfer. */
-export async function transferRulesFor(groupId: number): Promise<TransferRule[]> {
+export async function transferRulesFor(book: BookRef): Promise<TransferRule[]> {
   const rows = await db
     .select({
       id: financialAccounts.id,
@@ -71,7 +72,7 @@ export async function transferRulesFor(groupId: number): Promise<TransferRule[]>
       patterns: financialAccounts.transferPatterns,
     })
     .from(financialAccounts)
-    .where(and(eq(financialAccounts.groupId, groupId), isNull(financialAccounts.archivedAt)));
+    .where(and(eq(financialAccounts.bookId, book.id), isNull(financialAccounts.archivedAt)));
   return rows
     .filter((r) => r.kind !== "wallet")
     .flatMap((r) => (r.patterns ?? []).map((pattern) => ({ pattern, category: "transfer", accountId: r.id })));
@@ -104,7 +105,7 @@ export function asTransfer(
  * rules), so a manual "Gas" lands tagged exactly like a texted one would.
  */
 export async function resolveSpendCategory(
-  groupId: number,
+  book: BookRef,
   category: string,
   merchant: string | null,
   recurringExpenseId: number | null,
@@ -115,12 +116,12 @@ export async function resolveSpendCategory(
       .select({ category: recurringExpenses.category })
       .from(recurringExpenses)
       .where(
-        and(eq(recurringExpenses.id, recurringExpenseId), eq(recurringExpenses.groupId, groupId)),
+        and(eq(recurringExpenses.id, recurringExpenseId), eq(recurringExpenses.bookId, book.id)),
       )
       .limit(1);
     billCategory = bill?.category ?? null;
   }
-  return spendCategoryFor(category, merchant, billCategory, await spendRulesFor(groupId));
+  return spendCategoryFor(category, merchant, billCategory, await spendRulesFor(book));
 }
 
 /** The spend-category a matched bill contributes (for fixed/amortized inherit). */
@@ -140,7 +141,7 @@ function billCategoryOf(
  *    NOT a unique constraint, so two real identical same-day purchases both land).
  */
 export async function ingestAlert(
-  groupId: number,
+  book: BookRef,
   text: string,
   accountId: number | null,
 ): Promise<IngestResult> {
@@ -154,7 +155,7 @@ export async function ingestAlert(
     .from(transactions)
     .where(
       and(
-        eq(transactions.groupId, groupId),
+        eq(transactions.bookId, book.id),
         eq(transactions.rawHash, rawHash),
         gte(transactions.createdAt, since),
       ),
@@ -163,14 +164,15 @@ export async function ingestAlert(
     .limit(1);
   if (dupe) return { ok: true, id: dupe.id, deduped: true };
 
-  const tz = await getGroupTimezone(groupId);
+  const tz = await getGroupTimezone(book.groupId);
   const parsed = parseAlertText(body);
 
   if (!parsed) {
     const [row] = await db
       .insert(transactions)
       .values({
-        groupId,
+        groupId: book.groupId,
+        bookId: book.id,
         accountId,
         postedOn: todayISO(tz),
         merchant: null,
@@ -192,8 +194,8 @@ export async function ingestAlert(
   const postedOn =
     parsed.instant != null ? dateInTz(parsed.instant, tz) : parsed.postedOn;
 
-  const rules = await merchantRulesFor(groupId, postedOn);
-  const transfer = asTransfer(parsed.merchant, parsed.amount, accountId, await transferRulesFor(groupId));
+  const rules = await merchantRulesFor(book, postedOn);
+  const transfer = asTransfer(parsed.merchant, parsed.amount, accountId, await transferRulesFor(book));
   const matched = categorizeMerchant(parsed.merchant, rules, Number(parsed.amount), postedOn);
   const category = transfer ? "transfer" : matched.category;
   const recurringExpenseId = transfer ? null : matched.recurringExpenseId;
@@ -203,13 +205,14 @@ export async function ingestAlert(
         category,
         parsed.merchant,
         billCategoryOf(recurringExpenseId, rules),
-        await spendRulesFor(groupId),
+        await spendRulesFor(book),
       );
 
   const [row] = await db
     .insert(transactions)
     .values({
-      groupId,
+      groupId: book.groupId,
+      bookId: book.id,
       accountId: transfer ? transfer.accountId : accountId,
       transferAccountId: transfer?.transferAccountId ?? null,
       postedOn,
@@ -282,7 +285,7 @@ function normalizeDateLoose(raw: unknown): string | null {
 }
 
 export async function ingestStructured(
-  groupId: number,
+  book: BookRef,
   input: StructuredInput,
   accountId: number | null,
 ): Promise<StructuredResult> {
@@ -291,7 +294,7 @@ export async function ingestStructured(
 
   const merchant = cleanStr(input.merchant, 200);
   const note = cleanStr(input.note, 500);
-  const tz = await getGroupTimezone(groupId);
+  const tz = await getGroupTimezone(book.groupId);
   const postedOn = normalizeDateLoose(input.date) ?? todayISO(tz);
 
   // Dedupe on the canonical (amount|merchant|date), same 10-min window as SMS —
@@ -305,7 +308,7 @@ export async function ingestStructured(
     .from(transactions)
     .where(
       and(
-        eq(transactions.groupId, groupId),
+        eq(transactions.bookId, book.id),
         eq(transactions.rawHash, rawHash),
         gte(transactions.createdAt, since),
       ),
@@ -320,11 +323,11 @@ export async function ingestStructured(
   let recurringExpenseId: number | null = null;
   let rules: MerchantRule[] = [];
   if (merchant) {
-    rules = await merchantRulesFor(groupId, postedOn);
+    rules = await merchantRulesFor(book, postedOn);
     ({ category, recurringExpenseId } = categorizeMerchant(merchant, rules, Number(amount), postedOn));
   }
   const needsReview = merchant === null;
-  const transfer = asTransfer(merchant, amount, accountId, await transferRulesFor(groupId));
+  const transfer = asTransfer(merchant, amount, accountId, await transferRulesFor(book));
   if (transfer) {
     category = "transfer";
     recurringExpenseId = null;
@@ -338,14 +341,15 @@ export async function ingestStructured(
       category,
       merchant,
       billCategoryOf(recurringExpenseId, rules),
-      await spendRulesFor(groupId),
+      await spendRulesFor(book),
     );
   }
 
   const [row] = await db
     .insert(transactions)
     .values({
-      groupId,
+      groupId: book.groupId,
+      bookId: book.id,
       accountId: transfer ? transfer.accountId : accountId,
       transferAccountId: transfer?.transferAccountId ?? null,
       postedOn,

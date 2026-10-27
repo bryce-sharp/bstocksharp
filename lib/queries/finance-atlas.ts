@@ -12,8 +12,7 @@ import {
   type IncomeDeduction,
   type RecurringExpense,
 } from "@/lib/db/schema";
-import { requireGroupId } from "@/lib/session";
-import { profileInGroup } from "./scope";
+import { requireBook, type BookRef } from "@/lib/books";
 import { getGroupTimezone } from "@/lib/queries/group";
 import { lastDayOfMonth, todayISO } from "@/lib/finance/parse";
 import { goalForMonth } from "@/lib/finance/savings-goal";
@@ -151,17 +150,17 @@ export type AtlasView = {
 
 /** Session wrapper: scopes to the signed-in group, then delegates. */
 export async function getAtlasView(monthParam?: string): Promise<AtlasView> {
-  const groupId = await requireGroupId();
-  return getAtlasViewForGroup(groupId, monthParam, todayISO(await getGroupTimezone(groupId)));
+  const book = await requireBook();
+  return getAtlasViewForBook(book, monthParam, todayISO(await getGroupTimezone(book.groupId)));
 }
 
 /**
  * Group-explicit ATLAS view — the real work. Callable without a session (the
- * budget/widget layers pass a token-resolved groupId), same "two front doors,
+ * budget/widget layers pass a token-resolved book), same "two front doors,
  * one scoped core" split the tenancy model uses everywhere.
  */
-export async function getAtlasViewForGroup(
-  groupId: number,
+export async function getAtlasViewForBook(
+  book: BookRef,
   monthParam?: string,
   today: string = todayISO(), // the household's "today"; defaults to Central
 ): Promise<AtlasView> {
@@ -180,22 +179,22 @@ export async function getAtlasViewForGroup(
       db
         .select()
         .from(profiles)
-        .where(and(eq(profiles.groupId, groupId), isNull(profiles.archivedAt)))
+        .where(and(eq(profiles.groupId, book.groupId), isNull(profiles.archivedAt)))
         .orderBy(asc(profiles.sortOrder), asc(profiles.id)),
       db
         .select()
         .from(compensationPlans)
-        .where(profileInGroup(compensationPlans.profileId, groupId))
+        .where(eq(compensationPlans.bookId, book.id))
         .orderBy(asc(compensationPlans.startDate), asc(compensationPlans.id)),
       db
         .select()
         .from(incomeDeductions)
-        .where(profileInGroup(incomeDeductions.profileId, groupId))
+        .where(eq(incomeDeductions.bookId, book.id))
         .orderBy(asc(incomeDeductions.startDate), asc(incomeDeductions.id)),
       db
         .select()
         .from(recurringExpenses)
-        .where(eq(recurringExpenses.groupId, groupId))
+        .where(eq(recurringExpenses.bookId, book.id))
         .orderBy(asc(recurringExpenses.name), asc(recurringExpenses.startDate)),
       db
         .select({
@@ -205,7 +204,7 @@ export async function getAtlasViewForGroup(
           carriesDiscretion: financialAccounts.carriesDiscretion,
         })
         .from(financialAccounts)
-        .where(eq(financialAccounts.groupId, groupId)),
+        .where(eq(financialAccounts.bookId, book.id)),
       db
         .select({
           monthlyGoal: savingsGoals.monthlyGoal,
@@ -213,7 +212,7 @@ export async function getAtlasViewForGroup(
           endMonth: savingsGoals.endMonth,
         })
         .from(savingsGoals)
-        .where(eq(savingsGoals.groupId, groupId))
+        .where(eq(savingsGoals.bookId, book.id))
         .orderBy(asc(savingsGoals.startMonth), asc(savingsGoals.id)),
     ]);
   const accountById = new Map(accounts.map((a) => [a.id, a]));

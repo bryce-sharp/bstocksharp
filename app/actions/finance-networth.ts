@@ -5,9 +5,9 @@ import { and, desc, eq, inArray, isNull, max, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { financialAccounts, accountSnapshots, savingsGoals } from "@/lib/db/schema";
 import { requireEditor } from "@/lib/auth";
-import { requireGroupId } from "@/lib/session";
+import { requireBook, type BookRef } from "@/lib/books";
 import { accountOrder } from "@/lib/queries/finance-networth";
-import { getAtlasViewForGroup } from "@/lib/queries/finance-atlas";
+import { getAtlasViewForBook } from "@/lib/queries/finance-atlas";
 import { getGroupTimezone } from "@/lib/queries/group";
 import { todayISO } from "@/lib/finance/parse";
 import { requireApp } from "@/lib/hub-apps";
@@ -61,7 +61,7 @@ const ACCOUNT_KINDS = new Set([
 export async function saveSnapshotsAction(formData: FormData): Promise<void> {
   await requireApp("finance");
   await requireEditor();
-  const groupId = await requireGroupId();
+  const book = await requireBook();
 
   const month = normalizeMonth(formData.get("month"));
   if (!month) throw new Error("Pick a month.");
@@ -70,7 +70,7 @@ export async function saveSnapshotsAction(formData: FormData): Promise<void> {
   const ours = await db
     .select({ id: financialAccounts.id })
     .from(financialAccounts)
-    .where(eq(financialAccounts.groupId, groupId));
+    .where(eq(financialAccounts.bookId, book.id));
 
   const rows = ours.flatMap(({ id }) => {
     const balance = money(formData.get(`balance_${id}`));
@@ -98,7 +98,7 @@ export async function deleteSnapshotAction(
 ): Promise<void> {
   await requireApp("finance");
   await requireEditor();
-  const groupId = await requireGroupId();
+  const book = await requireBook();
   const normalized = normalizeMonth(month);
   if (!normalized) return;
 
@@ -106,7 +106,7 @@ export async function deleteSnapshotAction(
     .select({ id: financialAccounts.id })
     .from(financialAccounts)
     .where(
-      and(eq(financialAccounts.id, accountId), eq(financialAccounts.groupId, groupId)),
+      and(eq(financialAccounts.id, accountId), eq(financialAccounts.bookId, book.id)),
     )
     .limit(1);
   if (!account) throw new Error("Account not found.");
@@ -129,14 +129,14 @@ export async function deleteMonthSnapshotsAction(
 ): Promise<void> {
   await requireApp("finance");
   await requireEditor();
-  const groupId = await requireGroupId();
+  const book = await requireBook();
   const normalized = normalizeMonth(month);
   if (!normalized) return;
 
   const ours = await db
     .select({ id: financialAccounts.id })
     .from(financialAccounts)
-    .where(eq(financialAccounts.groupId, groupId));
+    .where(eq(financialAccounts.bookId, book.id));
   const ids = ours.map((a) => a.id);
   if (ids.length === 0) return;
 
@@ -176,18 +176,18 @@ function parseAccount(formData: FormData) {
 export async function addAccountAction(formData: FormData): Promise<void> {
   await requireApp("finance");
   await requireEditor();
-  const groupId = await requireGroupId();
+  const book = await requireBook();
   const data = parseAccount(formData);
   if (!data.name) throw new Error("Account name is required.");
 
   const [{ maxSort }] = await db
     .select({ maxSort: max(financialAccounts.sortOrder) })
     .from(financialAccounts)
-    .where(eq(financialAccounts.groupId, groupId));
+    .where(eq(financialAccounts.bookId, book.id));
 
   await db
     .insert(financialAccounts)
-    .values({ ...data, groupId, sortOrder: (maxSort ?? 0) + 1 });
+    .values({ ...data, groupId: book.groupId, bookId: book.id, sortOrder: (maxSort ?? 0) + 1 });
   revalidatePath(FINANCE, "layout");
 }
 
@@ -197,7 +197,7 @@ export async function updateAccountAction(
 ): Promise<void> {
   await requireApp("finance");
   await requireEditor();
-  const groupId = await requireGroupId();
+  const book = await requireBook();
   const data = parseAccount(formData);
   if (!data.name) throw new Error("Account name is required.");
 
@@ -205,7 +205,7 @@ export async function updateAccountAction(
     .update(financialAccounts)
     .set(data)
     .where(
-      and(eq(financialAccounts.id, id), eq(financialAccounts.groupId, groupId)),
+      and(eq(financialAccounts.id, id), eq(financialAccounts.bookId, book.id)),
     );
   revalidatePath(FINANCE, "layout");
 }
@@ -225,7 +225,7 @@ export async function moveAccountAction(
 ): Promise<void> {
   await requireApp("finance");
   await requireEditor();
-  const groupId = await requireGroupId();
+  const book = await requireBook();
 
   const rows = await db
     .select({
@@ -233,7 +233,7 @@ export async function moveAccountAction(
       archivedAt: financialAccounts.archivedAt,
     })
     .from(financialAccounts)
-    .where(eq(financialAccounts.groupId, groupId))
+    .where(eq(financialAccounts.bookId, book.id))
     .orderBy(...accountOrder);
 
   const target = rows.find((r) => r.id === id);
@@ -268,7 +268,7 @@ export async function moveAccountAction(
     })
     .where(
       and(
-        eq(financialAccounts.groupId, groupId),
+        eq(financialAccounts.bookId, book.id),
         inArray(financialAccounts.id, ordered),
       ),
     );
@@ -284,12 +284,12 @@ export async function setAccountArchivedAction(
 ): Promise<void> {
   await requireApp("finance");
   await requireEditor();
-  const groupId = await requireGroupId();
+  const book = await requireBook();
   await db
     .update(financialAccounts)
     .set({ archivedAt: archived ? new Date() : null })
     .where(
-      and(eq(financialAccounts.id, id), eq(financialAccounts.groupId, groupId)),
+      and(eq(financialAccounts.id, id), eq(financialAccounts.bookId, book.id)),
     );
   revalidatePath(FINANCE, "layout");
 }
@@ -301,11 +301,11 @@ export async function deleteAccountAction(
 ): Promise<void> {
   await requireApp("finance");
   await requireEditor();
-  const groupId = await requireGroupId();
+  const book = await requireBook();
   await db
     .delete(financialAccounts)
     .where(
-      and(eq(financialAccounts.id, id), eq(financialAccounts.groupId, groupId)),
+      and(eq(financialAccounts.id, id), eq(financialAccounts.bookId, book.id)),
     );
   revalidatePath(FINANCE, "layout");
 }
@@ -317,11 +317,11 @@ export async function deleteAccountAction(
  * are read as of the later of the start month and this month, so the goal
  * you type is the goal you see today.
  */
-async function takeHomePart(groupId: number, total: string, startMonth: string): Promise<string> {
-  const today = todayISO(await getGroupTimezone(groupId));
+async function takeHomePart(book: BookRef, total: string, startMonth: string): Promise<string> {
+  const today = todayISO(await getGroupTimezone(book.groupId));
   const thisMonth = `${today.slice(0, 7)}-01`;
   const asOf = startMonth > thisMonth ? startMonth : thisMonth;
-  const atlas = await getAtlasViewForGroup(groupId, asOf, today);
+  const atlas = await getAtlasViewForBook(book, asOf, today);
   return Math.max(0, Number(total) - atlas.totals.savingsFromPaycheck).toFixed(2);
 }
 
@@ -334,7 +334,7 @@ async function takeHomePart(groupId: number, total: string, startMonth: string):
 export async function saveSavingsGoalAction(formData: FormData): Promise<void> {
   await requireApp("finance");
   await requireEditor();
-  const groupId = await requireGroupId();
+  const book = await requireBook();
 
   const monthlyGoal = money(formData.get("monthlyGoal"));
   if (monthlyGoal === null) throw new Error("Monthly goal is required.");
@@ -344,7 +344,7 @@ export async function saveSavingsGoalAction(formData: FormData): Promise<void> {
   const [active] = await db
     .select()
     .from(savingsGoals)
-    .where(and(eq(savingsGoals.groupId, groupId), isNull(savingsGoals.endMonth)))
+    .where(and(eq(savingsGoals.bookId, book.id), isNull(savingsGoals.endMonth)))
     .orderBy(desc(savingsGoals.startMonth), desc(savingsGoals.id))
     .limit(1);
 
@@ -353,14 +353,14 @@ export async function saveSavingsGoalAction(formData: FormData): Promise<void> {
     active?.startMonth ??
     normalizeMonth(new Date().toISOString())!;
 
-  const takeHome = await takeHomePart(groupId, monthlyGoal, startMonth);
+  const takeHome = await takeHomePart(book, monthlyGoal, startMonth);
   if (active) {
     await db
       .update(savingsGoals)
       .set({ monthlyGoal: takeHome, startMonth })
       .where(eq(savingsGoals.id, active.id));
   } else {
-    await db.insert(savingsGoals).values({ groupId, monthlyGoal: takeHome, startMonth });
+    await db.insert(savingsGoals).values({ groupId: book.groupId, bookId: book.id, monthlyGoal: takeHome, startMonth });
   }
   revalidatePath(FINANCE, "layout");
 }
@@ -373,7 +373,7 @@ export async function saveSavingsGoalAction(formData: FormData): Promise<void> {
 export async function startSavingsGoalAction(formData: FormData): Promise<void> {
   await requireApp("finance");
   await requireEditor();
-  const groupId = await requireGroupId();
+  const book = await requireBook();
 
   const monthlyGoal = money(formData.get("monthlyGoal"));
   const startMonth = normalizeMonth(formData.get("startMonth"));
@@ -384,12 +384,12 @@ export async function startSavingsGoalAction(formData: FormData): Promise<void> 
   const [active] = await db
     .select()
     .from(savingsGoals)
-    .where(and(eq(savingsGoals.groupId, groupId), isNull(savingsGoals.endMonth)))
+    .where(and(eq(savingsGoals.bookId, book.id), isNull(savingsGoals.endMonth)))
     .limit(1);
 
   await db
     .insert(savingsGoals)
-    .values({ groupId, monthlyGoal: await takeHomePart(groupId, monthlyGoal, startMonth), startMonth });
+    .values({ groupId: book.groupId, bookId: book.id, monthlyGoal: await takeHomePart(book, monthlyGoal, startMonth), startMonth });
 
   if (active && active.startMonth < startMonth) {
     // Previous segment ends the month before the new one starts.

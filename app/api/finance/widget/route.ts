@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { looksLikeApiToken } from "@/lib/finance/tokens";
 import { resolveApiToken, touchApiToken } from "@/lib/queries/finance-tokens";
 import {
-  getBudgetMonthForGroup,
-  listRecentMonthsForGroup,
+  getBudgetMonthForBook,
+  listRecentMonthsForBook,
 } from "@/lib/queries/finance-budget";
 import { getGroupTimezone } from "@/lib/queries/group";
 import { currentMonthISO, todayISO } from "@/lib/finance/parse";
@@ -35,9 +35,9 @@ export async function GET(req: NextRequest) {
   const tz = await getGroupTimezone(auth.groupId);
   const month = currentMonthISO(tz);
   const today = todayISO(tz);
-  const { computation: c } = await getBudgetMonthForGroup(auth.groupId, month, today);
+  const { computation: c } = await getBudgetMonthForBook({ id: auth.bookId, groupId: auth.groupId }, month, today);
   const disc = c.discretionary;
-  const recentMonths = await listRecentMonthsForGroup(auth.groupId, 3, today);
+  const recentMonths = await listRecentMonthsForBook({ id: auth.bookId, groupId: auth.groupId }, 3, today);
 
   // The widget is a DISCRETIONARY story — "how much can I still spend." The bar
   // is discretionary spend vs the discretionary budget; fixed/amortized are

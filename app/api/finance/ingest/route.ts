@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
   }
   const auth = await resolveApiToken(token, "ingest");
   if (!auth) return NextResponse.json({ ok: false }, { status: 401 });
+  const book = { id: auth.bookId, groupId: auth.groupId };
 
   // Three accepted body shapes, so the endpoint works for a dumb Shortcut AND a
   // structured feed:
@@ -48,14 +49,14 @@ export async function POST(req: NextRequest) {
       body = {};
     }
     if (typeof body.text === "string") {
-      result = await ingestAlert(auth.groupId, body.text, auth.accountId);
+      result = await ingestAlert(book, body.text, auth.accountId);
     } else if (body.amount != null || body.merchant != null) {
-      result = await ingestStructured(auth.groupId, body as StructuredInput, auth.accountId);
+      result = await ingestStructured(book, body as StructuredInput, auth.accountId);
     } else {
       result = { ok: false, reason: "bad_amount" };
     }
   } else {
-    result = await ingestAlert(auth.groupId, await req.text(), auth.accountId);
+    result = await ingestAlert(book, await req.text(), auth.accountId);
   }
 
   void touchApiToken(auth.id);

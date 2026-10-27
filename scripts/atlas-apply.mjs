@@ -51,7 +51,7 @@ async function main() {
 
   const today = new Date().toISOString().slice(0, 10);
   const bills = await sql`
-    SELECT id, group_id, name, category, necessity, amount::float8 AS amount, payments_per_year, due_months,
+    SELECT id, group_id, book_id, name, category, necessity, amount::float8 AS amount, payments_per_year, due_months,
            due_day, paid_from_account_id, is_estimate, merchant_patterns, notes,
            start_date::text AS start_date, end_date::text AS end_date
     FROM recurring_expenses`;
@@ -147,6 +147,7 @@ async function main() {
       }
       const row = {
         group_id: like.group_id,
+        book_id: like.book_id,
         name: a.name,
         category: like.category,
         necessity: like.necessity,
@@ -165,13 +166,13 @@ async function main() {
       );
       if (write) {
         const [inserted] = await sql`
-          INSERT INTO recurring_expenses (group_id, name, category, necessity, amount, payments_per_year, due_months,
+          INSERT INTO recurring_expenses (group_id, book_id, name, category, necessity, amount, payments_per_year, due_months,
                                           due_day, paid_from_account_id, is_estimate, merchant_patterns, start_date)
-          VALUES (${row.group_id}, ${row.name}, ${row.category}, ${row.necessity}, ${money(row.amount)},
+          VALUES (${row.group_id}, ${row.book_id}, ${row.name}, ${row.category}, ${row.necessity}, ${money(row.amount)},
                   ${row.payments_per_year}, ${row.due_months?.length ? JSON.stringify(row.due_months) : null}::jsonb,
                   ${row.due_day}, ${row.paid_from_account_id}, ${row.is_estimate},
                   ${JSON.stringify(row.merchant_patterns)}::jsonb, ${row.start_date})
-          RETURNING id, group_id, name, category, payments_per_year`;
+          RETURNING id, group_id, book_id, name, category, payments_per_year`;
         console.log(`   added as bill ${inserted.id}`);
         added.set(row.name.toLowerCase(), inserted);
       } else {
@@ -187,14 +188,14 @@ async function main() {
       groups.add(target.group_id);
       const lane = target.payments_per_year === 12 ? "fixed" : "amortized";
       const rows = await sql`
-        SELECT t.id, t.group_id, t.posted_on::text AS date, t.merchant, t.amount::text AS amount, t.category,
+        SELECT t.id, t.group_id, t.book_id, t.posted_on::text AS date, t.merchant, t.amount::text AS amount, t.category,
                coalesce(r.name, '') AS bill
         FROM transactions t LEFT JOIN recurring_expenses r ON r.id = t.recurring_expense_id
         WHERE t.id = ANY(${c.refile})`;
       for (const id of c.refile) {
         const t = rows.find((r) => r.id === id);
         if (!t) throw new Error(`${n} no transaction ${id}.`);
-        if (t.group_id !== target.group_id) throw new Error(`${n} transaction ${id} belongs to another household.`);
+        if (t.book_id !== target.book_id) throw new Error(`${n} transaction ${id} belongs to another money book.`);
         if (!["discretionary", "fixed", "amortized"].includes(t.category)) {
           throw new Error(`${n} transaction ${id} is ${t.category}; only spending can be filed under a bill.`);
         }

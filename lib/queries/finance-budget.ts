@@ -9,9 +9,9 @@ import {
   type Transaction,
 } from "@/lib/db/schema";
 import { computeBudgetMonth, type EngineTxn, type BudgetComputation } from "@/lib/finance/budget-engine";
-import { getAtlasViewForGroup } from "@/lib/queries/finance-atlas";
+import { getAtlasViewForBook } from "@/lib/queries/finance-atlas";
 import { lastDayOfMonth, todayISO, currentMonthISO } from "@/lib/finance/parse";
-import { requireGroupId } from "@/lib/session";
+import { requireBook, type BookRef } from "@/lib/books";
 import { getGroupTimezone } from "@/lib/queries/group";
 import {
   cashFlowByCategory,
@@ -31,7 +31,7 @@ import { formatMonth } from "@/lib/format";
 // BUDGET reads. The engine (lib/finance/budget-engine) is pure; this layer
 // gathers a month's inputs — ATLAS discretion-left, effective recurring bills,
 // the month's transactions, and fund draw-history — and runs it. Group-scoped
-// via an explicit groupId so BOTH the session page and the token-authed widget
+// via an explicit book so BOTH the session page and the token-authed widget
 // route can call it (the widget has no session, same split as the ATLAS core).
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -66,8 +66,8 @@ export type BudgetView = {
  * stays freely editable (backfill a forgotten charge anytime). `today` is the
  * pace anchor (only meaningful for the current month).
  */
-export async function getBudgetMonthForGroup(
-  groupId: number,
+export async function getBudgetMonthForBook(
+  book: BookRef,
   month: string,
   today: string,
 ): Promise<BudgetView> {
@@ -75,7 +75,7 @@ export async function getBudgetMonthForGroup(
 
   // ATLAS discretion-left for this month's effective config (the budget base).
   // Pass `today` so its point-in-time asOf uses the household's zone, not UTC.
-  const atlas = await getAtlasViewForGroup(groupId, month, today);
+  const atlas = await getAtlasViewForBook(book, month, today);
   const discretionaryBudgetC = cents(atlas.totals.discretionLeft);
   const hasIncome = atlas.totals.monthlyNet > 0;
 
@@ -85,7 +85,7 @@ export async function getBudgetMonthForGroup(
     .from(recurringExpenses)
     .where(
       and(
-        eq(recurringExpenses.groupId, groupId),
+        eq(recurringExpenses.bookId, book.id),
         lte(recurringExpenses.startDate, end),
         or(isNull(recurringExpenses.endDate), gte(recurringExpenses.endDate, start)),
       ),
@@ -101,7 +101,7 @@ export async function getBudgetMonthForGroup(
     .from(transactions)
     .innerJoin(recurringExpenses, eq(recurringExpenses.id, transactions.recurringExpenseId))
     .where(
-      and(eq(transactions.groupId, groupId), lt(transactions.postedOn, start)),
+      and(eq(transactions.bookId, book.id), lt(transactions.postedOn, start)),
     )
     .orderBy(desc(transactions.postedOn));
   const lastPaidBy = new Map<number, string>();
@@ -134,7 +134,7 @@ export async function getBudgetMonthForGroup(
     .from(transactions)
     .where(
       and(
-        eq(transactions.groupId, groupId),
+        eq(transactions.bookId, book.id),
         gte(transactions.postedOn, start),
         lte(transactions.postedOn, end),
       ),
@@ -160,14 +160,14 @@ export async function getBudgetMonthForGroup(
     })
     .from(funds)
     .leftJoin(profiles, eq(funds.ownerProfileId, profiles.id))
-    .where(and(eq(funds.groupId, groupId), isNull(funds.closedAt)));
+    .where(and(eq(funds.bookId, book.id), isNull(funds.closedAt)));
 
   const priorFundDraws = await db
     .select({ fundId: transactions.fundId, amount: transactions.amount, category: transactions.category })
     .from(transactions)
     .where(
       and(
-        eq(transactions.groupId, groupId),
+        eq(transactions.bookId, book.id),
         inArray(transactions.category, ["fund", "income"]),
         isNotNull(transactions.fundId),
         lt(transactions.postedOn, start),
@@ -293,8 +293,8 @@ export type RangeReport = {
  * progress is left out (its unposted bills and paychecks would read as misses),
  * as are partial months at a custom range's edges.
  */
-export async function getRangeReportForGroup(
-  groupId: number,
+export async function getRangeReportForBook(
+  book: BookRef,
   from: string | undefined,
   to: string | undefined,
   today: string,
@@ -302,13 +302,13 @@ export async function getRangeReportForGroup(
   const current = `${today.slice(0, 7)}-01`;
   const inRange = (m: string) =>
     (!from || m >= from) && (!to || lastDayOfMonth(m) <= to);
-  const withData = (await listBudgetMonthsForGroup(groupId)).filter(inRange);
+  const withData = (await listBudgetMonthsForBook(book)).filter(inRange);
   const months = withData.filter((m) => m < current);
   if (months.length === 0) return null;
 
   const [views, lanes] = await Promise.all([
-    Promise.all(months.map((m) => getBudgetMonthForGroup(groupId, m, today))),
-    cashFlowByMonthAndCategory(groupId, { from: months[0], to: lastDayOfMonth(months.at(-1)!) }),
+    Promise.all(months.map((m) => getBudgetMonthForBook(book, m, today))),
+    cashFlowByMonthAndCategory(book, { from: months[0], to: lastDayOfMonth(months.at(-1)!) }),
   ]);
   const covered: string[] = [];
   const inputs: MonthReportInput[] = [];
@@ -331,29 +331,29 @@ export async function getRangeReportForGroup(
 }
 
 /** One month's plan-vs-actual report for a group (History's drill-down). */
-export async function getMonthReportForGroup(
-  groupId: number,
+export async function getMonthReportForBook(
+  book: BookRef,
   month: string,
   today: string,
 ): Promise<MonthReport | null> {
   const { start, end } = monthBounds(month);
   const [view, lanes] = await Promise.all([
-    getBudgetMonthForGroup(groupId, start, today),
-    cashFlowByCategory(groupId, { from: start, to: end }),
+    getBudgetMonthForBook(book, start, today),
+    cashFlowByCategory(book, { from: start, to: end }),
   ]);
   return monthReportFrom(view, lanes);
 }
 
 // ── Session wrappers (the budget page; the API routes use the …ForGroup core) ─
 export async function getBudgetMonth(month: string): Promise<BudgetView> {
-  const groupId = await requireGroupId();
-  return getBudgetMonthForGroup(groupId, month, todayISO(await getGroupTimezone(groupId)));
+  const book = await requireBook();
+  return getBudgetMonthForBook(book, month, todayISO(await getGroupTimezone(book.groupId)));
 }
 
 export async function listMonthTransactionsForSession(
   month: string,
 ): Promise<Transaction[]> {
-  return listMonthTransactions(await requireGroupId(), month);
+  return listMonthTransactions(await requireBook(), month);
 }
 
 export type RecentMonth = {
@@ -369,8 +369,8 @@ export type RecentMonth = {
  * the same way the page does.
  */
 export async function listRecentMonths(month: string, limit = 3): Promise<RecentMonth[]> {
-  const groupId = await requireGroupId();
-  const tz = await getGroupTimezone(groupId);
+  const book = await requireBook();
+  const tz = await getGroupTimezone(book.groupId);
   const viewed = `${month.slice(0, 7)}-01`;
   const past = (await listBudgetMonths()).filter((m) => m < viewed);
   const recent = past.slice(-limit).reverse(); // newest first
@@ -378,7 +378,7 @@ export async function listRecentMonths(month: string, limit = 3): Promise<Recent
 
   const out: RecentMonth[] = [];
   for (const m of recent) {
-    const v = await getBudgetMonthForGroup(groupId, m, todayISO(tz));
+    const v = await getBudgetMonthForBook(book, m, todayISO(tz));
     out.push({
       month: m,
       spent: dl(v.computation.discretionary.netSpentC),
@@ -408,14 +408,14 @@ const billOptionColumns = {
 
 /** Recurring bills effective in a month, for the txn detail bill-picker. */
 export async function listBillsForMonth(month: string): Promise<BillOption[]> {
-  const groupId = await requireGroupId();
+  const book = await requireBook();
   const { start, end } = monthBounds(month);
   return db
     .select(billOptionColumns)
     .from(recurringExpenses)
     .where(
       and(
-        eq(recurringExpenses.groupId, groupId),
+        eq(recurringExpenses.bookId, book.id),
         lte(recurringExpenses.startDate, end),
         or(isNull(recurringExpenses.endDate), gte(recurringExpenses.endDate, start)),
       ),
@@ -425,21 +425,21 @@ export async function listBillsForMonth(month: string): Promise<BillOption[]> {
 
 /** Every version of every bill, for the explorer's bill-picker (its rows span all months). */
 export async function listBills(): Promise<BillOption[]> {
-  const groupId = await requireGroupId();
+  const book = await requireBook();
   return db
     .select(billOptionColumns)
     .from(recurringExpenses)
-    .where(eq(recurringExpenses.groupId, groupId))
+    .where(eq(recurringExpenses.bookId, book.id))
     .orderBy(asc(recurringExpenses.name));
 }
 
 /** Open funds, for the explorer's fund-picker and "→ fund" row labels. */
 export async function listOpenFunds(): Promise<{ id: number; name: string }[]> {
-  const groupId = await requireGroupId();
+  const book = await requireBook();
   return db
     .select({ id: funds.id, name: funds.name })
     .from(funds)
-    .where(and(eq(funds.groupId, groupId), isNull(funds.closedAt)))
+    .where(and(eq(funds.bookId, book.id), isNull(funds.closedAt)))
     .orderBy(asc(funds.name));
 }
 
@@ -452,14 +452,14 @@ export async function listMerchantSuggestions(): Promise<{
   merchants: string[];
   sources: string[];
 }> {
-  const groupId = await requireGroupId();
+  const book = await requireBook();
   const grab = async (income: boolean, limit: number) => {
     const rows = await db
       .select({ merchant: transactions.merchant })
       .from(transactions)
       .where(
         and(
-          eq(transactions.groupId, groupId),
+          eq(transactions.bookId, book.id),
           isNotNull(transactions.merchant),
           income
             ? eq(transactions.category, "income")
@@ -476,11 +476,11 @@ export async function listMerchantSuggestions(): Promise<{
 }
 
 /** Months that have transactions — session-less core (for the token endpoint). */
-export async function listBudgetMonthsForGroup(groupId: number): Promise<string[]> {
+export async function listBudgetMonthsForBook(book: BookRef): Promise<string[]> {
   const txnMonths = await db
     .selectDistinct({ m: transactions.postedOn })
     .from(transactions)
-    .where(eq(transactions.groupId, groupId));
+    .where(eq(transactions.bookId, book.id));
   const set = new Set<string>();
   for (const r of txnMonths) set.add(`${r.m.slice(0, 7)}-01`);
   return [...set].sort();
@@ -488,7 +488,7 @@ export async function listBudgetMonthsForGroup(groupId: number): Promise<string[
 
 /** Months that have transactions (drives the month switcher). */
 export async function listBudgetMonths(): Promise<string[]> {
-  return listBudgetMonthsForGroup(await requireGroupId());
+  return listBudgetMonthsForBook(await requireBook());
 }
 
 export type RecentMonthBar = { month: string; spent: number; budget: number };
@@ -498,18 +498,18 @@ export type RecentMonthBar = { month: string; spent: number; budget: number };
  * "Recent Months" list. Discretionary (not whole-household) so it's coherent
  * with the widget's "left to spend" framing. Session-less for the token route.
  */
-export async function listRecentMonthsForGroup(
-  groupId: number,
+export async function listRecentMonthsForBook(
+  book: BookRef,
   limit: number,
   today: string,
 ): Promise<RecentMonthBar[]> {
   const current = `${today.slice(0, 7)}-01`;
-  const past = (await listBudgetMonthsForGroup(groupId)).filter((m) => m < current);
+  const past = (await listBudgetMonthsForBook(book)).filter((m) => m < current);
   const recent = past.slice(-limit).reverse(); // newest first
   const dl = (c: number) => Math.round(c) / 100;
   const out: RecentMonthBar[] = [];
   for (const m of recent) {
-    const { computation: c } = await getBudgetMonthForGroup(groupId, m, today);
+    const { computation: c } = await getBudgetMonthForBook(book, m, today);
     out.push({
       month: m,
       spent: dl(c.discretionary.netSpentC),
@@ -538,8 +538,8 @@ export async function getSpendTrend(
   month: string,
   lane: "discretionary" | "all" = "discretionary",
 ): Promise<SpendTrend> {
-  const groupId = await requireGroupId();
-  const tz = await getGroupTimezone(groupId);
+  const book = await requireBook();
+  const tz = await getGroupTimezone(book.groupId);
   const today = todayISO(tz);
 
   const cur = `${month.slice(0, 7)}-01`;
@@ -554,7 +554,7 @@ export async function getSpendTrend(
   // Per-day signed cents; for discretionary, reimbursements pull the total down.
   const signedRows =
     lane === "all"
-      ? (await dailyMoneyOut(groupId, prev, lastDayOfMonth(cur))).map((r) => ({
+      ? (await dailyMoneyOut(book, prev, lastDayOfMonth(cur))).map((r) => ({
           postedOn: r.postedOn,
           signed: cents(r.amount),
         }))
@@ -568,7 +568,7 @@ export async function getSpendTrend(
             .from(transactions)
             .where(
               and(
-                eq(transactions.groupId, groupId),
+                eq(transactions.bookId, book.id),
                 gte(transactions.postedOn, prev),
                 lte(transactions.postedOn, lastDayOfMonth(cur)),
                 or(
@@ -617,7 +617,7 @@ export async function getSpendTrend(
 
 /** Raw transaction rows for a month (the editable table). */
 export async function listMonthTransactions(
-  groupId: number,
+  book: BookRef,
   month: string,
 ): Promise<Transaction[]> {
   const { start, end } = monthBounds(month);
@@ -626,7 +626,7 @@ export async function listMonthTransactions(
     .from(transactions)
     .where(
       and(
-        eq(transactions.groupId, groupId),
+        eq(transactions.bookId, book.id),
         gte(transactions.postedOn, start),
         lte(transactions.postedOn, end),
       ),

@@ -10,8 +10,8 @@ import { getGroupTimezone } from "@/lib/queries/group";
 import { todayISO } from "@/lib/finance/parse";
 import { addMonths, rangeLabel, type NetWorthRange } from "@/lib/finance/net-worth";
 import {
-  getNetWorthDashboardForGroup,
-  getNetWorthExtrasForGroup,
+  getNetWorthDashboardForBook,
+  getNetWorthExtrasForBook,
 } from "@/lib/queries/finance-networth";
 import NetWorthActions from "@/components/finance/NetWorthActions";
 import NetWorthTiles from "@/components/finance/NetWorthTiles";
@@ -20,6 +20,7 @@ import NetWorthInsights from "@/components/finance/NetWorthInsights";
 import NetWorthRangePicker from "@/components/finance/NetWorthRangePicker";
 import MonthlyLog from "@/components/finance/MonthlyLog";
 import DueMonthBanner from "@/components/finance/DueMonthBanner";
+import { requireBook } from "@/lib/books";
 
 export const metadata = { title: "Net Worth" };
 
@@ -40,13 +41,13 @@ export default async function NetWorthPage({
   const { range: rawRange } = await searchParams;
   const range = RANGES.includes(rawRange as NetWorthRange) ? (rawRange as NetWorthRange) : "year";
 
-  const groupId = session.groupId;
-  const today = todayISO(await getGroupTimezone(groupId));
+  const book = await requireBook();
+  const today = todayISO(await getGroupTimezone(book.groupId));
   const [dash, editor] = await Promise.all([
-    getNetWorthDashboardForGroup(groupId, range, today),
+    getNetWorthDashboardForBook(book, range, today),
     isEditor(),
   ]);
-  const extras = await getNetWorthExtrasForGroup(groupId, dash, today);
+  const extras = await getNetWorthExtrasForBook(book, dash, today);
 
   const currentMonth = today.slice(0, 7);
   // Balances are logged on the 1st for the month that just closed.

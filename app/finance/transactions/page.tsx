@@ -11,20 +11,20 @@ import { isEditor } from "@/lib/auth";
 import { getGroupTimezone } from "@/lib/queries/group";
 import { lastDayOfMonth, todayISO } from "@/lib/finance/parse";
 import { formatMoney, formatMonth } from "@/lib/format";
-import { searchTransactionsForGroup, type TxnFilters } from "@/lib/queries/finance-transactions";
+import { searchTransactionsForBook, type TxnFilters } from "@/lib/queries/finance-transactions";
 import {
   cashFlowByMonth,
   incomeByTag,
   spendByTag,
   summarizeCashFlow,
 } from "@/lib/queries/finance-cashflow";
-import { getMerchantGroupsForGroup } from "@/lib/queries/finance-categories";
+import { getMerchantGroupsForBook } from "@/lib/queries/finance-categories";
 import { listFinancialAccounts } from "@/lib/queries/finance-networth";
 import { LANE_LABELS, UNTAGGED, flowOf, type Flow } from "@/lib/finance/cashflow";
 import { staleBanks, syncBanks } from "@/lib/plaid/sync";
 import {
-  getMonthReportForGroup,
-  getRangeReportForGroup,
+  getMonthReportForBook,
+  getRangeReportForBook,
   listBills,
   listMerchantSuggestions,
   listOpenFunds,
@@ -34,6 +34,7 @@ import TransactionsTable from "@/components/finance/TransactionsTable";
 import CashFlowHistory from "@/components/finance/CashFlowHistory";
 import ListFilterChip from "@/components/finance/ListFilterChip";
 import RefreshAfterSync from "@/components/finance/RefreshAfterSync";
+import { requireBook } from "@/lib/books";
 
 export const metadata = { title: "History" };
 
@@ -89,10 +90,10 @@ export default async function HistoryPage({
     return Array.isArray(v) ? v[0] : v;
   };
 
-  const groupId = session.groupId;
-  const tz = await getGroupTimezone(groupId);
+  const book = await requireBook();
+  const tz = await getGroupTimezone(book.groupId);
   // Bank data a few hours old: sync once this page is sent, then re-render.
-  const stale = await staleBanks(groupId);
+  const stale = await staleBanks(book);
   if (stale.length) after(() => syncBanks(stale, "stale"));
   const today = todayISO(tz);
 
@@ -116,8 +117,8 @@ export default async function HistoryPage({
 
   // Both sides' groups feed the Group picker (and carry each side's tag list).
   const [outGroups, inGroups] = await Promise.all([
-    getMerchantGroupsForGroup(groupId, "out"),
-    getMerchantGroupsForGroup(groupId, "in"),
+    getMerchantGroupsForBook(book, "out"),
+    getMerchantGroupsForBook(book, "in"),
   ]);
   const groupName = str(get("group"));
   const groupFlow: Flow = get("groupflow") === "in" ? "in" : "out";
@@ -217,13 +218,13 @@ export default async function HistoryPage({
     report,
     allAccounts,
   ] = await Promise.all([
-    searchTransactionsForGroup(groupId, listFilters, null),
-    summarizeCashFlow(groupId, listFilters),
-    cashFlowByMonth(groupId, filters),
-    spendByTag(groupId, filters),
-    month ? spendByTag(groupId, scoped) : Promise.resolve([]),
-    incomeByTag(groupId, filters),
-    month ? incomeByTag(groupId, scoped) : Promise.resolve([]),
+    searchTransactionsForBook(book, listFilters, null),
+    summarizeCashFlow(book, listFilters),
+    cashFlowByMonth(book, filters),
+    spendByTag(book, filters),
+    month ? spendByTag(book, scoped) : Promise.resolve([]),
+    incomeByTag(book, filters),
+    month ? incomeByTag(book, scoped) : Promise.resolve([]),
     listOpenFunds(),
     listBills(),
     listMerchantSuggestions(),
@@ -234,8 +235,8 @@ export default async function HistoryPage({
     narrowed
       ? Promise.resolve(null)
       : month
-        ? getMonthReportForGroup(groupId, month, today)
-        : getRangeReportForGroup(groupId, from, to, today),
+        ? getMonthReportForBook(book, month, today)
+        : getRangeReportForBook(book, from, to, today),
     listFinancialAccounts(),
   ]);
   const accounts = allAccounts

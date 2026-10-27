@@ -2,7 +2,7 @@ import "server-only";
 import { and, asc, eq, max, ne, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { eventLog, plaidAccounts, plaidItems, type PlaidItem } from "@/lib/db/schema";
-import { requireGroupId } from "@/lib/session";
+import { requireBook, type BookRef } from "@/lib/books";
 import { listEvents, type EventView } from "@/lib/events";
 import { plaidEnv } from "@/lib/plaid/client";
 
@@ -31,7 +31,7 @@ export type BankConnectionRow = {
 
 /** This group's bank logins and their accounts, oldest first. Never selects the token. */
 export async function listBankConnections(): Promise<BankConnectionRow[]> {
-  const groupId = await requireGroupId();
+  const book = await requireBook();
   const rows = await db
     .select({
       id: plaidItems.id,
@@ -50,7 +50,7 @@ export async function listBankConnections(): Promise<BankConnectionRow[]> {
     })
     .from(plaidItems)
     .leftJoin(plaidAccounts, eq(plaidAccounts.plaidItemId, plaidItems.id))
-    .where(eq(plaidItems.groupId, groupId))
+    .where(eq(plaidItems.bookId, book.id))
     .orderBy(asc(plaidItems.createdAt), asc(plaidAccounts.id));
 
   const byItem = new Map<number, BankConnectionRow>();
@@ -85,7 +85,7 @@ export async function listBankConnections(): Promise<BankConnectionRow[]> {
   const hooks = await db
     .select({ item: itemKey, at: max(eventLog.createdAt) })
     .from(eventLog)
-    .where(and(eq(eventLog.groupId, groupId), eq(eventLog.source, "plaid"), eq(eventLog.kind, "webhook")))
+    .where(and(eq(eventLog.groupId, book.groupId), eq(eventLog.source, "plaid"), eq(eventLog.kind, "webhook")))
     .groupBy(itemKey);
   for (const h of hooks) {
     const item = byItem.get(Number(h.item));
@@ -96,7 +96,7 @@ export async function listBankConnections(): Promise<BankConnectionRow[]> {
 
 /** The household's recent bank events (webhooks, syncs), newest first. */
 export async function listBankActivity(limit = 12): Promise<EventView[]> {
-  return listEvents({ groupId: await requireGroupId() }, { source: "plaid", limit });
+  return listEvents({ groupId: (await requireBook()).groupId }, { source: "plaid", limit });
 }
 
 export type BankAlert = { institutionName: string; status: string; lastError: string | null };
@@ -106,7 +106,7 @@ export type BankAlert = { institutionName: string; status: string; lastError: st
  * status), counting only this deployment's Plaid environment.
  */
 export async function listBankAlerts(): Promise<BankAlert[]> {
-  const groupId = await requireGroupId();
+  const book = await requireBook();
   return db
     .select({
       institutionName: plaidItems.institutionName,
@@ -115,20 +115,20 @@ export async function listBankAlerts(): Promise<BankAlert[]> {
     })
     .from(plaidItems)
     .where(
-      and(eq(plaidItems.groupId, groupId), eq(plaidItems.environment, plaidEnv()), ne(plaidItems.status, "ok")),
+      and(eq(plaidItems.bookId, book.id), eq(plaidItems.environment, plaidEnv()), ne(plaidItems.status, "ok")),
     )
     .orderBy(asc(plaidItems.createdAt));
 }
 
 /** One item of the given group (with its encrypted token), or null. */
-export async function getPlaidItemForGroup(
+export async function getPlaidItemForBook(
   id: number,
-  groupId: number,
+  book: BookRef,
 ): Promise<PlaidItem | null> {
   const [row] = await db
     .select()
     .from(plaidItems)
-    .where(and(eq(plaidItems.id, id), eq(plaidItems.groupId, groupId)))
+    .where(and(eq(plaidItems.id, id), eq(plaidItems.bookId, book.id)))
     .limit(1);
   return row ?? null;
 }

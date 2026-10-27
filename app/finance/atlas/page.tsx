@@ -11,7 +11,7 @@ import { listPriceSuggestions } from "@/lib/queries/finance-bills";
 import { listFinancialAccounts } from "@/lib/queries/finance-networth";
 import { listProfiles } from "@/lib/queries/profiles";
 import { currentMonthISO } from "@/lib/finance/parse";
-import { requireGroupId } from "@/lib/session";
+import { requireBook } from "@/lib/books";
 import { getGroupTimezone } from "@/lib/queries/group";
 import { formatMonth } from "@/lib/format";
 import AtlasMonthSwitcher from "@/components/finance/AtlasMonthSwitcher";
@@ -44,11 +44,11 @@ export default async function AtlasPage({
   ]);
 
   const editable = editor && view.isCurrentMonth;
-  const groupId = await requireGroupId();
-  const currentMonth = currentMonthISO(await getGroupTimezone(groupId));
+  const book = await requireBook();
+  const currentMonth = currentMonthISO(await getGroupTimezone(book.groupId));
   // Bills whose latest payment differs from their price: offered on the current month only.
   const suggestions = editable
-    ? Object.fromEntries((await listPriceSuggestions(groupId, currentMonth)).map((s) => [s.billId, s.suggestion]))
+    ? Object.fromEntries((await listPriceSuggestions(book, currentMonth)).map((s) => [s.billId, s.suggestion]))
     : {};
   const openBillId = bill && /^\d+$/.test(bill) ? Number(bill) : null;
   const defaultMonth = currentMonth.slice(0, 7);
