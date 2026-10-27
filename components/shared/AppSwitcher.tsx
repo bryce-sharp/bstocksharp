@@ -11,9 +11,12 @@ import Divider from "@mui/material/Divider";
 import Box from "@mui/material/Box";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import AppsIcon from "@mui/icons-material/Apps";
+import BuildOutlinedIcon from "@mui/icons-material/BuildOutlined";
+import Typography from "@mui/material/Typography";
 import CheckIcon from "@mui/icons-material/Check";
 import { useRouter } from "next/navigation";
 import { getApp, visibleApps } from "@/lib/apps";
+import { DEV_PAGES, isDevSite } from "@/lib/dev";
 import { switchBookAction } from "@/app/actions/books";
 
 /** The viewer's money books, listed under Finance; `activeId` is the one this device works in. */
@@ -142,6 +145,23 @@ export default function AppSwitcher({
                 </ListItemIcon>
                 <ListItemText>All apps</ListItemText>
               </MenuItem>,
+            ]
+          : null}
+        {/* Dev pages (lib/dev) exist only on your own machine, so only there are they listed. */}
+        {isDevSite
+          ? [
+              <Divider key="dev-divider" />,
+              <Typography key="dev-title" variant="overline" color="text.secondary" sx={{ px: 2, display: "block" }}>
+                Dev pages · localhost
+              </Typography>,
+              ...DEV_PAGES.map((d) => (
+                <MenuItem key={d.href} component={Link} href={d.href} onClick={close} dense>
+                  <ListItemIcon>
+                    <BuildOutlinedIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText secondary={d.about}>{d.name}</ListItemText>
+                </MenuItem>
+              )),
             ]
           : null}
       </Menu>
