@@ -177,6 +177,7 @@ export function Btn({
   small,
   tight,
   label,
+  announce,
 }: {
   children: ReactNode;
   onClick: () => void;
@@ -187,6 +188,8 @@ export function Btn({
   tight?: boolean;
   /** Accessible name and tooltip, for buttons that show only an icon. */
   label?: string;
+  /** Just unlocked: pops in with rings of gold thread, so it gets noticed. */
+  announce?: boolean;
 }) {
   return (
     <button
@@ -195,6 +198,7 @@ export function Btn({
       disabled={disabled}
       aria-label={label}
       title={label}
+      className={announce ? "snug-announce" : undefined}
       style={{
         position: "relative",
         fontFamily: FONT,
@@ -400,6 +404,36 @@ export function QuiltBackdrop({ dateKey }: { dateKey: string }) {
         "@keyframes snugPop": {
           "0%": { transform: "translate(-50%,-46%) scale(.92)", opacity: 0 },
           "100%": { transform: "translate(-50%,-50%) scale(1)", opacity: 1 },
+        },
+        // A help button that just unlocked pops in and sends out two rings of gold thread.
+        "@keyframes snugAnnounce": {
+          "0%": { transform: "scale(.6)", opacity: 0 },
+          "70%": { transform: "scale(1.12)", opacity: 1 },
+          "100%": { transform: "scale(1)", opacity: 1 },
+        },
+        "@keyframes snugAnnounceRing": {
+          "0%": { boxShadow: "0 0 0 0 rgba(246,196,69,.95)" },
+          "100%": { boxShadow: "0 0 0 14px rgba(246,196,69,0)" },
+        },
+        ".snug-announce": { animation: "snugAnnounce 450ms ease-out, snugAnnounceRing 1s ease-out 450ms 2" },
+        // The marked spare lifts out of the basket and wiggles before it greys.
+        "@keyframes snugSpareLift": {
+          "0%, 100%": { transform: "translateY(0) rotate(0)" },
+          "20%": { transform: "translateY(-14%) rotate(-6deg)" },
+          "35%": { transform: "translateY(-14%) rotate(6deg)" },
+          "50%": { transform: "translateY(-14%) rotate(-4deg)" },
+          "70%": { transform: "translateY(0) rotate(0)" },
+        },
+        ".snug-spare-lift": { animation: "snugSpareLift 1.1s ease-in-out", transformOrigin: "50% 100%" },
+        // Its paper tag swings on and stays.
+        "@keyframes snugTag": {
+          "0%": { transform: "translate(-50%, -140%) rotate(-30deg)", opacity: 0 },
+          "60%": { transform: "translate(-50%, -96%) rotate(8deg)", opacity: 1 },
+          "100%": { transform: "translate(-50%, -100%) rotate(-4deg)", opacity: 1 },
+        },
+        ".snug-tag-swing": { animation: "snugTag 700ms ease-out both" },
+        "@media (prefers-reduced-motion: reduce)": {
+          ".snug-announce, .snug-spare-lift, .snug-tag-swing": { animation: "none" },
         },
       }}
     />
@@ -669,7 +703,7 @@ export function HowToPlay({ onClose, touch, spares }: { onClose: () => void; tou
         {!touch &&
           section("Keyboard", "Press Tab to pick a patch, move it with the arrow keys, press Enter to stitch it down, and Esc to put it back.")}
         {section("Scoring", "Fewer holes is better, and time breaks ties. The clock starts with your first patch. A perfect fill finishes on its own; otherwise press Tie it off.")}
-        {section("Stuck?", "After 3 minutes you can mark a spare for free: it turns grey, and you can still use it. After 5 minutes you can use a hint, and after 10 minutes a second one. Each stitches a patch into its spot in the intended fill in gold thread; you can still move it, and your result notes how many hints you used.")}
+        {section("Stuck?", "After 3 minutes you can mark a spare for free: it gets a spare tag and turns grey, and you can still use it. After 5 minutes you can use a hint, and after 10 minutes a second one. Each stitches a patch into its spot in the intended fill in gold thread; you can still move it, and your result notes how many hints you used.")}
         {section(
           "One quilt a day",
           "Your first finish each day is your recorded result, and your best run on every day is kept too. Replays and past quilts are not scored. Tap the date to open the calendar and jump to any day. A new quilt arrives at midnight: gentle on Monday, trickier through the week, toughest on Sunday.",

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { addDays, formatDuration, formatLongDate, formatShortDate, loadAttempt, puzzleNumber, saveAttempt, todayKey } from "../daily";
 import type { Puzzle } from "./generator";
 import { loadPuzzle } from "./puzzles";
@@ -159,6 +159,15 @@ const shift = (cells: readonly Cell[], s: Spot) => cells.map(([x, y]) => [x + s.
  * `shareUrl` is the link players share; it defaults to the live site's Snug page. `profileId` is the signed-in person;
  * their account is merged in before the day opens, and saves go to it.
  */
+/** A help button that pops in with gold rings the first time it unlocks, not again after a pause. */
+function HelpBtn({ seen, id, ...props }: { seen: Set<string>; id: string } & Parameters<typeof Btn>[0]) {
+  const [announce] = useState(() => !seen.has(id));
+  useEffect(() => {
+    seen.add(id);
+  }, [seen, id]);
+  return <Btn {...props} announce={announce} />;
+}
+
 export function Snug({ shareUrl, profileId }: { shareUrl?: string; profileId?: number }) {
   useFloatingHeader();
   const [today, setToday] = useState(() => todayKey());
@@ -339,6 +348,9 @@ function SnugDay({
   const [hintIds, setHintIds] = useState<string[]>(() => progress?.hintIds ?? (progress?.hintId ? [progress.hintId] : []));
   /** Patches marked as left over in the intended fill; they stay usable. Saved as `pulledIds`. */
   const [spareIds, setSpareIds] = useState<string[]>(() => progress?.pulledIds ?? []);
+  // The spare just marked: it lifts and wiggles, then greys, and its tag swings on.
+  const [justMarked, setJustMarked] = useState<string | null>(null);
+  const [helpSeen] = useState(() => new Set<string>());
   const playRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
 
@@ -873,7 +885,12 @@ function SnugDay({
     const spare = spares.find((p) => !inFill.has(shapeClass(p.cells))) ?? spares[0];
     if (!spare) return;
     setSpareIds([...spareIds, spare.id]);
-    setSaid("One spare is marked in grey. The intended fill leaves it over, but you can still use it.");
+    setJustMarked(spare.id);
+    window.setTimeout(() => setJustMarked((id) => (id === spare.id ? null : id)), 1100);
+    requestAnimationFrame(() =>
+      document.querySelector(`[data-piece="${spare.id}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" }),
+    );
+    setSaid("Tagged a spare. The intended fill leaves it over, but you can still use it.");
   };
 
   /** Places one solution patch where it belongs, moving anything in its way back to the basket. */
@@ -1142,9 +1159,10 @@ function SnugDay({
                 const lifted = dragged || carry?.id === p.id;
                 const movable = phase === "playing" && !paused;
                 const spare = spareIds.includes(p.id) && phase === "playing";
+                const lifting = justMarked === p.id;
                 return (
+                  <Fragment key={p.id}>
                   <div
-                    key={p.id}
                     data-piece={p.id}
                     tabIndex={movable ? 0 : -1}
                     role={movable ? "button" : undefined}
@@ -1159,13 +1177,14 @@ function SnugDay({
                       height: h * cell,
                       transformOrigin: "0 0",
                       transform: `translate(${pos.x}px, ${pos.y}px) scale(${pos.s})`,
-                      transition: dragged ? "none" : "transform 220ms cubic-bezier(.2,.9,.3,1.15), opacity 400ms ease",
-                      opacity: spare && !p.at && !lifted ? 0.6 : 1,
+                      transition: dragged ? "none" : "transform 220ms cubic-bezier(.2,.9,.3,1.15), opacity 900ms ease, filter 900ms ease",
+                      opacity: spare && !p.at && !lifted && !lifting ? 0.6 : 1,
                       zIndex: lifted ? 50 : p.loose ? 30 : p.at ? 10 : 5,
                       pointerEvents: "none",
                       filter:
                         [
-                          spare ? "grayscale(.85)" : "",
+                          // Always present, so greying fades in rather than snapping.
+                          `grayscale(${spare && !lifting ? 0.85 : 0})`,
                           selected === p.id && phase === "playing" && !dragged ? "drop-shadow(0 0 2px #fff) drop-shadow(0 0 1.5px #fff)" : "",
                           // Stitched-down patches cast no shadow, so neighbors meet at a clean seam.
                           lifted || p.loose ? "drop-shadow(0 12px 10px rgba(40,20,10,.4))" : p.at ? "" : "drop-shadow(0 2px 2px rgba(40,20,10,.35))",
@@ -1174,15 +1193,53 @@ function SnugDay({
                           .join(" ") || "none",
                     }}
                   >
-                    <PatchSvg
-                      piece={p}
-                      cell={cell}
-                      interactive={phase === "playing"}
-                      loose={p.loose && !lifted}
-                      hinted={hintIds.includes(p.id) && phase === "playing" && onSolutionSpot(p)}
-                      onDown={(e, i) => onPieceDown(e, p, index, i)}
-                    />
+                    <div className={lifting ? "snug-spare-lift" : undefined}>
+                      <PatchSvg
+                        piece={p}
+                        cell={cell}
+                        interactive={phase === "playing"}
+                        loose={p.loose && !lifted}
+                        hinted={hintIds.includes(p.id) && phase === "playing" && onSolutionSpot(p)}
+                        onDown={(e, i) => onPieceDown(e, p, index, i)}
+                      />
+                    </div>
                   </div>
+                  {spare && (
+                    // Outside the patch, so the paper tag stays crisp while the patch greys.
+                    <div
+                      aria-hidden
+                      style={{
+                        position: "absolute",
+                        left: 0,
+                        top: 0,
+                        transform: `translate(${pos.x + (w * cell * pos.s) / 2}px, ${pos.y}px)`,
+                        transition: dragged ? "none" : "transform 220ms cubic-bezier(.2,.9,.3,1.15)",
+                        zIndex: lifted ? 51 : 45,
+                        pointerEvents: "none",
+                      }}
+                    >
+                      <div
+                        className={lifting ? "snug-tag-swing" : undefined}
+                        style={{
+                          transform: "translate(-50%, -100%) rotate(-4deg)",
+                          fontSize: 12,
+                          fontFamily: FONT,
+                          fontWeight: 600,
+                          lineHeight: 1.4,
+                          padding: "0 6px",
+                          color: BINDING,
+                          background: LINEN,
+                          border: `1px solid ${BINDING}`,
+                          borderRadius: 3,
+                          whiteSpace: "nowrap",
+                          boxShadow: "0 1px 2px rgba(40,20,10,.3)",
+                        }}
+                      >
+                        spare
+                      </div>
+                    </div>
+                  )}
+                  </Fragment>
                 );
               })}
 
@@ -1279,14 +1336,14 @@ function SnugDay({
                 <span style={{ flex: 1 }} />
                 {/* Phones offer one help at a time, the free spare first, so the row stays on one line. */}
                 {canMarkSpare && (
-                  <Btn small={compact} tight={compact} onClick={markSpare}>
+                  <HelpBtn seen={helpSeen} id="spare" small={compact} tight={compact} onClick={markSpare}>
                     {compact ? "Spare" : "Mark a spare"}
-                  </Btn>
+                  </HelpBtn>
                 )}
                 {canHint && !(compact && canMarkSpare) && (
-                  <Btn small={compact} tight={compact} onClick={applyHint}>
+                  <HelpBtn seen={helpSeen} id={`hint${hintIds.length}`} small={compact} tight={compact} onClick={applyHint}>
                     {hintIds.length === 0 ? (compact ? "Hint" : "Use a hint") : compact ? "Hint 2" : "Use a second hint"}
-                  </Btn>
+                  </HelpBtn>
                 )}
                 {/* On phones the result card says a past quilt or replay is not scored. */}
                 {(isReplay || isArchive) && !compact && (
