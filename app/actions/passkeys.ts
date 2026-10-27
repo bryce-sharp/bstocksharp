@@ -38,7 +38,7 @@ export type PasskeyResult = { ok: true; next?: string } | { ok: false; error: st
 export async function startPasskeyRegistration(): Promise<PublicKeyCredentialCreationOptionsJSON> {
   const { accountId } = await requireSession();
   // A passkey on a shared screen would let anyone there in with no password.
-  if ((await currentLogin())?.isHubLogin) throw new Error("The hub login signs in with its password.");
+  if ((await currentLogin())?.isHubLogin) throw new Error("The shared login signs in with its password.");
   const [account] = await db
     .select()
     .from(accounts)

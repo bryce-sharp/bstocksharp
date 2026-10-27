@@ -35,7 +35,7 @@ export async function claimProfileAction(
   _formData: FormData,
 ): Promise<void> {
   const { accountId } = await requireSession();
-  if ((await currentLogin())?.isHubLogin) throw new Error("The hub login is no particular person.");
+  if ((await currentLogin())?.isHubLogin) throw new Error("The shared login is no particular person.");
 
   const profile = await getProfile(profileId); // group-scoped
   if (!profile) throw new Error("Profile not found.");
@@ -101,7 +101,7 @@ export async function createHubLoginAction(_prev: LoginFormState, formData: Form
     });
   } catch {
     // The username index or the one-hub-login-per-hub index refused it.
-    return { error: "That username is taken, or this hub already has a hub login." };
+    return { error: "That username is taken, or this hub already has a shared login." };
   }
   revalidatePath("/group");
   return { ok: true };
@@ -117,7 +117,7 @@ export async function setHubLoginPasswordAction(_prev: LoginFormState, formData:
     .set({ passwordHash: hashPassword(password), passwordChangedAt: new Date() })
     .where(and(eq(accounts.groupId, session.groupId), eq(accounts.isHubLogin, true)))
     .returning({ id: accounts.id });
-  if (!updated.length) return { error: "This hub has no hub login." };
+  if (!updated.length) return { error: "This hub has no shared login." };
   revalidatePath("/group");
   return { ok: true };
 }

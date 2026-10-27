@@ -6,7 +6,7 @@ import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 /** Shown in place of a person's data this login may not see (lib/sharing, or a game played on their own login). */
 export default function PrivateNotice({
   title,
-  detail = "Pick someone else from the menu at the top.",
+  detail = "Pick someone else under Viewing, at the top.",
 }: {
   title: string;
   detail?: string;

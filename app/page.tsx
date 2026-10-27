@@ -7,25 +7,26 @@ import Typography from "@mui/material/Typography";
 import Card from "@mui/material/Card";
 import CardActionArea from "@mui/material/CardActionArea";
 import CardContent from "@mui/material/CardContent";
-import ProfileControl from "@/components/shared/ProfileControl";
-import { getActiveProfile } from "@/lib/profile";
+import AccountControl from "@/components/shared/AccountControl";
+import { getMe } from "@/lib/profile";
+import { getHubName } from "@/lib/queries/group";
 import { visibleApps } from "@/lib/apps";
 import { hubApps } from "@/lib/hub-apps";
 
-// Tab title follows whoever's active, rather than a baked-in name.
+// Tab title is you, rather than a baked-in name.
 export async function generateMetadata() {
-  const active = await getActiveProfile();
-  return { title: active?.name ?? "Hub" };
+  const me = await getMe();
+  return { title: me?.name ?? (await getHubName()) ?? "Hub" };
 }
 
 // The Hub: a launcher for all the sub-apps (from the registry in lib/apps.tsx).
 export default async function HubPage() {
-  const [active, offered] = await Promise.all([getActiveProfile(), hubApps()]);
-  const apps = visibleApps(active?.hiddenApps, offered);
+  const [me, offered, hubName] = await Promise.all([getMe(), hubApps(), getHubName()]);
+  const apps = visibleApps(me?.hiddenApps, offered);
 
-  // Only one app in view → this person has no use for a launcher; take them
+  // Only one app in view → this login has no use for a launcher; take them
   // straight in. They can still reach other apps + settings from any header.
-  if (active && apps.length === 1) redirect(apps[0].href);
+  if (offered.length && apps.length === 1) redirect(apps[0].href);
 
   return (
     <Box>
@@ -38,14 +39,14 @@ export default async function HubPage() {
           p: 2,
         }}
       >
-        <ProfileControl />
+        <AccountControl />
       </Box>
       <Container maxWidth="md" sx={{ py: { xs: 2, md: 6 } }}>
         <Stack spacing={1} sx={{ mb: 4 }}>
           <Typography variant="h3" component="h1">
-            {active?.name ?? "Your apps"}
+            {me?.name ?? hubName ?? "Your apps"}
           </Typography>
-          {active ? (
+          {me ? (
             <Typography variant="h6" component="p" color="text.secondary" fontWeight={400}>
               Your apps
             </Typography>

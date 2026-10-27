@@ -21,8 +21,8 @@ import { listPendingInvites } from "@/lib/queries/invites";
 import { canEditProfile } from "@/lib/auth";
 import { listGroupMembers } from "@/lib/queries/groups";
 import { listAllProfiles } from "@/lib/queries/profiles";
+import { getHubName } from "@/lib/queries/group";
 import { hoursUntil, listPendingResets, type PendingReset } from "@/lib/password-reset";
-import { getActiveProfile } from "@/lib/profile";
 import {
   claimProfileAction,
   releaseClaimAction,
@@ -61,11 +61,11 @@ export default async function PeopleTab({
   /** For reset links, which need an absolute URL. */
   origin: string;
 }) {
-  const [members, all, active, offeredApps] = await Promise.all([
+  const [members, all, offeredApps, hubName] = await Promise.all([
     listGroupMembers(),
     listAllProfiles(),
-    getActiveProfile(),
     hubApps(),
+    getHubName(),
   ]);
   const allApps = await allHubApps();
   const hubLogin = members.find((m) => m.isHubLogin) ?? null;
@@ -148,20 +148,17 @@ export default async function PeopleTab({
                   <Typography fontWeight={600} component="span">
                     {p.name}
                   </Typography>
-                  {active?.id === p.id ? (
-                    <Chip size="small" label="Active" color="primary" sx={{ ml: 1 }} />
-                  ) : null}
                   {archived ? <Chip size="small" label="Archived" sx={{ ml: 1 }} /> : null}
                 </Box>
-                {manageable && !archived ? (
+                {manageable && !archived && claim ? (
                   <SharingButton
                     profileId={p.id}
                     name={p.name}
                     self={mine}
-                    hasLogin={!!claim}
                     sharing={p.sharing}
                     people={heirs}
                     hubApps={offeredApps}
+                    hubName={hubLogin !== null ? (hubName ?? "Hub") : null}
                   />
                 ) : null}
                 {manageable ? (
@@ -231,7 +228,7 @@ export default async function PeopleTab({
                   ) : (
                     <>
                       <Typography variant="body2" color="text.secondary" sx={{ flexGrow: 1 }}>
-                        No login, so open to everyone here
+                        No login: everyone here can see and change their stuff
                       </Typography>
                       <form action={claimProfileAction.bind(null, p.id)}>
                         <SubmitButton size="small" variant="outlined" pendingLabel="Claiming…">
@@ -274,6 +271,7 @@ export default async function PeopleTab({
         <HubLogin
           login={hubLogin ? { id: hubLogin.id, username: hubLogin.username, apps: hubLogin.apps } : null}
           hubApps={allApps}
+          hubName={hubName ?? "Hub"}
         />
       ) : null}
 

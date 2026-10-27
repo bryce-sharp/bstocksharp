@@ -29,7 +29,7 @@ export default async function SnugPage() {
     return (
       <PrivateNotice
         title={`You can't play Snug for ${active.name} or see their boards`}
-        detail={`${active.name} plays on their own login. Pick yourself, or someone without a login, from the menu at the top.`}
+        detail={`${active.name} plays on their own login. Pick yourself, or someone without a login, under Viewing at the top.`}
       />
     );
   }

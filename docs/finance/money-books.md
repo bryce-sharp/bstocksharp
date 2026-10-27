@@ -1,6 +1,6 @@
 # Money books
 
-Status: agreed 2026-10-27. PR 1 (books underneath) is built.
+Status: agreed 2026-10-27. PR 1 (books underneath) is live; PR 2 (books you can see) is built.
 
 Decided: every active person starts in their hub's Family book; any member manages a
 book; one book per pay plan (no split paychecks); it ships as the three PRs in
@@ -60,10 +60,18 @@ for tenancy, hub deletion and the demo seed.
 
 ## Using it
 
-- **Book switcher:** Finance gets a book picker in its header, like the person menu.
-  The choice is remembered per device (an `active_book` cookie), validated on every
-  request against the login's books.
-- **No books:** a login whose person is in no book sees "Create a book" instead of Finance.
+- **Book switcher:** the books are listed under Finance in the app menu, from any app,
+  with a check on the current one and "Manage books…". In Finance the menu's label reads
+  "Finance · Business". The choice is remembered per device (an `active_book` cookie),
+  validated on every request against the login's books.
+- **Books page** (Finance > Books, from "Manage books…"): new book, rename, members, and
+  delete by typing the book's name. A hub keeps at least one book, and a book with linked
+  banks must disconnect them first.
+- **The shared login** (named after the hub, like "Home") is no person, so it is never a
+  member. A book's members can tick it to let it open the book too; it also needs Finance
+  among its apps. It cannot manage books.
+- **No books:** a login whose person is in no book sees a note with "New book" instead of Finance.
+- **New people** join no book on their own; a member adds them on the Books page.
 - **Bank links and tokens:** linking a bank or minting an ingest token happens inside
   a book, and its data lands in that book. The bank-admin rule (owner plus
   `BANK_USERS`) stays, and the admin must also be a member of the book.

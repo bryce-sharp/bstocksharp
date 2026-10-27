@@ -6,7 +6,7 @@ import AppBar from "@mui/material/AppBar";
 import Toolbar from "@mui/material/Toolbar";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import AppSwitcher from "@/components/shared/AppSwitcher";
+import AppSwitcher, { type SwitcherBooks } from "@/components/shared/AppSwitcher";
 
 // Shared header used by each sub-app. The app-switcher gives it identity + a way
 // to hop between apps; `nav` holds app-specific links. Appearance + the editing
@@ -16,6 +16,8 @@ export default function AppHeader({
   nav = [],
   hiddenApps = [],
   hubApps,
+  books,
+  appControl,
   profileControl,
 }: {
   current: string;
@@ -23,6 +25,10 @@ export default function AppHeader({
   hiddenApps?: string[];
   /** The apps this hub has; omitted means every app. */
   hubApps?: string[];
+  /** The viewer's money books, listed under Finance in the app menu. */
+  books?: SwitcherBooks | null;
+  /** Whose stuff this app shows (the Viewing picker), beside the account menu. */
+  appControl?: React.ReactNode;
   profileControl?: React.ReactNode;
 }) {
   return (
@@ -37,7 +43,7 @@ export default function AppHeader({
       }}
     >
       <Toolbar sx={{ gap: 0.5 }}>
-        <AppSwitcher current={current} nav={nav} hiddenApps={hiddenApps} hubApps={hubApps} />
+        <AppSwitcher current={current} nav={nav} hiddenApps={hiddenApps} hubApps={hubApps} books={books} />
         {/* Inline nav on desktop; on mobile it lives in the switcher menu. */}
         <Box sx={{ display: { xs: "none", sm: "flex" }, gap: 0.5 }}>
           {nav.map((n) => (
@@ -53,6 +59,7 @@ export default function AppHeader({
           ))}
         </Box>
         <Box sx={{ flexGrow: 1 }} />
+        {appControl}
         {profileControl}
       </Toolbar>
     </AppBar>

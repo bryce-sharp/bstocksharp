@@ -1,8 +1,10 @@
 import "server-only";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { listProfiles } from "@/lib/queries/profiles";
 import { getSessionGroupId } from "@/lib/session";
 import type { Profile } from "@/lib/db/schema";
+import { currentLogin } from "@/lib/hub-apps";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ACTIVE PROFILE — who "we" are across the hub.
@@ -53,3 +55,15 @@ export async function setActiveProfileCookie(id: number): Promise<void> {
     maxAge: COOKIE_MAX_AGE,
   });
 }
+
+/**
+ * You: the person the signed-in login is tied to. The header, the app's name,
+ * color and icons follow this, never the person being viewed. Null for the shared
+ * login and for a login tied to no one.
+ */
+export const getMe = cache(async (): Promise<Profile | null> => {
+  if ((await getSessionGroupId()) === null) return null;
+  const id = (await currentLogin())?.profileId ?? null;
+  if (id === null) return null;
+  return (await listProfiles()).find((p) => p.id === id) ?? null;
+});

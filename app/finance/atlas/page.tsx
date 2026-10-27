@@ -9,9 +9,8 @@ import { isEditor } from "@/lib/auth";
 import { getAtlasView } from "@/lib/queries/finance-atlas";
 import { listPriceSuggestions } from "@/lib/queries/finance-bills";
 import { listFinancialAccounts } from "@/lib/queries/finance-networth";
-import { listProfiles } from "@/lib/queries/profiles";
 import { currentMonthISO } from "@/lib/finance/parse";
-import { requireBook } from "@/lib/books";
+import { listBookMembers, requireBook } from "@/lib/books";
 import { getGroupTimezone } from "@/lib/queries/group";
 import { formatMonth } from "@/lib/format";
 import AtlasMonthSwitcher from "@/components/finance/AtlasMonthSwitcher";
@@ -38,7 +37,7 @@ export default async function AtlasPage({
   const { month, bill } = await searchParams;
   const [view, profiles, allAccounts, editor] = await Promise.all([
     getAtlasView(month),
-    listProfiles(),
+    requireBook().then((b) => listBookMembers(b.id)),
     listFinancialAccounts(),
     isEditor(),
   ]);

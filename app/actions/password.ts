@@ -110,7 +110,7 @@ export async function changePasswordAction(
 ): Promise<ChangePasswordState> {
   const session = await requireSession();
   if ((await currentLogin())?.isHubLogin) {
-    return { error: "Only the hub owner can change the hub login's password." };
+    return { error: "Only the hub owner can change the shared login's password." };
   }
   const current = String(formData.get("current") ?? "");
   const password = String(formData.get("password") ?? "");

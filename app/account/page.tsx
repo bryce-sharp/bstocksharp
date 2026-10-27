@@ -110,10 +110,10 @@ export default async function AccountPage({
                 profileId={mine.id}
                 name={mine.name}
                 self
-                hasLogin
                 sharing={mine.sharing}
                 people={others.map((p) => ({ id: p.id, name: p.name }))}
                 hubApps={offeredApps}
+                hubName={members.some((m) => m.isHubLogin) ? (group?.name ?? "Hub") : null}
               />
             </Box>
           </Paper>

@@ -1,5 +1,9 @@
 import "server-only";
+import { inArray } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { plaidItems } from "@/lib/db/schema";
 import { getSession } from "@/lib/session";
+import { readViewerBooks } from "@/lib/books";
 import { isOwner, isSiteAdmin } from "@/lib/auth";
 import { getGroupTimezone } from "@/lib/queries/group";
 import { isProblem, listEvents, listEventSources, type EventScope } from "@/lib/events";
@@ -27,7 +31,7 @@ export type ActivityRow = {
 
 export type ActivityPage = { rows: ActivityRow[]; more: boolean };
 
-type Viewer = { scope: EventScope; timeZone: string };
+type Viewer = { scope: EventScope; timeZone: string; plaidItems: number[] };
 
 /** What the signed-in account may read, or null when it may read nothing. */
 export async function activityViewer(): Promise<Viewer | null> {
@@ -35,9 +39,15 @@ export async function activityViewer(): Promise<Viewer | null> {
   if (!session) return null;
   const [owner, admin] = await Promise.all([isOwner(), isSiteAdmin()]);
   if (!owner && !admin) return null;
+  // Bank events belong to a money book; the owner sees only their own books' banks.
+  const mine = (await readViewerBooks()).map((b) => b.id);
+  const banks = mine.length
+    ? await db.select({ id: plaidItems.id }).from(plaidItems).where(inArray(plaidItems.bookId, mine))
+    : [];
   return {
     scope: { groupId: owner ? session.groupId : null, site: admin },
     timeZone: await getGroupTimezone(session.groupId),
+    plaidItems: banks.map((b) => b.id),
   };
 }
 
@@ -46,7 +56,7 @@ export async function listActivity(
   viewer: Viewer,
   opts: { source?: string; before?: number } = {},
 ): Promise<ActivityPage> {
-  const events = await listEvents(viewer.scope, { ...opts, limit: ACTIVITY_PAGE + 1 });
+  const events = await listEvents(viewer.scope, { ...opts, limit: ACTIVITY_PAGE + 1, plaidItems: viewer.plaidItems });
   return {
     rows: events.slice(0, ACTIVITY_PAGE).map((e) => ({
       id: e.id,

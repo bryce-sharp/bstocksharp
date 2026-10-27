@@ -96,7 +96,9 @@ export async function listBankConnections(): Promise<BankConnectionRow[]> {
 
 /** The household's recent bank events (webhooks, syncs), newest first. */
 export async function listBankActivity(limit = 12): Promise<EventView[]> {
-  return listEvents({ groupId: (await requireBook()).groupId }, { source: "plaid", limit });
+  const book = await requireBook();
+  const items = await db.select({ id: plaidItems.id }).from(plaidItems).where(eq(plaidItems.bookId, book.id));
+  return listEvents({ groupId: book.groupId }, { source: "plaid", limit, items: items.map((i) => i.id) });
 }
 
 export type BankAlert = { institutionName: string; status: string; lastError: string | null };

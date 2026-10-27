@@ -1,8 +1,8 @@
 import { ImageResponse } from "next/og";
-import { getActiveProfile } from "@/lib/profile";
+import { getMe } from "@/lib/profile";
 import { iconInitial, textOn } from "@/lib/icon";
 
-// PWA manifest icons (referenced from app/manifest.ts): the active profile's
+// PWA manifest icons (referenced from app/manifest.ts): your
 // color + initial, generated to PNG at request time — same family as
 // app/apple-icon.tsx (iOS) and /profile-icon (favicon). `?size=` picks the
 // dimension; `?maskable=1` shrinks the glyph into the maskable safe zone (the
@@ -20,8 +20,8 @@ export async function GET(request: Request) {
   }
   const maskable = params.get("maskable") === "1";
 
-  const active = await getActiveProfile();
-  const bg = active?.color ?? "#4caf7d";
+  const me = await getMe();
+  const bg = me?.color ?? "#4caf7d";
 
   return new ImageResponse(
     (
@@ -41,7 +41,7 @@ export async function GET(request: Request) {
           fontFamily: "sans-serif",
         }}
       >
-        {iconInitial(active?.name)}
+        {iconInitial(me?.name)}
       </div>
     ),
     { width: size, height: size },
