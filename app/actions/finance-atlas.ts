@@ -12,8 +12,7 @@ import {
   type RecurringExpense,
 } from "@/lib/db/schema";
 import { requireEditor, requireEditorFor } from "@/lib/auth";
-import { requireGroupId } from "@/lib/session";
-import { profileInGroup } from "@/lib/queries/scope";
+import { requireBook, type BookRef } from "@/lib/books";
 import { getGroupTimezone } from "@/lib/queries/group";
 import { getBillHistory, type BillHistoryView } from "@/lib/queries/finance-bills";
 import {
@@ -64,13 +63,14 @@ function parseComp(formData: FormData) {
   };
 }
 
-async function activeCompPlan(profileId: number) {
+async function activeCompPlan(profileId: number, book: BookRef) {
   const [row] = await db
     .select()
     .from(compensationPlans)
     .where(
       and(
         eq(compensationPlans.profileId, profileId),
+        eq(compensationPlans.bookId, book.id),
         isNull(compensationPlans.endDate),
       ),
     )
@@ -86,9 +86,10 @@ export async function saveCompPlanAction(
 ): Promise<void> {
   await requireApp("finance");
   await requireEditorFor(profileId);
+  const book = await requireBook();
   const data = parseComp(formData);
 
-  const active = await activeCompPlan(profileId);
+  const active = await activeCompPlan(profileId, book);
   if (active) {
     await db
       .update(compensationPlans)
@@ -97,13 +98,13 @@ export async function saveCompPlanAction(
   } else {
     const startDate =
       normalizeMonth(formData.get("startMonth")) ?? currentMonthISO();
-    await db.insert(compensationPlans).values({ ...data, profileId, startDate });
+    await db.insert(compensationPlans).values({ ...data, profileId, bookId: book.id, startDate });
   }
   revalidatePath(ATLAS);
 }
 
 /**
- * Remove a person's income entirely — every compensation segment AND their
+ * Remove a person's income in this book — every compensation segment AND their
  * deductions (deductions without a plan are meaningless). Reverts them to the
  * "set up income" state. The UI confirms.
  */
@@ -113,8 +114,13 @@ export async function removeCompensationAction(
 ): Promise<void> {
   await requireApp("finance");
   await requireEditorFor(profileId);
-  await db.delete(incomeDeductions).where(eq(incomeDeductions.profileId, profileId));
-  await db.delete(compensationPlans).where(eq(compensationPlans.profileId, profileId));
+  const book = await requireBook();
+  await db
+    .delete(incomeDeductions)
+    .where(and(eq(incomeDeductions.profileId, profileId), eq(incomeDeductions.bookId, book.id)));
+  await db
+    .delete(compensationPlans)
+    .where(and(eq(compensationPlans.profileId, profileId), eq(compensationPlans.bookId, book.id)));
   revalidatePath(ATLAS);
 }
 
@@ -128,9 +134,10 @@ export async function startCompPlanAction(
   const data = parseComp(formData);
   const startDate = normalizeMonth(formData.get("startMonth"));
   if (!startDate) throw new Error("Pick the month the change takes effect.");
+  const book = await requireBook();
 
-  const active = await activeCompPlan(profileId);
-  await db.insert(compensationPlans).values({ ...data, profileId, startDate });
+  const active = await activeCompPlan(profileId, book);
+  await db.insert(compensationPlans).values({ ...data, profileId, bookId: book.id, startDate });
   if (active) {
     await db
       .update(compensationPlans)
@@ -156,11 +163,11 @@ const DEDUCTION_TYPES = new Set([
 async function scopedAccountId(raw: FormDataEntryValue | null): Promise<number | null> {
   const id = parseBoundedInt(raw, 1, 2 ** 31);
   if (id === null) return null;
-  const groupId = await requireGroupId();
+  const book = await requireBook();
   const [acct] = await db
     .select({ id: financialAccounts.id })
     .from(financialAccounts)
-    .where(and(eq(financialAccounts.id, id), eq(financialAccounts.groupId, groupId)))
+    .where(and(eq(financialAccounts.id, id), eq(financialAccounts.bookId, book.id)))
     .limit(1);
   return acct ? id : null;
 }
@@ -198,16 +205,16 @@ async function parseDeduction(formData: FormData) {
   };
 }
 
-/** A deduction row, only if its profile is in OUR group. */
+/** A deduction row, only if it is in the viewer's book. */
 async function scopedDeduction(id: number) {
-  const groupId = await requireGroupId();
+  const book = await requireBook();
   const [row] = await db
     .select()
     .from(incomeDeductions)
     .where(
       and(
         eq(incomeDeductions.id, id),
-        profileInGroup(incomeDeductions.profileId, groupId),
+        eq(incomeDeductions.bookId, book.id),
       ),
     )
     .limit(1);
@@ -224,7 +231,9 @@ export async function addDeductionAction(
   const data = await parseDeduction(formData);
   const startDate =
     normalizeMonth(formData.get("startMonth")) ?? currentMonthISO();
-  await db.insert(incomeDeductions).values({ ...data, profileId, startDate });
+  await db
+    .insert(incomeDeductions)
+    .values({ ...data, profileId, bookId: (await requireBook()).id, startDate });
   revalidatePath(ATLAS);
 }
 
@@ -257,7 +266,7 @@ export async function replaceDeductionAction(
 
   await db
     .insert(incomeDeductions)
-    .values({ ...data, profileId: row.profileId, startDate });
+    .values({ ...data, profileId: row.profileId, bookId: row.bookId, startDate });
   await db
     .update(incomeDeductions)
     .set({ endDate: row.startDate < startDate ? dayBefore(startDate) : row.startDate })
@@ -302,7 +311,7 @@ export async function reassignCategoryAction(
 ): Promise<void> {
   await requireApp("finance");
   await requireEditor();
-  const groupId = await requireGroupId();
+  const book = await requireBook();
   const target = to?.trim() || null;
   if (!from.trim() || from.trim() === target) return;
 
@@ -311,7 +320,7 @@ export async function reassignCategoryAction(
     .set({ category: target })
     .where(
       and(
-        eq(recurringExpenses.groupId, groupId),
+        eq(recurringExpenses.bookId, book.id),
         eq(recurringExpenses.category, from),
       ),
     );
@@ -322,7 +331,7 @@ export async function reassignCategoryAction(
 const NECESSITIES = new Set(["essential", "lifestyle", "commitment"]);
 
 async function parseExpense(formData: FormData) {
-  const groupId = await requireGroupId();
+  const book = await requireBook();
   const name = String(formData.get("name") ?? "").trim();
   if (!name) throw new Error("Name is required.");
   const amount = parseMoney(formData.get("amount"));
@@ -361,7 +370,7 @@ async function parseExpense(formData: FormData) {
       .where(
         and(
           eq(financialAccounts.id, paidFromAccountId),
-          eq(financialAccounts.groupId, groupId),
+          eq(financialAccounts.bookId, book.id),
         ),
       )
       .limit(1);
@@ -385,12 +394,12 @@ async function parseExpense(formData: FormData) {
 
 /** An expense row in OUR group. */
 async function scopedExpense(id: number) {
-  const groupId = await requireGroupId();
+  const book = await requireBook();
   const [row] = await db
     .select()
     .from(recurringExpenses)
     .where(
-      and(eq(recurringExpenses.id, id), eq(recurringExpenses.groupId, groupId)),
+      and(eq(recurringExpenses.id, id), eq(recurringExpenses.bookId, book.id)),
     )
     .limit(1);
   if (!row) throw new Error("Expense not found.");
@@ -400,11 +409,13 @@ async function scopedExpense(id: number) {
 export async function addExpenseAction(formData: FormData): Promise<void> {
   await requireApp("finance");
   await requireEditor();
-  const groupId = await requireGroupId();
+  const book = await requireBook();
   const data = await parseExpense(formData);
   const startDate =
     normalizeMonth(formData.get("startMonth")) ?? currentMonthISO();
-  await db.insert(recurringExpenses).values({ ...data, groupId, startDate });
+  await db
+    .insert(recurringExpenses)
+    .values({ ...data, groupId: book.groupId, bookId: book.id, startDate });
   revalidatePath(ATLAS);
 }
 
@@ -433,7 +444,7 @@ type ExpenseFields = Awaited<ReturnType<typeof parseExpense>>;
 async function startNewVersion(row: RecurringExpense, data: ExpenseFields, startDate: string): Promise<void> {
   const [created] = await db
     .insert(recurringExpenses)
-    .values({ ...data, groupId: row.groupId, startDate, seriesId: row.seriesId ?? row.id })
+    .values({ ...data, groupId: row.groupId, bookId: row.bookId, startDate, seriesId: row.seriesId ?? row.id })
     .returning({ id: recurringExpenses.id });
   await db
     .update(recurringExpenses)
@@ -444,7 +455,7 @@ async function startNewVersion(row: RecurringExpense, data: ExpenseFields, start
     .set({ recurringExpenseId: created.id })
     .where(
       and(
-        eq(transactions.groupId, row.groupId),
+        eq(transactions.bookId, row.bookId),
         eq(transactions.recurringExpenseId, row.id),
         gte(transactions.postedOn, startDate),
       ),
@@ -470,8 +481,8 @@ export async function replaceExpenseAction(
 /** A bill's price history (every version, every payment) for its History tab. */
 export async function getBillHistoryAction(id: number): Promise<BillHistoryView | { error: string }> {
   await requireApp("finance");
-  const groupId = await requireGroupId();
-  const view = await getBillHistory(groupId, id, currentMonthISO(await getGroupTimezone(groupId)));
+  const book = await requireBook();
+  const view = await getBillHistory(book, id, currentMonthISO(await getGroupTimezone(book.groupId)));
   return view ?? { error: "That bill no longer exists." };
 }
 

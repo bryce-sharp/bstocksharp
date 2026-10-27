@@ -1,6 +1,7 @@
 import "server-only";
 import { and, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { type BookRef } from "@/lib/books";
 import { recurringExpenses, transactions } from "@/lib/db/schema";
 import { addMonths } from "@/lib/finance/net-worth";
 import {
@@ -30,24 +31,24 @@ export type BillHistoryView = {
 };
 
 /** One bill's price history, from any of its versions; null when it is not this group's. */
-export async function getBillHistory(groupId: number, billId: number, currentMonth: string): Promise<BillHistoryView | null> {
+export async function getBillHistory(book: BookRef, billId: number, currentMonth: string): Promise<BillHistoryView | null> {
   const [row] = await db
     .select({ key: seriesKey })
     .from(recurringExpenses)
-    .where(and(eq(recurringExpenses.id, billId), eq(recurringExpenses.groupId, groupId)))
+    .where(and(eq(recurringExpenses.id, billId), eq(recurringExpenses.bookId, book.id)))
     .limit(1);
   if (!row) return null;
   const versions = await db
     .select()
     .from(recurringExpenses)
-    .where(and(eq(recurringExpenses.groupId, groupId), sql`${seriesKey} = ${row.key}`))
+    .where(and(eq(recurringExpenses.bookId, book.id), sql`${seriesKey} = ${row.key}`))
     .orderBy(recurringExpenses.startDate);
   const payments = await db
     .select({ postedOn: transactions.postedOn, amount: transactions.amount })
     .from(transactions)
     .where(
       and(
-        eq(transactions.groupId, groupId),
+        eq(transactions.bookId, book.id),
         inArray(transactions.recurringExpenseId, versions.map((v) => v.id)),
         inArray(transactions.category, BILL_LANES),
         eq(transactions.needsReview, false),
@@ -71,7 +72,7 @@ export async function getBillHistory(groupId: number, billId: number, currentMon
 export type BillPriceSuggestion = { billId: number; name: string; suggestion: PriceSuggestion };
 
 /** Current bills whose latest payment, within the last year, suggests a new price. */
-export async function listPriceSuggestions(groupId: number, currentMonth: string): Promise<BillPriceSuggestion[]> {
+export async function listPriceSuggestions(book: BookRef, currentMonth: string): Promise<BillPriceSuggestion[]> {
   const bills = await db
     .select({
       id: recurringExpenses.id,
@@ -85,7 +86,7 @@ export async function listPriceSuggestions(groupId: number, currentMonth: string
     .from(recurringExpenses)
     .where(
       and(
-        eq(recurringExpenses.groupId, groupId),
+        eq(recurringExpenses.bookId, book.id),
         isNull(recurringExpenses.endDate),
         eq(recurringExpenses.isEstimate, false),
       ),
@@ -97,7 +98,7 @@ export async function listPriceSuggestions(groupId: number, currentMonth: string
     .innerJoin(recurringExpenses, eq(recurringExpenses.id, transactions.recurringExpenseId))
     .where(
       and(
-        eq(transactions.groupId, groupId),
+        eq(transactions.bookId, book.id),
         inArray(transactions.category, BILL_LANES),
         eq(transactions.needsReview, false),
         gte(transactions.postedOn, addMonths(currentMonth, -12)),

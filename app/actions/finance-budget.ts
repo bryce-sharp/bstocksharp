@@ -11,7 +11,7 @@ import {
   profiles,
 } from "@/lib/db/schema";
 import { requireEditor } from "@/lib/auth";
-import { requireGroupId } from "@/lib/session";
+import { requireBook, type BookRef } from "@/lib/books";
 import { getGroupTimezone } from "@/lib/queries/group";
 import { parseMoney, parseStr, parseInt as parseBoundedInt, todayISO } from "@/lib/finance/parse";
 import { categorizeMerchant } from "@/lib/finance/sms";
@@ -48,48 +48,48 @@ function parseTag(v: FormDataEntryValue | null): string | null {
 
 /** A transaction row in OUR group, or throw. */
 async function scopedTxn(id: number) {
-  const groupId = await requireGroupId();
+  const book = await requireBook();
   const [row] = await db
     .select()
     .from(transactions)
-    .where(and(eq(transactions.id, id), eq(transactions.groupId, groupId)))
+    .where(and(eq(transactions.id, id), eq(transactions.bookId, book.id)))
     .limit(1);
   if (!row) throw new Error("Transaction not found.");
-  return { row, groupId };
+  return { row, book };
 }
 
 /** Validate a fund id belongs to the group (or null). */
-async function validFund(groupId: number, id: number | null): Promise<number | null> {
+async function validFund(book: BookRef, id: number | null): Promise<number | null> {
   if (id === null) return null;
   const [f] = await db
     .select({ id: funds.id })
     .from(funds)
-    .where(and(eq(funds.id, id), eq(funds.groupId, groupId)))
+    .where(and(eq(funds.id, id), eq(funds.bookId, book.id)))
     .limit(1);
   return f ? id : null;
 }
 
 /** Validate a recurring-bill id belongs to the group (or null). */
-async function validBill(groupId: number, id: number | null): Promise<number | null> {
+async function validBill(book: BookRef, id: number | null): Promise<number | null> {
   if (id === null) return null;
   const [b] = await db
     .select({ id: recurringExpenses.id })
     .from(recurringExpenses)
-    .where(and(eq(recurringExpenses.id, id), eq(recurringExpenses.groupId, groupId)))
+    .where(and(eq(recurringExpenses.id, id), eq(recurringExpenses.bookId, book.id)))
     .limit(1);
   return b ? id : null;
 }
 
 /** Validate an account id belongs to the group (or null), with its kind. */
 async function validAccount(
-  groupId: number,
+  book: BookRef,
   id: number | null,
 ): Promise<{ id: number; kind: string } | null> {
   if (id === null) return null;
   const [a] = await db
     .select({ id: financialAccounts.id, kind: financialAccounts.kind })
     .from(financialAccounts)
-    .where(and(eq(financialAccounts.id, id), eq(financialAccounts.groupId, groupId)))
+    .where(and(eq(financialAccounts.id, id), eq(financialAccounts.bookId, book.id)))
     .limit(1);
   return a ?? null;
 }
@@ -118,7 +118,7 @@ export async function updateTransactionAction(
 ): Promise<TxnRowData> {
   await requireApp("finance");
   await requireEditor();
-  const { row, groupId } = await scopedTxn(id);
+  const { row, book } = await scopedTxn(id);
   const has = (k: string) => formData.has(k);
 
   const set: Record<string, unknown> = { needsReview: false };
@@ -136,23 +136,23 @@ export async function updateTransactionAction(
   }
   if (has("fundId")) {
     set.fundId = await validFund(
-      groupId,
+      book,
       parseBoundedInt(formData.get("fundId"), 1, 2 ** 31),
     );
   }
   if (has("recurringExpenseId")) {
     set.recurringExpenseId = await validBill(
-      groupId,
+      book,
       parseBoundedInt(formData.get("recurringExpenseId"), 1, 2 ** 31),
     );
   }
   if (has("accountId")) {
     set.accountId =
-      (await validAccount(groupId, parseBoundedInt(formData.get("accountId"), 1, 2 ** 31)))?.id ?? null;
+      (await validAccount(book, parseBoundedInt(formData.get("accountId"), 1, 2 ** 31)))?.id ?? null;
   }
   if (has("transferAccountId")) {
     set.transferAccountId =
-      (await validAccount(groupId, parseBoundedInt(formData.get("transferAccountId"), 1, 2 ** 31)))?.id ??
+      (await validAccount(book, parseBoundedInt(formData.get("transferAccountId"), 1, 2 ** 31)))?.id ??
       null;
   }
 
@@ -182,7 +182,7 @@ export async function updateTransactionAction(
   if (effectiveCategory === "transfer") {
     const fromId = ("accountId" in set ? set.accountId : row.accountId) as number | null;
     const intoId = ("transferAccountId" in set ? set.transferAccountId : row.transferAccountId) as number | null;
-    checkTransfer(await validAccount(groupId, fromId), await validAccount(groupId, intoId), fromId);
+    checkTransfer(await validAccount(book, fromId), await validAccount(book, intoId), fromId);
     set.spendCategory = null; // transfers are never tagged
   } else {
     set.transferAccountId = null;
@@ -198,7 +198,7 @@ export async function updateTransactionAction(
     set.spendCategory = null;
   } else if (row.spendCategory == null && effectiveCategory !== "transfer") {
     set.spendCategory = await resolveSpendCategory(
-      groupId,
+      book,
       effectiveCategory,
       "merchant" in set ? (set.merchant as string | null) : row.merchant,
       "recurringExpenseId" in set
@@ -222,11 +222,11 @@ export async function updateTransactionAction(
 export async function addManualTransactionAction(formData: FormData): Promise<void> {
   await requireApp("finance");
   await requireEditor();
-  const groupId = await requireGroupId();
+  const book = await requireBook();
 
   const amount = parseMoney(formData.get("amount"));
   if (amount === null || Number(amount) <= 0) throw new Error("Enter an amount.");
-  const postedOn = parseStr(formData.get("postedOn")) ?? todayISO(await getGroupTimezone(groupId));
+  const postedOn = parseStr(formData.get("postedOn")) ?? todayISO(await getGroupTimezone(book.groupId));
   const merchant = parseStr(formData.get("merchant"));
   const kindRaw = formData.get("kind");
   const kind = kindRaw === "income" ? "income" : kindRaw === "transfer" ? "transfer" : "expense";
@@ -245,7 +245,7 @@ export async function addManualTransactionAction(formData: FormData): Promise<vo
     // purchase, so it nets against spending under the tag it pays back).
     category = formData.get("moneyKind") === "reimbursement" ? "reimbursement" : "income";
   } else if (categoryRaw === "auto") {
-    const rules = await merchantRulesFor(groupId, postedOn);
+    const rules = await merchantRulesFor(book, postedOn);
     const c = categorizeMerchant(merchant ?? "", rules, Number(amount), postedOn);
     category = c.category;
     autoRecurringId = c.recurringExpenseId;
@@ -254,7 +254,7 @@ export async function addManualTransactionAction(formData: FormData): Promise<vo
       merchant,
       amount,
       parseBoundedInt(formData.get("accountId"), 1, 2 ** 31),
-      await transferRulesFor(groupId),
+      await transferRulesFor(book),
     );
     if (t) {
       category = "transfer";
@@ -273,33 +273,34 @@ export async function addManualTransactionAction(formData: FormData): Promise<vo
     const [a] = await db
       .select({ id: financialAccounts.id })
       .from(financialAccounts)
-      .where(and(eq(financialAccounts.id, accountId), eq(financialAccounts.groupId, groupId)))
+      .where(and(eq(financialAccounts.id, accountId), eq(financialAccounts.bookId, book.id)))
       .limit(1);
     if (!a) accountId = null;
   }
   if (kind === "transfer") {
     const into = await validAccount(
-      groupId,
+      book,
       parseBoundedInt(formData.get("transferAccountId"), 1, 2 ** 31),
     );
-    checkTransfer(await validAccount(groupId, accountId), into, accountId);
+    checkTransfer(await validAccount(book, accountId), into, accountId);
     transferAccountId = into!.id;
   }
   // A fund purchase draws its fund; income can be put into one instead.
   const fundId =
     category === "fund" || category === "income"
-      ? await validFund(groupId, parseBoundedInt(formData.get("fundId"), 1, 2 ** 31))
+      ? await validFund(book, parseBoundedInt(formData.get("fundId"), 1, 2 ** 31))
       : null;
   // Auto-detect already resolved a bill link; an explicit fixed/amortized pick
   // takes it from the form.
   const recurringExpenseId =
     category === "fixed" || category === "amortized"
       ? autoRecurringId ??
-        (await validBill(groupId, parseBoundedInt(formData.get("recurringExpenseId"), 1, 2 ** 31)))
+        (await validBill(book, parseBoundedInt(formData.get("recurringExpenseId"), 1, 2 ** 31)))
       : null;
 
   await db.insert(transactions).values({
-    groupId,
+    groupId: book.groupId,
+    bookId: book.id,
     accountId,
     transferAccountId,
     postedOn,
@@ -314,7 +315,7 @@ export async function addManualTransactionAction(formData: FormData): Promise<vo
         ? null
         : category === "reimbursement"
           ? parseTag(formData.get("spendCategory"))
-          : await resolveSpendCategory(groupId, category, merchant, recurringExpenseId),
+          : await resolveSpendCategory(book, category, merchant, recurringExpenseId),
     source: "manual",
     note: parseStr(formData.get("note")),
   });
@@ -339,7 +340,7 @@ export async function deleteTransactionAction(
 export async function createFundAction(formData: FormData): Promise<void> {
   await requireApp("finance");
   await requireEditor();
-  const groupId = await requireGroupId();
+  const book = await requireBook();
   const name = parseStr(formData.get("name"));
   if (!name) throw new Error("Name the fund.");
   const startingBalance = parseMoney(formData.get("startingBalance")) ?? "0.00";
@@ -350,25 +351,25 @@ export async function createFundAction(formData: FormData): Promise<void> {
     const [p] = await db
       .select({ id: profiles.id })
       .from(profiles)
-      .where(and(eq(profiles.id, ownerProfileId), eq(profiles.groupId, groupId)))
+      .where(and(eq(profiles.id, ownerProfileId), eq(profiles.groupId, book.groupId)))
       .limit(1);
     if (!p) ownerProfileId = null;
   }
 
-  await db.insert(funds).values({ groupId, name, startingBalance, ownerProfileId });
+  await db.insert(funds).values({ groupId: book.groupId, bookId: book.id, name, startingBalance, ownerProfileId });
   revalidatePath(BUDGET);
 }
 
 /** A fund row in OUR group, or throw. */
 async function scopedFund(id: number) {
-  const groupId = await requireGroupId();
+  const book = await requireBook();
   const [row] = await db
     .select()
     .from(funds)
-    .where(and(eq(funds.id, id), eq(funds.groupId, groupId)))
+    .where(and(eq(funds.id, id), eq(funds.bookId, book.id)))
     .limit(1);
   if (!row) throw new Error("Fund not found.");
-  return { row, groupId };
+  return { row, book };
 }
 
 /**

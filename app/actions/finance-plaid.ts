@@ -15,7 +15,7 @@ import {
 } from "@/lib/db/schema";
 import { canUseBanks, requireOwner } from "@/lib/auth";
 import { getGroupTimezone } from "@/lib/queries/group";
-import { getPlaidItemForGroup } from "@/lib/queries/finance-plaid";
+import { getPlaidItemForBook } from "@/lib/queries/finance-plaid";
 import { currentMonthISO } from "@/lib/finance/parse";
 import {
   getPlaid,
@@ -29,6 +29,7 @@ import { decryptToken, encryptToken } from "@/lib/plaid/crypto";
 import { suggestAccount } from "@/lib/plaid/accounts";
 import { applyPlaidItemNow, syncPlaidItem, type SyncOutcome } from "@/lib/plaid/sync";
 import { requireApp } from "@/lib/hub-apps";
+import { requireBook, type BookRef } from "@/lib/books";
 
 // Bank connections (Plaid). Connecting a bank shares account access and spends
 // one of the site's few Plaid slots, so every action here needs the household
@@ -69,7 +70,7 @@ const HISTORY_DAYS = 730;
 type Result = { ok: true } | { error: string };
 
 /** The owner's group, refusing non-bank users, the demo login, and unconfigured deployments. */
-async function requireBankAdmin(): Promise<number> {
+async function requireBankAdmin(): Promise<BookRef> {
   const session = await requireOwner();
   if (!(await canUseBanks())) throw new Error("Bank connections are not available for this login.");
   if (!plaidConfigured()) throw new Error("Bank sync is not set up on this deployment.");
@@ -79,15 +80,15 @@ async function requireBankAdmin(): Promise<number> {
     .where(eq(groups.id, session.groupId))
     .limit(1);
   if (!group || group.isDemo) throw new Error("The demo hub cannot connect banks.");
-  return session.groupId;
+  return requireBook();
 }
 
 /**
  * One of the group's bank logins, refused when it was made in the other Plaid
  * environment (dev holds copies of live's real logins and must not touch them).
  */
-async function usableItem(plaidItemId: number, groupId: number): Promise<PlaidItem | { error: string }> {
-  const item = await getPlaidItemForGroup(plaidItemId, groupId);
+async function usableItem(plaidItemId: number, book: BookRef): Promise<PlaidItem | { error: string }> {
+  const item = await getPlaidItemForBook(plaidItemId, book);
   if (!item) return { error: "That bank connection no longer exists." };
   const elsewhere = otherEnvironmentNote(item.environment);
   return elsewhere ? { error: elsewhere } : item;
@@ -112,10 +113,10 @@ export async function createLinkTokenAction(
   plaidItemId: number | null,
 ): Promise<{ linkToken: string } | { error: string }> {
   await requireApp("finance");
-  const groupId = await requireBankAdmin();
+  const book = await requireBankAdmin();
   let accessToken: string | null = null;
   if (plaidItemId !== null) {
-    const item = await usableItem(plaidItemId, groupId);
+    const item = await usableItem(plaidItemId, book);
     if ("error" in item) return item;
     accessToken = decryptToken(item.accessTokenEnc);
   }
@@ -125,7 +126,7 @@ export async function createLinkTokenAction(
       language: "en",
       country_codes: [CountryCode.Us],
       // A stable, non-personal id for this household (Plaid forbids PII here).
-      user: { client_user_id: `group-${groupId}` },
+      user: { client_user_id: `group-${book.groupId}` },
       ...(accessToken
         ? { access_token: accessToken, update: { account_selection_enabled: true } }
         : {
@@ -152,7 +153,7 @@ export async function connectBankAction(
   publicToken: string,
 ): Promise<{ ok: true; duplicateOf: string | null; summary: string } | { error: string }> {
   await requireApp("finance");
-  const groupId = await requireBankAdmin();
+  const book = await requireBankAdmin();
   const plaid = getPlaid();
 
   let itemRowId: number;
@@ -160,11 +161,12 @@ export async function connectBankAction(
   try {
     const { data } = await plaid.itemPublicTokenExchange({ public_token: publicToken });
     accessToken = data.access_token;
-    const tz = await getGroupTimezone(groupId);
+    const tz = await getGroupTimezone(book.groupId);
     const [row] = await db
       .insert(plaidItems)
       .values({
-        groupId,
+        groupId: book.groupId,
+        bookId: book.id,
         itemId: data.item_id,
         environment: plaidEnv(),
         accessTokenEnc: encryptToken(accessToken),
@@ -198,19 +200,19 @@ export async function connectBankAction(
       db
         .select({ id: financialAccounts.id, name: financialAccounts.name, kind: financialAccounts.kind })
         .from(financialAccounts)
-        .where(and(eq(financialAccounts.groupId, groupId), isNull(financialAccounts.archivedAt))),
+        .where(and(eq(financialAccounts.bookId, book.id), isNull(financialAccounts.archivedAt))),
       db
         .select({ id: plaidAccounts.financialAccountId })
         .from(plaidAccounts)
         .innerJoin(plaidItems, eq(plaidAccounts.plaidItemId, plaidItems.id))
-        .where(eq(plaidItems.groupId, groupId)),
+        .where(eq(plaidItems.bookId, book.id)),
       institutionId
         ? db
             .select({ name: plaidItems.institutionName })
             .from(plaidItems)
             .where(
               and(
-                eq(plaidItems.groupId, groupId),
+                eq(plaidItems.bookId, book.id),
                 eq(plaidItems.environment, plaidEnv()),
                 eq(plaidItems.institutionId, institutionId),
                 ne(plaidItems.id, itemRowId),
@@ -264,7 +266,7 @@ export async function mapBankAccountAction(
   financialAccountId: number | null,
 ): Promise<Result> {
   await requireApp("finance");
-  const groupId = await requireBankAdmin();
+  const book = await requireBankAdmin();
 
   const [bankAccount] = await db
     .select({
@@ -275,7 +277,7 @@ export async function mapBankAccountAction(
     })
     .from(plaidAccounts)
     .innerJoin(plaidItems, eq(plaidAccounts.plaidItemId, plaidItems.id))
-    .where(and(eq(plaidAccounts.id, plaidAccountId), eq(plaidItems.groupId, groupId)))
+    .where(and(eq(plaidAccounts.id, plaidAccountId), eq(plaidItems.bookId, book.id)))
     .limit(1);
   if (!bankAccount) return { error: "That bank account no longer exists." };
   const elsewhere = otherEnvironmentNote(bankAccount.environment);
@@ -288,7 +290,7 @@ export async function mapBankAccountAction(
       .where(
         and(
           eq(financialAccounts.id, financialAccountId),
-          eq(financialAccounts.groupId, groupId),
+          eq(financialAccounts.bookId, book.id),
           isNull(financialAccounts.archivedAt),
         ),
       )
@@ -298,7 +300,7 @@ export async function mapBankAccountAction(
     const groupItems = db
       .select({ id: plaidItems.id })
       .from(plaidItems)
-      .where(eq(plaidItems.groupId, groupId));
+      .where(eq(plaidItems.bookId, book.id));
     const [clash] = await db
       .select({ id: plaidAccounts.id })
       .from(plaidAccounts)
@@ -333,12 +335,12 @@ export async function mapBankAccountAction(
     await db
       .update(transactions)
       .set({ accountId: financialAccountId })
-      .where(and(eq(transactions.groupId, groupId), eq(transactions.accountId, previous), inArray(transactions.id, imported)));
+      .where(and(eq(transactions.bookId, book.id), eq(transactions.accountId, previous), inArray(transactions.id, imported)));
     await db
       .update(transactions)
       .set({ transferAccountId: financialAccountId })
       .where(
-        and(eq(transactions.groupId, groupId), eq(transactions.transferAccountId, previous), inArray(transactions.id, imported)),
+        and(eq(transactions.bookId, book.id), eq(transactions.transferAccountId, previous), inArray(transactions.id, imported)),
       );
   }
 
@@ -362,8 +364,8 @@ export async function syncBankAction(
   plaidItemId: number,
 ): Promise<{ ok: true; summary: string } | { error: string }> {
   await requireApp("finance");
-  const groupId = await requireBankAdmin();
-  const item = await usableItem(plaidItemId, groupId);
+  const book = await requireBankAdmin();
+  const item = await usableItem(plaidItemId, book);
   if ("error" in item) return item;
   const outcome = await syncPlaidItem(item.id, "manual");
   revalidateFinance();
@@ -375,8 +377,8 @@ export async function markBankRepairedAction(
   plaidItemId: number,
 ): Promise<{ ok: true; summary: string } | { error: string }> {
   await requireApp("finance");
-  const groupId = await requireBankAdmin();
-  const item = await usableItem(plaidItemId, groupId);
+  const book = await requireBankAdmin();
+  const item = await usableItem(plaidItemId, book);
   if ("error" in item) return item;
   await db
     .update(plaidItems)
@@ -397,8 +399,8 @@ export async function disconnectBankAction(
   _formData: FormData,
 ): Promise<void> {
   await requireApp("finance");
-  const groupId = await requireBankAdmin();
-  const item = await getPlaidItemForGroup(plaidItemId, groupId);
+  const book = await requireBankAdmin();
+  const item = await getPlaidItemForBook(plaidItemId, book);
   if (!item) return;
   const elsewhere = otherEnvironmentNote(item.environment);
   if (elsewhere) throw new Error(elsewhere);

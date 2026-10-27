@@ -9,9 +9,8 @@ import {
   transactions,
   type FinancialAccount,
 } from "@/lib/db/schema";
-import { requireGroupId } from "@/lib/session";
+import { requireBook, type BookRef } from "@/lib/books";
 import { getGroupTimezone } from "@/lib/queries/group";
-import { profileInGroup } from "@/lib/queries/scope";
 import { lastDayOfMonth, todayISO } from "@/lib/finance/parse";
 import {
   CASH_KINDS,
@@ -26,7 +25,7 @@ import {
   PAYCHECKS_PER_YEAR,
   deductionPerCheckC,
   effectiveAt,
-  getAtlasViewForGroup,
+  getAtlasViewForBook,
 } from "@/lib/queries/finance-atlas";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -120,11 +119,11 @@ export type NetWorthDashboard = {
 
 /** Every financial account of the group, display order, archived last. */
 export async function listFinancialAccounts(): Promise<FinancialAccount[]> {
-  const groupId = await requireGroupId();
+  const book = await requireBook();
   return db
     .select()
     .from(financialAccounts)
-    .where(eq(financialAccounts.groupId, groupId))
+    .where(eq(financialAccounts.bookId, book.id))
     .orderBy(...accountOrder);
 }
 
@@ -149,20 +148,20 @@ function windowFor(range: NetWorthRange, all: string[]): { months: string[]; win
 
 /** Session wrapper: scopes to the signed-in group, then delegates. */
 export async function getNetWorthDashboard(range: NetWorthRange = "year"): Promise<NetWorthDashboard> {
-  const groupId = await requireGroupId();
-  return getNetWorthDashboardForGroup(groupId, range, todayISO(await getGroupTimezone(groupId)));
+  const book = await requireBook();
+  return getNetWorthDashboardForBook(book, range, todayISO(await getGroupTimezone(book.groupId)));
 }
 
 /** The whole Net Worth tab in one call (weight-dashboard shape). */
-export async function getNetWorthDashboardForGroup(
-  groupId: number,
+export async function getNetWorthDashboardForBook(
+  book: BookRef,
   range: NetWorthRange,
   today: string,
 ): Promise<NetWorthDashboard> {
   const allAccounts = await db
     .select()
     .from(financialAccounts)
-    .where(eq(financialAccounts.groupId, groupId))
+    .where(eq(financialAccounts.bookId, book.id))
     .orderBy(...accountOrder);
 
   const accountIds = allAccounts.map((a) => a.id);
@@ -177,14 +176,14 @@ export async function getNetWorthDashboardForGroup(
     db
       .select()
       .from(compensationPlans)
-      .where(profileInGroup(compensationPlans.profileId, groupId))
+      .where(eq(compensationPlans.bookId, book.id))
       .orderBy(asc(compensationPlans.startDate), asc(compensationPlans.id)),
     db
       .select()
       .from(incomeDeductions)
       .where(
         and(
-          profileInGroup(incomeDeductions.profileId, groupId),
+          eq(incomeDeductions.bookId, book.id),
           isNotNull(incomeDeductions.depositAccountId),
         ),
       )
@@ -248,7 +247,7 @@ export async function getNetWorthDashboardForGroup(
   }
 
   const contributions = contributionsFor(months, accounts, plans, linked);
-  const flows = await flowsFor(groupId, months, accounts);
+  const flows = await flowsFor(book, months, accounts);
 
   const last = months.length - 1;
   const stats: NetWorthStats | null =
@@ -298,7 +297,7 @@ export async function getNetWorthDashboardForGroup(
  * posted: the same (starting point, newest] span the snapshots cover.
  */
 async function flowsFor(
-  groupId: number,
+  book: BookRef,
   months: string[],
   accounts: FinancialAccount[],
 ): Promise<Record<number, AccountFlows>> {
@@ -316,7 +315,7 @@ async function flowsFor(
     .from(transactions)
     .where(
       and(
-        eq(transactions.groupId, groupId),
+        eq(transactions.bookId, book.id),
         eq(transactions.needsReview, false),
         inArray(transactions.category, ["income", "transfer"]),
         gte(transactions.postedOn, addMonths(months[0], 1)),
@@ -462,8 +461,8 @@ export type NetWorthExtras = {
 };
 
 /** Cross-app numbers: the budget's spending and ATLAS bills next to the balances. */
-export async function getNetWorthExtrasForGroup(
-  groupId: number,
+export async function getNetWorthExtrasForBook(
+  book: BookRef,
   dash: NetWorthDashboard,
   today: string,
 ): Promise<NetWorthExtras> {
@@ -472,11 +471,11 @@ export async function getNetWorthExtrasForGroup(
   const thisMonth = `${today.slice(0, 7)}-01`;
 
   const [outMonths, atlas] = await Promise.all([
-    cashFlowByMonth(groupId, {
+    cashFlowByMonth(book, {
       from: addMonths(thisMonth, -6),
       to: lastDayOfMonth(addMonths(thisMonth, -1)),
     }),
-    getAtlasViewForGroup(groupId, undefined, today),
+    getAtlasViewForBook(book, undefined, today),
   ]);
 
   // Months before the first transaction would drag the average down, so skip them.

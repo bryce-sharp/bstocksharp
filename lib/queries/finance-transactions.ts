@@ -2,7 +2,7 @@ import "server-only";
 import { and, desc, eq, gt, gte, ilike, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { financialAccounts, plaidAccounts, plaidItems, plaidTransactions, transactions } from "@/lib/db/schema";
-import { requireGroupId } from "@/lib/session";
+import { requireBook, type BookRef } from "@/lib/books";
 import { IN_CATEGORIES, REIMBURSEMENT, SPEND_CATEGORIES, type Flow } from "@/lib/finance/cashflow";
 import type { TxnRowData } from "@/components/finance/TransactionRow";
 
@@ -51,8 +51,8 @@ function cursorCond(cursor: string | null) {
 
 /** The group-scoped filter condition — shared with the cash-flow totals so the
  *  numbers always describe exactly the rows the list shows. */
-export function txnWhere(groupId: number, f: TxnFilters, cursor: string | null = null) {
-  const conds = [eq(transactions.groupId, groupId)];
+export function txnWhere(book: BookRef, f: TxnFilters, cursor: string | null = null) {
+  const conds = [eq(transactions.bookId, book.id)];
   if (f.q) conds.push(ilike(transactions.merchant, `%${f.q}%`));
   if (f.merchants) {
     conds.push(f.merchants.length ? inArray(transactions.merchant, f.merchants) : sql`false`);
@@ -103,8 +103,8 @@ export function toTxnRow(t: typeof transactions.$inferSelect): TxnRowData {
   };
 }
 
-export async function searchTransactionsForGroup(
-  groupId: number,
+export async function searchTransactionsForBook(
+  book: BookRef,
   f: TxnFilters,
   cursor: string | null,
   limit = EXPLORER_PAGE_SIZE,
@@ -113,7 +113,7 @@ export async function searchTransactionsForGroup(
   const rows = await db
     .select()
     .from(transactions)
-    .where(txnWhere(groupId, f, cursor))
+    .where(txnWhere(book, f, cursor))
     .orderBy(desc(transactions.postedOn), desc(transactions.id))
     .limit(limit + 1);
   const hasMore = rows.length > limit;
@@ -156,11 +156,11 @@ function readableCategory(primary: string | null, detailed: string | null): stri
   return rest ? `${words(primary)} · ${words(rest)}` : words(primary);
 }
 
-export async function getTransactionDetail(groupId: number, id: number): Promise<TxnDetail | null> {
+export async function getTransactionDetail(book: BookRef, id: number): Promise<TxnDetail | null> {
   const [t] = await db
     .select({ createdAt: transactions.createdAt, rawText: transactions.rawText, accountId: transactions.accountId })
     .from(transactions)
-    .where(and(eq(transactions.id, id), eq(transactions.groupId, groupId)))
+    .where(and(eq(transactions.id, id), eq(transactions.bookId, book.id)))
     .limit(1);
   if (!t) return null;
 
@@ -188,7 +188,7 @@ export async function getTransactionDetail(groupId: number, id: number): Promise
     .innerJoin(plaidItems, eq(plaidAccounts.plaidItemId, plaidItems.id))
     .where(
       and(
-        eq(plaidItems.groupId, groupId),
+        eq(plaidItems.bookId, book.id),
         isNull(plaidTransactions.removedAt),
         sql`(${plaidTransactions.ledgerTransactionId} = ${id} or ${id} = any(${plaidTransactions.splitLedgerIds}))`,
       ),
@@ -208,7 +208,7 @@ export async function getTransactionDetail(groupId: number, id: number): Promise
         .select({ id: plaidAccounts.id })
         .from(plaidAccounts)
         .innerJoin(financialAccounts, eq(plaidAccounts.financialAccountId, financialAccounts.id))
-        .where(and(eq(plaidAccounts.financialAccountId, t.accountId), eq(financialAccounts.groupId, groupId)))
+        .where(and(eq(plaidAccounts.financialAccountId, t.accountId), eq(financialAccounts.bookId, book.id)))
         .limit(1)
     : [];
 
@@ -244,5 +244,5 @@ export async function searchTransactions(
   f: TxnFilters,
   cursor: string | null,
 ): Promise<TxnPage> {
-  return searchTransactionsForGroup(await requireGroupId(), f, cursor);
+  return searchTransactionsForBook(await requireBook(), f, cursor);
 }

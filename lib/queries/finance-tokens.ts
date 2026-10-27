@@ -2,7 +2,7 @@ import "server-only";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { apiTokens, financialAccounts, type ApiToken } from "@/lib/db/schema";
-import { requireGroupId } from "@/lib/session";
+import { requireBook, type BookRef } from "@/lib/books";
 import { hashApiToken } from "@/lib/finance/tokens";
 
 // Resolve a raw bearer token → its live row, or null. Session-LESS on purpose:
@@ -46,7 +46,7 @@ export type TokenListRow = {
 
 /** This group's live tokens for the settings page (secrets never stored). */
 export async function listApiTokens(): Promise<TokenListRow[]> {
-  const groupId = await requireGroupId();
+  const book = await requireBook();
   return db
     .select({
       id: apiTokens.id,
@@ -58,6 +58,6 @@ export async function listApiTokens(): Promise<TokenListRow[]> {
     })
     .from(apiTokens)
     .leftJoin(financialAccounts, eq(apiTokens.accountId, financialAccounts.id))
-    .where(and(eq(apiTokens.groupId, groupId), isNull(apiTokens.revokedAt)))
+    .where(and(eq(apiTokens.bookId, book.id), isNull(apiTokens.revokedAt)))
     .orderBy(desc(apiTokens.createdAt));
 }

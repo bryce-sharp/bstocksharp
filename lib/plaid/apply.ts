@@ -7,6 +7,7 @@ import { categorizeMerchant, type MerchantRule } from "@/lib/finance/sms";
 import { spendCategoryFor } from "@/lib/finance/categorize";
 import { spendRulesFor } from "@/lib/queries/finance-categories";
 import { getGroupTimezone } from "@/lib/queries/group";
+import { type BookRef } from "@/lib/books";
 import { pickMatch, pickSplit } from "@/lib/finance/match";
 import { bankDate, bankKind, ledgerAmount, type BankKind } from "@/lib/plaid/map";
 
@@ -51,11 +52,12 @@ const DROPPED_NOTE = "The bank dropped this charge. Delete it if it never went t
 export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
   const stats: ApplyStats = { inserted: 0, claimed: 0, updated: 0, removed: 0, skipped: 0, review: 0 };
   const [item] = await db
-    .select({ id: plaidItems.id, groupId: plaidItems.groupId, syncFrom: plaidItems.syncFrom })
+    .select({ id: plaidItems.id, groupId: plaidItems.groupId, bookId: plaidItems.bookId, syncFrom: plaidItems.syncFrom })
     .from(plaidItems)
     .where(eq(plaidItems.id, plaidItemId))
     .limit(1);
   if (!item) return stats;
+  const book: BookRef = { id: item.bookId, groupId: item.groupId };
 
   const accounts = await db
     .select({ id: plaidAccounts.id, financialAccountId: plaidAccounts.financialAccountId })
@@ -126,14 +128,14 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
 
   const tz = await getGroupTimezone(item.groupId);
   const [spendRules, transferRules] = await Promise.all([
-    spendRulesFor(item.groupId),
-    transferRulesFor(item.groupId),
+    spendRulesFor(book),
+    transferRulesFor(book),
   ]);
   const billRules = new Map<string, MerchantRule[]>();
   const rulesOn = async (date: string) => {
     let rules = billRules.get(date);
     if (!rules) {
-      rules = await merchantRulesFor(item.groupId, date);
+      rules = await merchantRulesFor(book, date);
       billRules.set(date, rules);
     }
     return rules;
@@ -178,7 +180,7 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
         .from(transactions)
         .where(
           and(
-            eq(transactions.groupId, item.groupId),
+            eq(transactions.bookId, book.id),
             ne(transactions.source, "plaid"),
             or(inArray(transactions.accountId, finIds), inArray(transactions.transferAccountId, finIds)),
             gte(transactions.postedOn, shiftDays(dates[0], -7)),
@@ -245,6 +247,7 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
       .insert(transactions)
       .values({
         groupId: item.groupId,
+        bookId: book.id,
         accountId: values.accountId,
         transferAccountId: values.transferAccountId,
         postedOn: values.date,
@@ -328,7 +331,7 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
       .innerJoin(plaidItems, eq(plaidAccounts.plaidItemId, plaidItems.id))
       .where(
         and(
-          eq(plaidItems.groupId, item.groupId),
+          eq(plaidItems.bookId, book.id),
           isNull(plaidTransactions.removedAt),
           isNull(plaidTransactions.dismissedAt),
           isNotNull(plaidAccounts.financialAccountId),
