@@ -12,6 +12,7 @@ import type { Workout, WorkoutItem, Exercise } from "@/lib/db/schema";
 import { resolveItem, type ResolvedItem } from "@/lib/workout";
 import { requireGroupId } from "@/lib/session";
 import { profileInGroup } from "./scope";
+import { requireView } from "@/lib/sharing";
 // Profiles are hub-wide now — reads live in ./profiles.
 import { getProfile } from "./profiles";
 
@@ -152,6 +153,7 @@ export type AssignmentRow = {
 
 /** A profile's assigned days (only weekdays that have a workout). */
 export async function getAssignments(profileId: number): Promise<AssignmentRow[]> {
+  await requireView(profileId, "workout");
   const groupId = await requireGroupId();
   return db
     .select({

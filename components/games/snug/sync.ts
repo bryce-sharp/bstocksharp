@@ -51,13 +51,16 @@ function localDates(): string[] {
   return [...dates];
 }
 
-async function upload(days: SnugUpload[]) {
-  for (let i = 0; i < days.length; i += UPLOAD_BATCH) await saveSnugDays(days.slice(i, i + UPLOAD_BATCH));
+async function upload(profileId: number, days: SnugUpload[]) {
+  for (let i = 0; i < days.length; i += UPLOAD_BATCH) await saveSnugDays(profileId, days.slice(i, i + UPLOAD_BATCH));
 }
 
 /** Merges the account's days into this browser and uploads what only the browser has; saves go to the account afterwards. */
 export async function syncSnug(profileId: number): Promise<void> {
-  const remote = new Map((await loadSnugDays()).map((d) => [d.dateKey, d]));
+  // The previous person's unfinished game goes to them before this browser switches over.
+  flushRemote();
+  owner = null;
+  const remote = new Map((await loadSnugDays(profileId)).map((d) => [d.dateKey, d]));
   // Results stored here for someone else are already in their account; this person starts from their own.
   const storedOwner = read<number>(OWNER_KEY);
   if (storedOwner !== null && storedOwner !== profileId) {
@@ -91,7 +94,7 @@ export async function syncSnug(profileId: number): Promise<void> {
 
     if (up.attempt || up.best || "progress" in up) uploads.push(up);
   }
-  await upload(uploads);
+  await upload(profileId, uploads);
   owner = profileId;
 }
 
@@ -100,7 +103,7 @@ export function saveRunRemote(dateKey: string, attempt: Attempt | null, best: At
   if (owner === null) return;
   // A finish supersedes any unfinished game still waiting to go up.
   pendingProgress.delete(dateKey);
-  void saveSnugDays([{ dateKey, attempt, best }]).catch(() => {});
+  void saveSnugDays(owner, [{ dateKey, attempt, best }]).catch(() => {});
 }
 
 /** Queues the unfinished game for the account, sent once it stops changing for a moment. */
@@ -117,5 +120,5 @@ export function flushRemote() {
   if (owner === null || pendingProgress.size === 0) return;
   const days = [...pendingProgress].map(([dateKey, progress]) => ({ dateKey, progress }));
   pendingProgress.clear();
-  void saveSnugDays(days).catch(() => {});
+  void saveSnugDays(owner, days).catch(() => {});
 }

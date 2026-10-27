@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { maintenanceRecords, fuelLogs, vehicles } from "@/lib/db/schema";
 import { requireGroupId } from "@/lib/session";
 import { vehicleInGroup } from "./scope";
+import { canEditProfile } from "@/lib/auth";
 
 /** Total spend for a vehicle, split maintenance vs fuel. */
 export async function vehicleSpend(vehicleId: number) {
@@ -58,6 +59,7 @@ export async function listVehicleDueRecords(vehicleId: number) {
  */
 export async function listAllDueRecords(profileId: number) {
   const groupId = await requireGroupId();
+  const ownCars = (await canEditProfile(profileId)) ? eq(vehicles.profileId, profileId) : undefined;
   return db
     .select({
       vehicleId: maintenanceRecords.vehicleId,
@@ -69,7 +71,7 @@ export async function listAllDueRecords(profileId: number) {
     .where(
       and(
         eq(vehicles.groupId, groupId),
-        or(eq(vehicles.visibility, "shared"), eq(vehicles.profileId, profileId)),
+        or(eq(vehicles.visibility, "shared"), ownCars),
         or(
           isNotNull(maintenanceRecords.nextDueDate),
           isNotNull(maintenanceRecords.nextDueMileage),

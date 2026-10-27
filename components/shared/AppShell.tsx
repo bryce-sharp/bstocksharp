@@ -32,7 +32,7 @@ export default async function AppShell({
           nav={app?.nav ?? []}
           hiddenApps={active?.hiddenApps ?? []}
           hubApps={apps}
-          profileControl={<ProfileControl />}
+          profileControl={<ProfileControl app={current} />}
         />
       }
     >

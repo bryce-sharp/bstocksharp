@@ -12,6 +12,8 @@ import AddIcon from "@mui/icons-material/Add";
 import { isEditor } from "@/lib/auth";
 import { getAssignments, listWorkoutsWithCreator } from "@/lib/queries/workout";
 import { getActiveProfile } from "@/lib/profile";
+import PrivateNotice from "@/components/shared/PrivateNotice";
+import { canView } from "@/lib/sharing";
 import WeekSchedule from "@/components/workout/WeekSchedule";
 import Chip from "@mui/material/Chip";
 
@@ -24,6 +26,9 @@ export default async function WorkoutDashboard({
 }) {
   const { profile } = await searchParams;
   const activeProfile = await getActiveProfile(profile);
+  if (activeProfile && !(await canView(activeProfile, "workout"))) {
+    return <PrivateNotice title={`${activeProfile.name} keeps their workouts private`} />;
+  }
 
   const [assignments, library, editor] = await Promise.all([
     activeProfile ? getAssignments(activeProfile.id) : Promise.resolve([]),

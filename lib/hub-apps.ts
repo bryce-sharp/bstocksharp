@@ -11,12 +11,17 @@ import { APPS } from "@/lib/apps";
 // own list (accounts.apps, set by the owner: a kitchen screen gets chores and
 // games). Pages and actions for any other app are refused here, on the server.
 
-/** The signed-in login's hub apps, its own limits, and whether it is the hub login. */
+/** The signed-in login's hub apps, its own limits, its person, and whether it is the hub login. */
 export const currentLogin = cache(async () => {
   const session = await getSession();
   if (!session) return null;
   const [row] = await db
-    .select({ hubApps: groups.apps, loginApps: accounts.apps, isHubLogin: accounts.isHubLogin })
+    .select({
+      hubApps: groups.apps,
+      loginApps: accounts.apps,
+      isHubLogin: accounts.isHubLogin,
+      profileId: accounts.profileId,
+    })
     .from(accounts)
     .innerJoin(groups, eq(accounts.groupId, groups.id))
     .where(eq(accounts.id, session.accountId))

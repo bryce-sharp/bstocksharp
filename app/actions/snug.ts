@@ -4,11 +4,10 @@ import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { snugDays } from "@/lib/db/schema";
 import { requireEditorFor } from "@/lib/auth";
-import { getActiveProfile } from "@/lib/profile";
 import { listSnugDays } from "@/lib/queries/snug";
 import { isCurrent } from "@/components/games/snug/version";
 
-// Snug results belong to the ACTIVE person, like weigh-ins; the browser never names a profile, so it cannot write anyone else's.
+// Snug results belong to one person. The browser names whose board it is, and the server refuses anyone this login may not play for.
 
 type Json = Record<string, unknown>;
 
@@ -21,11 +20,11 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_DAYS = 400;
 const MAX_DAY_BYTES = 40_000;
 
-async function activeProfileId(): Promise<number> {
-  const active = await getActiveProfile();
-  if (!active) throw new Error("No one is signed in.");
-  await requireEditorFor(active.id);
-  return active.id;
+/** The person a board belongs to, refused unless this login may play for them (themselves, or someone without a login). */
+async function playerId(profileId: number): Promise<number> {
+  if (!Number.isInteger(profileId)) throw new Error("No one to save for.");
+  await requireEditorFor(profileId);
+  return profileId;
 }
 
 function isRun(v: unknown): v is Json & { gaps: number; timeMs: number; hints?: number; hinted?: boolean; pieces: unknown[] } {
@@ -34,12 +33,12 @@ function isRun(v: unknown): v is Json & { gaps: number; timeMs: number; hints?: 
   return Number.isInteger(r.gaps) && (r.gaps as number) >= 0 && Number.isFinite(r.timeMs) && (r.timeMs as number) >= 0 && Array.isArray(r.pieces);
 }
 
-export async function loadSnugDays(): Promise<RemoteSnugDay[]> {
-  return listSnugDays(await activeProfileId());
+export async function loadSnugDays(profileId: number): Promise<RemoteSnugDay[]> {
+  return listSnugDays(await playerId(profileId));
 }
 
-export async function saveSnugDays(days: SnugUpload[]): Promise<void> {
-  const profileId = await activeProfileId();
+export async function saveSnugDays(player: number, days: SnugUpload[]): Promise<void> {
+  const profileId = await playerId(player);
   if (!Array.isArray(days) || days.length > MAX_DAYS) throw new Error("Too many days.");
 
   for (const day of days) {

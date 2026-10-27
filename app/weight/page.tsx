@@ -4,6 +4,8 @@ import Typography from "@mui/material/Typography";
 import Paper from "@mui/material/Paper";
 import MonitorWeightOutlinedIcon from "@mui/icons-material/MonitorWeightOutlined";
 import { getActiveProfile } from "@/lib/profile";
+import PrivateNotice from "@/components/shared/PrivateNotice";
+import { canView } from "@/lib/sharing";
 import { canEditProfile } from "@/lib/auth";
 import { getWeightDashboard } from "@/lib/queries/weight";
 import WeightActions from "@/components/weight/WeightActions";
@@ -32,6 +34,7 @@ export default async function WeightDashboard({
       </Container>
     );
   }
+  if (!(await canView(active, "weight"))) return <PrivateNotice title={`${active.name} keeps their weight private`} />;
 
   const [dash, editor] = await Promise.all([
     getWeightDashboard(active.id, year ? Number(year) : undefined),

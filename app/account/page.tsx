@@ -8,6 +8,7 @@ import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
 import Link from "@/components/shared/AppLink";
 import EditProfileButton from "@/components/shared/EditProfileButton";
+import SharingButton from "@/components/shared/SharingButton";
 import SignInSection from "./SignInSection";
 import DeleteAccount from "./DeleteAccount";
 import { getSession } from "@/lib/session";
@@ -95,6 +96,28 @@ export default async function AccountPage({
             </Stack>
           )}
         </Paper>
+
+        {mine ? (
+          <Paper variant="outlined" sx={{ p: 2 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+              <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                <Typography fontWeight={600}>Who can see your stuff</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Your weight and workouts, app by app
+                </Typography>
+              </Box>
+              <SharingButton
+                profileId={mine.id}
+                name={mine.name}
+                self
+                hasLogin
+                sharing={mine.sharing}
+                people={others.map((p) => ({ id: p.id, name: p.name }))}
+                hubApps={offeredApps}
+              />
+            </Box>
+          </Paper>
+        ) : null}
 
         <SignInSection
           accountId={session.accountId}

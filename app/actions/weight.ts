@@ -7,6 +7,7 @@ import { weighIns, weightPlans } from "@/lib/db/schema";
 import { requireEditorFor } from "@/lib/auth";
 import { getActivePlan } from "@/lib/queries/weight";
 import { requireApp } from "@/lib/hub-apps";
+import { requireView } from "@/lib/sharing";
 
 // Whole weeks between two YYYY-MM-DD dates (≥1, so deadline math never divides by 0).
 function weeksBetween(startISO: string, endISO: string): number {
@@ -27,6 +28,7 @@ const str = (formData: FormData, k: string) => {
 export async function logWeight(profileId: number, formData: FormData): Promise<void> {
   await requireApp("weight");
   await requireEditorFor(profileId);
+  await requireView(profileId, "weight");
 
   const measuredOn = str(formData, "measuredOn");
   const weight = str(formData, "weight");
@@ -56,6 +58,7 @@ export async function logWeight(profileId: number, formData: FormData): Promise<
 export async function startPlan(profileId: number, formData: FormData): Promise<void> {
   await requireApp("weight");
   await requireEditorFor(profileId);
+  await requireView(profileId, "weight");
   const values = buildPlanValues(formData);
 
   // Close the current plan the day before the new one starts (no overlap).
@@ -83,6 +86,7 @@ export async function updateWeighIn(
 ): Promise<void> {
   await requireApp("weight");
   await requireEditorFor(profileId);
+  await requireView(profileId, "weight");
 
   const measuredOn = str(formData, "measuredOn");
   const weight = str(formData, "weight");
@@ -107,6 +111,7 @@ export async function deleteWeighIn(
 ): Promise<void> {
   await requireApp("weight");
   await requireEditorFor(profileId);
+  await requireView(profileId, "weight");
 
   await db
     .delete(weighIns)
@@ -166,6 +171,7 @@ function buildPlanValues(formData: FormData) {
 export async function savePlan(profileId: number, formData: FormData): Promise<void> {
   await requireApp("weight");
   await requireEditorFor(profileId);
+  await requireView(profileId, "weight");
   const values = buildPlanValues(formData);
 
   const active = await getActivePlan(profileId);

@@ -14,6 +14,7 @@ import type { Exercise } from "@/lib/db/schema";
 import { requireEditor, requireEditorFor } from "@/lib/auth";
 import { requireWorkoutEditor } from "@/lib/authz";
 import { getActiveProfile } from "@/lib/profile";
+import { requireView } from "@/lib/sharing";
 import { requireGroupId } from "@/lib/session";
 import { getProfile } from "@/lib/queries/profiles";
 import { countExerciseUsage, getExercise, getWorkout } from "@/lib/queries/workout";
@@ -205,6 +206,7 @@ export async function createWorkoutWithItems(formData: FormData): Promise<void> 
   if (!createdByProfileId) throw new Error("Choose who's saving this workout.");
   // The person it's saved-by owns it, so they must be unlocked to create it.
   await requireEditorFor(createdByProfileId);
+  await requireView(createdByProfileId, "workout");
 
   // Only OUR catalog's exercises can be referenced — foreign ids are dropped.
   const groupId = await requireGroupId();
@@ -500,6 +502,7 @@ export async function setAssignment(
 ): Promise<void> {
   await requireApp("workout");
   await requireEditorFor(profileId); // your own week — you must be unlocked
+  await requireView(profileId, "workout");
   const workoutId = int(formData, "workoutId");
   // Only OUR group's workouts can be scheduled (foreign id → not found).
   if (workoutId && !(await getWorkout(workoutId))) {

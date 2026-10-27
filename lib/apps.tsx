@@ -20,6 +20,8 @@ export type AppDef = {
   /** In-app header links. Single source of truth — the header + AppSwitcher
    *  read these, so a layout never re-declares its own nav. */
   nav?: AppNavLink[];
+  /** Each person's data here is theirs, and they choose who can see it (lib/sharing). */
+  personal?: true;
 };
 
 export const APPS: AppDef[] = [
@@ -34,6 +36,7 @@ export const APPS: AppDef[] = [
   },
   {
     slug: "workout",
+    personal: true,
     name: "Workout",
     tagline: "Tonight's exercises, with timers",
     href: "/workout",
@@ -47,6 +50,7 @@ export const APPS: AppDef[] = [
   },
   {
     slug: "weight",
+    personal: true,
     name: "Weight",
     tagline: "Weekly weigh-ins, trend & goal pace",
     href: "/weight",

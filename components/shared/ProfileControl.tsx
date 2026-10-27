@@ -3,11 +3,13 @@ import { listGroupMembers } from "@/lib/queries/groups";
 import { getActiveProfile } from "@/lib/profile";
 import { getSession } from "@/lib/session";
 import { allHubApps, currentLogin } from "@/lib/hub-apps";
+import { getApp } from "@/lib/apps";
+import { canView } from "@/lib/sharing";
 import ProfileMenu, { type ProfilePick } from "./ProfileMenu";
 
 // Server component: reads who's active + the roster, then hands a plain,
 // serializable slice to the client menu. Passed into AppHeader as a prop.
-export default async function ProfileControl() {
+export default async function ProfileControl({ app }: { app?: string }) {
   const [profiles, active, members, session, apps] = await Promise.all([
     listProfiles(),
     getActiveProfile(),
@@ -29,12 +31,17 @@ export default async function ProfileControl() {
     }
   }
 
+  const personal = getApp(app ?? "")?.personal ? app : null;
+  const hidden = new Set<number>();
+  for (const p of profiles) if (personal && !(await canView(p, personal))) hidden.add(p.id);
+
   const pick = (p: { id: number; name: string; color: string | null }): ProfilePick => ({
     id: p.id,
     name: p.name,
     color: p.color,
     lockedBy: lockedBy.get(p.id) ?? null,
     you: members.some((m) => m.id === session?.accountId && m.profileId === p.id),
+    private: hidden.has(p.id),
   });
 
   return (

@@ -48,9 +48,8 @@ export const vehicles = pgTable("vehicles", {
   currentMileage: integer("current_mileage"),
   heroPhotoUrl: text("hero_photo_url"),
   notes: text("notes"),
-  // Owner + visibility — see ARCHITECTURE "Profiles, visibility & access". Profiles
-  // aren't a security boundary; visibility is organization, not permission. A
-  // `shared` car shows in everyone's garage, a `private` one only in its owner's.
+  // Owner + visibility — see ARCHITECTURE "Profiles, visibility & access". A `shared`
+  // car shows in everyone's garage, a `private` one only to its owner's login.
   profileId: integer("profile_id").references(() => profiles.id, {
     onDelete: "set null",
   }),
@@ -407,6 +406,9 @@ export const passwordResets = pgTable(
 // security boundary (no passwords, free switching) — see ARCHITECTURE. First used
 // by the workout app; now hub-wide (vehicles.profile_id, active_profile cookie).
 // ─────────────────────────────────────────────────────────────────────────────
+export type ShareRule = { who: "everyone" | "chosen" | "me"; people?: number[] };
+export type Sharing = Record<string, ShareRule>;
+
 export const profiles = pgTable("profiles", {
   id: serial("id").primaryKey(),
   groupId: integer("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
@@ -422,6 +424,8 @@ export const profiles = pgTable("profiles", {
   // [] = "not set up yet" → nothing is filtered (show everything). Editor-gated to
   // change, so the read-only showcase stays read-only — see auth notes.
   equipment: jsonb("equipment").$type<string[]>().notNull().default([]),
+  // Who can see this person's data, per personal app (lib/sharing). A missing app = everyone.
+  sharing: jsonb("sharing").$type<Sharing>().notNull().default({}),
   // (Phase D removed the per-profile edit passwords — a profile is protected by
   // being CLAIMED by an account instead; see accounts.profileId.)
   // Soft-delete: "Deactivate" sets this (hidden from the switcher, can't be
