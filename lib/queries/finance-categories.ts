@@ -1,9 +1,9 @@
 import "server-only";
 import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { merchantCategories, transactions } from "@/lib/db/schema";
+import { merchantCategories, transactions, transactionShares } from "@/lib/db/schema";
 import { requireBook, type BookRef } from "@/lib/books";
-import { longestMatchingRule, type SpendRule } from "@/lib/finance/categorize";
+import { longestMatchingRule, rulesForFlow, type SpendRule } from "@/lib/finance/categorize";
 import {
   IN_CATEGORIES,
   OUT_CATEGORIES,
@@ -45,15 +45,36 @@ export async function spendRulesFor(book: BookRef): Promise<SpendRule[]> {
       pattern: merchantCategories.pattern,
       category: merchantCategories.category,
       flow: merchantCategories.flow,
+      alsoBookId: merchantCategories.alsoBookId,
     })
     .from(merchantCategories)
     .where(eq(merchantCategories.bookId, book.id));
   return rows.map((r) => ({ ...r, flow: r.flow === "in" ? "in" : "out" }));
 }
 
+/**
+ * A new row whose merchant's rule says "also count for" another book is shared
+ * with it (her supplier's charges on the family card count for her business),
+ * starting with this book's tag.
+ */
+export async function shareFromRules(
+  book: BookRef,
+  row: { id: number; merchant: string | null; category: string; spendCategory: string | null },
+  rules?: SpendRule[],
+): Promise<void> {
+  const flow = flowOf(row.category);
+  if (!flow || !row.merchant) return;
+  const rule = longestMatchingRule(row.merchant, rulesForFlow(rules ?? (await spendRulesFor(book)), flow));
+  if (!rule?.alsoBookId || rule.alsoBookId === book.id) return;
+  await db
+    .insert(transactionShares)
+    .values({ transactionId: row.id, bookId: rule.alsoBookId, spendCategory: row.spendCategory })
+    .onConflictDoNothing();
+}
+
 /** Tags in use for one flow — on its transactions and its rules — plus starters. */
 async function tagsForFlow(book: BookRef, flow: Flow): Promise<string[]> {
-  const [used, ruled] = await Promise.all([
+  const [used, shared, ruled] = await Promise.all([
     db
       .selectDistinct({ c: transactions.spendCategory })
       .from(transactions)
@@ -64,13 +85,25 @@ async function tagsForFlow(book: BookRef, flow: Flow): Promise<string[]> {
           inArray(transactions.category, [...FLOW_CATEGORIES[flow]]),
         ),
       ),
+    // Tags this book gave charges another book shares into it.
+    db
+      .selectDistinct({ c: transactionShares.spendCategory })
+      .from(transactionShares)
+      .innerJoin(transactions, eq(transactions.id, transactionShares.transactionId))
+      .where(
+        and(
+          eq(transactionShares.bookId, book.id),
+          isNotNull(transactionShares.spendCategory),
+          inArray(transactions.category, [...FLOW_CATEGORIES[flow]]),
+        ),
+      ),
     db
       .selectDistinct({ c: merchantCategories.category })
       .from(merchantCategories)
       .where(and(eq(merchantCategories.bookId, book.id), eq(merchantCategories.flow, flow))),
   ]);
   const set = new Set<string>(flow === "in" ? STARTER_INCOME_CATEGORIES : STARTER_SPEND_CATEGORIES);
-  for (const r of [...used, ...ruled]) if (r.c) set.add(r.c);
+  for (const r of [...used, ...shared, ...ruled]) if (r.c) set.add(r.c);
   return [...set].sort();
 }
 
@@ -109,6 +142,14 @@ export async function setSpendCategoryForBook(
   category: string | null,
   applyToMerchant: boolean,
 ): Promise<SetCategoryResult> {
+  // A charge another book shares into this one: only this book's own tag for it changes.
+  const shared = await db
+    .update(transactionShares)
+    .set({ spendCategory: category?.trim() || null })
+    .where(and(eq(transactionShares.transactionId, txnId), eq(transactionShares.bookId, book.id)))
+    .returning({ id: transactionShares.transactionId });
+  if (shared.length) return { merchant: null, affected: 1 };
+
   const [txn] = await db
     .select({ merchant: transactions.merchant, category: transactions.category })
     .from(transactions)
@@ -410,4 +451,59 @@ export async function deleteGroupForBook(book: BookRef, flow: Flow, name: string
     .delete(merchantCategories)
     .where(and(eq(merchantCategories.bookId, book.id), groupMatch(name, flow)));
   await sweepForPatterns(book, rows.map((r) => r.pattern), flow);
+}
+
+/**
+ * Make a merchant's exact rule also count its rows for another book (or stop,
+ * with null). Turning it on shares the merchant's existing rows on that side of
+ * the ledger too. A new rule starts as its own group with this tag.
+ */
+export async function setMerchantShare(
+  book: BookRef,
+  merchant: string,
+  flow: Flow,
+  category: string,
+  alsoBookId: number | null,
+): Promise<void> {
+  const [rule] = await db
+    .select({ id: merchantCategories.id })
+    .from(merchantCategories)
+    .where(
+      and(
+        eq(merchantCategories.bookId, book.id),
+        eq(merchantCategories.pattern, merchant),
+        eq(merchantCategories.flow, flow),
+      ),
+    )
+    .limit(1);
+  if (rule) {
+    await db.update(merchantCategories).set({ alsoBookId }).where(eq(merchantCategories.id, rule.id));
+  } else {
+    await db.insert(merchantCategories).values({
+      groupId: book.groupId,
+      bookId: book.id,
+      pattern: merchant,
+      category,
+      groupName: merchant,
+      flow,
+      alsoBookId,
+    });
+  }
+  if (alsoBookId === null) return;
+  const rows = await db
+    .select({ id: transactions.id, spendCategory: transactions.spendCategory })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.bookId, book.id),
+        eq(transactions.merchant, merchant),
+        inArray(transactions.category, [...FLOW_CATEGORIES[flow]]),
+      ),
+    );
+  if (rows.length) {
+    await db
+      .insert(transactionShares)
+      .values(rows.map((r) => ({ transactionId: r.id, bookId: alsoBookId, spendCategory: r.spendCategory })))
+      .onConflictDoNothing();
+  }
 }

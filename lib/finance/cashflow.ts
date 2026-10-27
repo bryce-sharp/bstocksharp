@@ -28,10 +28,14 @@ export const LANE_LABELS: Record<string, string> = {
   income: "Income",
   reimbursement: "Reimbursements",
   transfer: "Transfers",
+  between: "Between books",
 };
 
 /** Money moved between your own accounts: never in, never out, never tagged. */
 export const TRANSFER = "transfer";
+
+/** The lane for money moved between two of the hub's money books: out for one, in for the other. */
+export const BETWEEN_BOOKS = "between";
 
 /** Lanes whose tags come from the Categories-tab rules (bills inherit theirs;
  *  a reimbursement takes the tag of what it pays back, picked by hand). */

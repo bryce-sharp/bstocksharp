@@ -1,4 +1,5 @@
 import "server-only";
+import { inBook } from "@/lib/finance/book-rows";
 import { and, asc, eq, gte, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
@@ -315,7 +316,8 @@ async function flowsFor(
     .from(transactions)
     .where(
       and(
-        eq(transactions.bookId, book.id),
+        // Money moved in from another book counts for this book's account too.
+        inBook(book),
         eq(transactions.needsReview, false),
         inArray(transactions.category, ["income", "transfer"]),
         gte(transactions.postedOn, addMonths(months[0], 1)),

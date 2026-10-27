@@ -15,6 +15,9 @@ import Alert from "@mui/material/Alert";
 import Avatar from "@mui/material/Avatar";
 import Chip from "@mui/material/Chip";
 import Divider from "@mui/material/Divider";
+import FormGroup from "@mui/material/FormGroup";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import Checkbox from "@mui/material/Checkbox";
 import Typography from "@mui/material/Typography";
 import CircularProgress from "@mui/material/CircularProgress";
 import useMediaQuery from "@mui/material/useMediaQuery";
@@ -24,7 +27,11 @@ import NumberField from "@/components/shared/NumberField";
 import SuggestField from "@/components/shared/SuggestField";
 import TransferAccounts from "./TransferAccounts";
 import { deleteTransactionAction, updateTransactionAction } from "@/app/actions/finance-budget";
-import { getTransactionDetailAction } from "@/app/actions/finance-transactions";
+import {
+  getTransactionDetailAction,
+  removeShareHereAction,
+  setShareAction,
+} from "@/app/actions/finance-transactions";
 import { flowOf, moneyDirection } from "@/lib/finance/cashflow";
 import { formatDate, formatMoney } from "@/lib/format";
 import type { TxnDetail } from "@/lib/queries/finance-transactions";
@@ -94,11 +101,17 @@ export default function TransactionDialog({
   onSaved,
   onDeleted,
   onClose,
+  otherBooks = [],
+  otherAccounts = [],
 }: {
   txn: TxnRowData;
   editable: boolean;
   funds: TxnFund[];
   accounts?: TxnAccount[];
+  /** Your other money books, for "Also count for". */
+  otherBooks?: { id: number; name: string }[];
+  /** Accounts in your other books, for a transfer between books. */
+  otherAccounts?: TxnAccount[];
   bills: TxnBill[];
   merchants: string[];
   sources: string[];
@@ -114,6 +127,9 @@ export default function TransactionDialog({
   const [error, setError] = React.useState<string | null>(null);
   const [detail, setDetail] = React.useState<TxnDetail | null | undefined>(undefined);
   const [deleting, startDelete] = React.useTransition();
+  const [sharedWith, setSharedWith] = React.useState(txn.sharedWith ?? []);
+  const [always, setAlways] = React.useState(false);
+  const [, startSharing] = React.useTransition();
 
   React.useEffect(() => {
     let live = true;
@@ -148,6 +164,32 @@ export default function TransactionDialog({
     }
   }
 
+  function share(bookId: number, on: boolean) {
+    setError(null);
+    const before = sharedWith;
+    const name = otherBooks.find((b) => b.id === bookId)?.name ?? "";
+    // Ticks at once; a refused save puts it back.
+    setSharedWith(on ? [...before, { id: bookId, name }] : before.filter((b) => b.id !== bookId));
+    startSharing(async () => {
+      const result = await setShareAction(txn.id, bookId, on, always);
+      if ("error" in result) {
+        setSharedWith(before);
+        setError(result.error);
+        return;
+      }
+      setSharedWith(result.sharedWith ?? []);
+      onSaved(result);
+    });
+  }
+
+  function removeHere() {
+    startDelete(async () => {
+      await removeShareHereAction(txn.id);
+      onDeleted(txn.id);
+      onClose();
+    });
+  }
+
   function remove() {
     if (!window.confirm(`Delete this ${txn.merchant ?? "transaction"}?`)) return;
     startDelete(async () => {
@@ -170,6 +212,18 @@ export default function TransactionDialog({
           ? ` → ${accountName(txn.transferAccountId)}`
           : ""}
       </Fact>
+      {txn.home && !txn.between ? (
+        <Fact label="Counted from">
+          {txn.home.book}
+          {txn.home.account ? ` · paid from ${txn.home.account}` : ""}
+        </Fact>
+      ) : null}
+      {txn.between ? (
+        <Fact label="Between books">
+          {txn.between.direction === "out" ? `To ${txn.between.book}` : `From ${txn.between.book}`}. Not spending or
+          income in either book.
+        </Fact>
+      ) : null}
       {detail === undefined ? (
         <CircularProgress size={18} sx={{ alignSelf: "center", my: 1 }} />
       ) : detail === null ? null : (
@@ -252,20 +306,33 @@ export default function TransactionDialog({
     </DialogTitle>
   );
 
-  if (!editable) {
+  // Another book's row is read-only here: this book keeps only its own tag
+  // (tap the row's tag) and can stop counting it.
+  if (!editable || txn.home) {
     return (
       <Dialog open onClose={onClose} fullWidth maxWidth="sm" fullScreen={fullScreen}>
         {header}
         <DialogContent sx={{ pt: 1 }}>
           <Stack spacing={0.75}>
+            {error ? <Alert severity="error">{error}</Alert> : null}
             {facts}
             <Divider sx={{ my: 1 }} />
             <Fact label="Category">{CATEGORY_OPTIONS.find((c) => c.value === txn.category)?.label ?? txn.category}</Fact>
             {txn.spendCategory ? <Fact label="Tag">{txn.spendCategory}</Fact> : null}
             {txn.note ? <Fact label="Note">{txn.note}</Fact> : null}
+            {txn.home && !txn.between ? (
+              <Typography variant="caption" color="text.secondary" sx={{ pt: 1 }}>
+                {txn.home.book} owns this row, so it is changed there. This book keeps its own tag for it.
+              </Typography>
+            ) : null}
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
+          {editable && txn.home && !txn.between ? (
+            <Button onClick={removeHere} color="error" disabled={deleting} sx={{ mr: "auto" }}>
+              {deleting ? "Removing…" : "Remove from this book"}
+            </Button>
+          ) : null}
           <Button onClick={onClose}>Close</Button>
         </DialogActions>
       </Dialog>
@@ -324,7 +391,11 @@ export default function TransactionDialog({
               ])}
             </TextField>
             {category === "transfer" ? (
-              <TransferAccounts accounts={accounts} fromId={txn.accountId} intoId={txn.transferAccountId} />
+              <TransferAccounts
+                accounts={[...accounts, ...otherAccounts]}
+                fromId={txn.accountId}
+                intoId={txn.transferAccountId}
+              />
             ) : null}
             {category === "fund" ? (
               <TextField
@@ -394,6 +465,36 @@ export default function TransactionDialog({
                 defaultValue={flowOf(txn.category) === flow ? (txn.spendCategory ?? "") : ""}
                 placeholder={flow === "in" ? "Paycheck, Gift…" : "Groceries, Dining…"}
               />
+            ) : null}
+            {otherBooks.length && flowOf(txn.category) && category === txn.category ? (
+              <Box>
+                <Typography variant="subtitle2">Also count for</Typography>
+                <Typography variant="caption" color="text.secondary" component="p" sx={{ mb: 0.5 }}>
+                  It stays in this book. The book you tick counts it too, with its own tag.
+                </Typography>
+                <FormGroup>
+                  {otherBooks.map((b) => (
+                    <FormControlLabel
+                      key={b.id}
+                      control={
+                        <Checkbox
+                          size="small"
+                          checked={sharedWith.some((w) => w.id === b.id)}
+                          onChange={(e) => share(b.id, e.target.checked)}
+                        />
+                      }
+                      label={b.name}
+                    />
+                  ))}
+                  {txn.merchant ? (
+                    <FormControlLabel
+                      control={<Checkbox size="small" checked={always} onChange={(e) => setAlways(e.target.checked)} />}
+                      label={`Always for ${txn.merchant}`}
+                      slotProps={{ typography: { variant: "body2", color: "text.secondary" } }}
+                    />
+                  ) : null}
+                </FormGroup>
+              </Box>
             ) : null}
             <TextField
               name="note"

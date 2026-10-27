@@ -34,7 +34,7 @@ import TransactionsTable from "@/components/finance/TransactionsTable";
 import CashFlowHistory from "@/components/finance/CashFlowHistory";
 import ListFilterChip from "@/components/finance/ListFilterChip";
 import RefreshAfterSync from "@/components/finance/RefreshAfterSync";
-import { requireBook } from "@/lib/books";
+import { otherBooksForViewer, requireBook } from "@/lib/books";
 
 export const metadata = { title: "History" };
 
@@ -90,6 +90,7 @@ export default async function HistoryPage({
     return Array.isArray(v) ? v[0] : v;
   };
 
+  const others = await otherBooksForViewer();
   const book = await requireBook();
   const tz = await getGroupTimezone(book.groupId);
   // Bank data a few hours old: sync once this page is sent, then re-render.
@@ -322,6 +323,8 @@ export default async function HistoryPage({
         funds={funds}
         bills={bills}
         accounts={accounts}
+        otherBooks={others.books}
+        otherAccounts={others.accounts}
         merchants={suggest.merchants}
         sources={suggest.sources}
         categories={categories}

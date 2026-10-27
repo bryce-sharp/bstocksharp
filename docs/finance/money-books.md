@@ -1,6 +1,6 @@
 # Money books
 
-Status: agreed 2026-10-27. PR 1 (books underneath) is live; PR 2 (books you can see) is built.
+Status: agreed 2026-10-27. PR 1 and PR 2 are live; PR 3 (charges another book also counts, money between books, the book lane) is built.
 
 Decided: every active person starts in their hub's Family book; any member manages a
 book; one book per pay plan (no split paychecks); it ships as the three PRs in
@@ -40,7 +40,7 @@ for tenancy, hub deletion and the demo seed.
 | Table | Today | With books |
 | --- | --- | --- |
 | `financial_accounts` | hub | book |
-| `transactions` | hub | book (can differ from its account's book, see "Moving a charge") |
+| `transactions` | hub | book (its card's book; another book can also count it, see "Charges another book also counts") |
 | `recurring_expenses` (bills) | hub | book |
 | `savings_goals` | hub | book |
 | `merchant_categories` (tag rules) | hub | book |
@@ -76,23 +76,62 @@ for tenancy, hub deletion and the demo seed.
   a book, and its data lands in that book. The bank-admin rule (owner plus
   `BANK_USERS`) stays, and the admin must also be a member of the book.
 
-## Moving a charge
+## Charges another book also counts (PR 3)
 
-A family card bought something for the business. The fix is to **move the whole
-charge** to the other book (no splitting for now).
+Lauren runs a small business and sometimes pays for it with the family Visa. Two
+things are true at once: the money left the family, and it is a business expense.
+So one charge is **counted by two books**, each in its own way. It is never copied
+(two rows would drift apart) and never moved (Family really did pay it).
 
-- `transactions.bookId` decides which book counts the charge. `accountId` stays as
-  "which card paid".
-- The charge leaves the Family budget and counts as Business A spending.
-- In Business A it shows as "Paid from Family Visa".
-- Later, if useful: a "moved charges" total that shows what Business A owes Family.
+Example month: Bryce spends $50 on the Visa; Lauren spends $100 on it for her
+business.
 
-## Money between books
+| | Family | Lauren's business |
+| --- | --- | --- |
+| Bryce's $50 | Spent | Not there |
+| Lauren's $100 | Spent, in a "Lauren's business" lane | Spent, as a business expense, "Paid from Family Visa" |
+| Total spent | $150 | $100 |
 
-- Paying yourself from Business A into Family is two ordinary rows:
-  - In Business A: money out, as a transfer to another book, so not spending.
-  - In Family: money in, as income.
-- They are not linked to each other in v1.
+- **"Also count for…"** on a charge or a deposit picks the other book. The row stays in
+  its own book (its card's book). The other book counts it too and keeps its **own tag**
+  for it. There, it is read-only apart from that tag and "Remove from this book".
+- Books are never added together: each answers its own question, and the shared row is
+  labeled on both sides.
+- **Merchant rules** can do it automatically (her supplier always counts for her book).
+- **Refunds** of a shared charge are shared by the merchant rule ("Always for …"); a refund
+  of a charge shared by hand is shared by hand too.
+- **Plaid** swapping a pending charge for the posted one keeps the share (same row). In the
+  rare case the bank drops the pending charge before posting it, a hand-made share is lost;
+  a rule shares the posted one again.
+- **In the other book** a shared bill or fund charge counts as plain spending, because
+  that book has no such bill or fund.
+- Only books you are a member of can be picked. Deleting the other book drops its shares;
+  the charge goes back to plain Family spending.
+- **Not included:** splitting one receipt across books.
+
+## Money between books (PR 3)
+
+Money moving from an account in one book to an account in another book (Lauren's
+business checking paying back Family, or paying herself) is **"Between books"**: like a
+transfer between two of your own accounts, it is neither spending nor earned income in
+either book, but "All money" shows it as out for one and in for the other. The row lives in
+the book the money left. Plaid pairs the two sides across the hub's banks; by hand, a
+transfer's From or Into can be an account in any of your books. Account transfer words
+("SCHWAB") still match only within one book. Paying back and paying yourself are the same
+thing; no labels tell them apart.
+
+## The book lane and its running total (PR 3)
+
+Family shows a lane per other book it has dealt with: what Family paid for that book
+(shared charges) and what came from it or went to it (between books). Because months
+mislead on their own (paid for her in July, paid back in August), the lane also shows a
+**running total**: "Lauren's business owes Family $100", "Even", or "It has sent $300
+more than it cost". The lane appears only in months with activity, so a hub that never
+uses any of this never sees it.
+
+Timing follows the two existing lenses: **spending** counts a charge when it was bought
+(July), and **money out** ("All money") counts the payback when the account dropped
+(August).
 
 ## How the code changes
 
@@ -148,4 +187,4 @@ mostly mechanical:
    - Empty-book screens.
    - Bank links and tokens per book.
    - Choosing the book for each pay plan.
-3. **Moving a charge** between books.
+3. **Charges another book also counts**, money between books, and the book lane (above).

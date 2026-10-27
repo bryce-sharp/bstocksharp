@@ -30,6 +30,7 @@ export default function AddTransactionDialog({
   funds,
   bills,
   accounts,
+  otherAccounts = [],
   merchants,
   sources,
   categories,
@@ -38,6 +39,8 @@ export default function AddTransactionDialog({
   funds: TxnFund[];
   bills: TxnBill[];
   accounts: TxnAccount[];
+  /** Accounts in your other money books, for a transfer between books. */
+  otherAccounts?: TxnAccount[];
   merchants: string[];
   sources: string[];
   categories: string[]; // spending tags, for what a reimbursement pays back
@@ -86,7 +89,7 @@ export default function AddTransactionDialog({
             >
               <ToggleButton value="expense">Expense</ToggleButton>
               <ToggleButton value="income">Money in</ToggleButton>
-              {accounts.length > 1 ? <ToggleButton value="transfer">Transfer</ToggleButton> : null}
+              {accounts.length + otherAccounts.length > 1 ? <ToggleButton value="transfer">Transfer</ToggleButton> : null}
             </ToggleButtonGroup>
 
             <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: "1fr 1fr" }}>
@@ -103,7 +106,7 @@ export default function AddTransactionDialog({
 
             {kind === "transfer" ? (
               <>
-                <TransferAccounts accounts={accounts} fromId={null} intoId={null} />
+                <TransferAccounts accounts={[...accounts, ...otherAccounts]} fromId={null} intoId={null} />
                 <TextField name="merchant" label="Description (optional)" placeholder="e.g. Monthly Schwab deposit" />
               </>
             ) : (
