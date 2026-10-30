@@ -15,12 +15,14 @@ import {
 
 // "Add a passkey to this device": server mints the challenge, the platform
 // authenticator (Face ID / Windows Hello) signs it, server verifies + stores.
+const noopSubscribe = () => () => {};
+
 export default function AddPasskeyButton() {
   const router = useRouter();
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [supported, setSupported] = React.useState(true); // assume yes until mounted
-  React.useEffect(() => setSupported(browserSupportsWebAuthn()), []);
+  // Assume yes on the server; the browser answers once hydrated.
+  const supported = React.useSyncExternalStore(noopSubscribe, browserSupportsWebAuthn, () => true);
 
   async function add() {
     setBusy(true);

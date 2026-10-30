@@ -44,6 +44,26 @@ function SaveStatus() {
   );
 }
 
+// A small "restore to catalog default" button for an overridden field's endAdornment; the label names the default.
+function RevertAdornment({ onClick, defaultText }: { onClick: () => void; defaultText: string }) {
+  return (
+    <InputAdornment position="end">
+      <Tooltip title={`Revert to catalog default${defaultText ? ` (${defaultText})` : ""}`}>
+        <IconButton
+          size="small"
+          edge="end"
+          aria-label="Revert to catalog default"
+          // Keep the input from blurring (which would fire an extra save).
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={onClick}
+        >
+          <SettingsBackupRestoreIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+    </InputAdornment>
+  );
+}
+
 export default function WorkoutItemAutoSave({
   action,
   item,
@@ -104,30 +124,6 @@ export default function WorkoutItemAutoSave({
     save();
   };
 
-  // A small "restore to catalog default" button for a field's endAdornment.
-  // Shown only when that field is overridden; label names the default value.
-  const revertAdornment = (
-    show: boolean,
-    onClick: () => void,
-    defaultText: string,
-  ) =>
-    show ? (
-      <InputAdornment position="end">
-        <Tooltip title={`Revert to catalog default${defaultText ? ` (${defaultText})` : ""}`}>
-          <IconButton
-            size="small"
-            edge="end"
-            aria-label="Revert to catalog default"
-            // Keep the input from blurring (which would fire an extra save).
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={onClick}
-          >
-            <SettingsBackupRestoreIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      </InputAdornment>
-    ) : undefined;
-
   return (
     <form action={action} ref={formRef}>
       <Stack spacing={2}>
@@ -166,11 +162,10 @@ export default function WorkoutItemAutoSave({
             slotProps={{
               inputLabel: { shrink: true },
               input: {
-                endAdornment: revertAdornment(
-                  item.reps != null,
-                  revertReps,
-                  exercise.defaultReps ?? "none",
-                ),
+                endAdornment:
+                  item.reps != null ? (
+                    <RevertAdornment onClick={revertReps} defaultText={exercise.defaultReps ?? "none"} />
+                  ) : undefined,
               },
             }}
           />
@@ -187,13 +182,13 @@ export default function WorkoutItemAutoSave({
               htmlInput: { min: 0, step: 1 },
               inputLabel: { shrink: true },
               input: {
-                endAdornment: revertAdornment(
-                  item.duration != null,
-                  revertDuration,
-                  exercise.defaultDuration != null
-                    ? `${exercise.defaultDuration}s`
-                    : "none",
-                ),
+                endAdornment:
+                  item.duration != null ? (
+                    <RevertAdornment
+                      onClick={revertDuration}
+                      defaultText={exercise.defaultDuration != null ? `${exercise.defaultDuration}s` : "none"}
+                    />
+                  ) : undefined,
               },
             }}
           />
@@ -208,11 +203,10 @@ export default function WorkoutItemAutoSave({
             slotProps={{
               inputLabel: { shrink: true },
               input: {
-                endAdornment: revertAdornment(
-                  item.weight != null,
-                  revertWeight,
-                  exercise.defaultWeight ?? "none",
-                ),
+                endAdornment:
+                  item.weight != null ? (
+                    <RevertAdornment onClick={revertWeight} defaultText={exercise.defaultWeight ?? "none"} />
+                  ) : undefined,
               },
             }}
           />

@@ -7,11 +7,22 @@ import { useTheme } from "@mui/material/styles";
 import Box from "@mui/material/Box";
 import { formatMoney, formatMoneyCompact } from "@/lib/format";
 
-// Hydration-safe "are we on the client yet?" — same idiom as WeightChart, so the
-// chart never renders on the server (x-charts measures the DOM).
-const noopSubscribe = () => () => {};
-function useMounted() {
-  return React.useSyncExternalStore(noopSubscribe, () => true, () => false);
+// The y-axis (60) plus the side margins; narrower than this, x-charts draws a negative clip area.
+const MIN_WIDTH = 80;
+
+/** A box's live width; 0 on the server, so the chart never renders there (x-charts measures the DOM). */
+function useWidth(): [(el: HTMLDivElement | null) => void, number] {
+  const [el, setEl] = React.useState<HTMLDivElement | null>(null);
+  const subscribe = React.useCallback(
+    (onChange: () => void) => {
+      if (!el) return () => {};
+      const ro = new ResizeObserver(onChange);
+      ro.observe(el);
+      return () => ro.disconnect();
+    },
+    [el],
+  );
+  return [setEl, React.useSyncExternalStore(subscribe, () => el?.clientWidth ?? 0, () => 0)];
 }
 
 // The pace picture: cumulative discretionary spend this month (solid, the active
@@ -35,7 +46,7 @@ export default function SpendTrendChart({
   budget?: number | null;
 }) {
   const theme = useTheme();
-  const mounted = useMounted();
+  const [measure, width] = useWidth();
   // theme.vars = CSS custom properties, so both lines follow light/dark mode
   // (theme.palette only holds the light scheme's values under cssVariables).
   const color = theme.vars?.palette.primary.main ?? theme.palette.primary.main; // follows the active profile
@@ -71,39 +82,41 @@ export default function SpendTrendChart({
   const dataMax = Math.max(0, ...[...thisMonth, ...lastMonth].filter((v): v is number => v != null));
   const yMax = showBudget && budget > dataMax ? budget * 1.1 : undefined;
 
-  if (!mounted) return <Box sx={{ height: 220 }} aria-hidden />;
+  if (width < MIN_WIDTH) return <Box ref={measure} sx={{ height: 220 }} aria-hidden />;
 
   return (
-    <LineChart
-      height={220}
-      series={series}
-      xAxis={[
-        {
-          data: days,
-          scaleType: "point",
-          valueFormatter: (v: number, ctx: { location: string }) =>
-            ctx.location === "tick" ? `${v}` : `Day ${v}`,
-          tickInterval: days.filter((day) => day === 1 || day % 5 === 0),
-        },
-      ]}
-      yAxis={[{ max: yMax, valueFormatter: (v: number) => formatMoneyCompact(v), width: 60 }]}
-      margin={{ top: 10, right: 12, bottom: 4, left: 4 }}
-      slotProps={{ tooltip: { trigger: "axis" } }}
-      sx={{
-        [`& .${lineClasses.line}[data-series="lastMonth"]`]: { strokeDasharray: "5 4", strokeWidth: 1.5 },
-        [`& .${lineClasses.line}[data-series="thisMonth"]`]: { strokeWidth: 2.5 },
-        [`& .${lineClasses.area}[data-series="thisMonth"]`]: { fillOpacity: 0.12 },
-      }}
-    >
-      {showBudget ? (
-        <ChartsReferenceLine
-          y={budget}
-          label={`Budget ${formatMoneyCompact(budget)}`}
-          labelAlign="start"
-          lineStyle={{ stroke: ghost, strokeWidth: 1, opacity: 0.7 }}
-          labelStyle={{ fill: ghost, fontSize: 11 }}
-        />
-      ) : null}
-    </LineChart>
+    <Box ref={measure}>
+      <LineChart
+        height={220}
+        series={series}
+        xAxis={[
+          {
+            data: days,
+            scaleType: "point",
+            valueFormatter: (v: number, ctx: { location: string }) =>
+              ctx.location === "tick" ? `${v}` : `Day ${v}`,
+            tickInterval: days.filter((day) => day === 1 || day % 5 === 0),
+          },
+        ]}
+        yAxis={[{ max: yMax, valueFormatter: (v: number) => formatMoneyCompact(v), width: 60 }]}
+        margin={{ top: 10, right: 12, bottom: 4, left: 4 }}
+        slotProps={{ tooltip: { trigger: "axis" } }}
+        sx={{
+          [`& .${lineClasses.line}[data-series="lastMonth"]`]: { strokeDasharray: "5 4", strokeWidth: 1.5 },
+          [`& .${lineClasses.line}[data-series="thisMonth"]`]: { strokeWidth: 2.5 },
+          [`& .${lineClasses.area}[data-series="thisMonth"]`]: { fillOpacity: 0.12 },
+        }}
+      >
+        {showBudget ? (
+          <ChartsReferenceLine
+            y={budget}
+            label={`Budget ${formatMoneyCompact(budget)}`}
+            labelAlign="start"
+            lineStyle={{ stroke: ghost, strokeWidth: 1, opacity: 0.7 }}
+            labelStyle={{ fill: ghost, fontSize: 11 }}
+          />
+        ) : null}
+      </LineChart>
+    </Box>
   );
 }
