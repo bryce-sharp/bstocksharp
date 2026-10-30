@@ -413,7 +413,7 @@ function SnugDay({
       window.clearTimeout(settle);
       window.removeEventListener("resize", onResize);
     };
-  }, []);
+  }, [coarsePointer]);
 
   // Touches that start anywhere in the play area never scroll the page, even when they miss a piece.
   useEffect(() => {
@@ -882,6 +882,8 @@ function SnugDay({
   }, [isReplay, isArchive, pieces, dateKey, saved, stopClock, hintIds, holesIn, lab]);
 
   useEffect(() => {
+    // Many moves can fill the board (a drop, a hint, a restored game), so finishing watches for it here.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (phase === "playing" && !dragging && gaps === 0) finish();
   }, [phase, dragging, gaps, finish]);
 

@@ -24,6 +24,8 @@ type Assignment = {
 // Mon-first display order (JS getDay(): 0=Sun … 6=Sat).
 const ORDER = [1, 2, 3, 4, 5, 6, 0];
 
+const noopSubscribe = () => () => {};
+
 // Client component so "today" uses the phone's clock, not the server's UTC day.
 export default function WeekSchedule({
   assignments,
@@ -36,8 +38,7 @@ export default function WeekSchedule({
   profileId: number;
   editor: boolean;
 }) {
-  const [today, setToday] = React.useState<number | null>(null);
-  React.useEffect(() => setToday(new Date().getDay()), []);
+  const today = React.useSyncExternalStore<number | null>(noopSubscribe, () => new Date().getDay(), () => null);
 
   const byDay = new Map(assignments.map((a) => [a.weekday, a]));
   const todayA = today != null ? (byDay.get(today) ?? null) : null;
