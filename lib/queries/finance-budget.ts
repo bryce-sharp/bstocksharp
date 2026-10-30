@@ -239,7 +239,7 @@ function monthReportInput(view: BudgetView, lanes: CategoryFlow[]): MonthReportI
   // month; when it posts, only what the set-aside did not cover counts (or what
   // it over-covered comes back). Bills paid more often than monthly count as paid.
   const later = laterBills(view);
-  const setAsideC = later.reduce((s, r) => s + r.monthlyC - (r.paidThisMonthC != null ? r.accruedC : 0), 0);
+  const setAsideC = later.reduce((s, r) => s + r.monthlyC - (paidThisMonth(r) ? r.accruedC : 0), 0);
   const amortizedBills = dl(setAsideC) + out("amortized");
   return {
     plan: {
@@ -263,6 +263,9 @@ function monthReportInput(view: BudgetView, lanes: CategoryFlow[]): MonthReportI
   };
 }
 
+/** Paid only when money actually went out: a refunded payment left the set-aside alone. */
+const paidThisMonth = (r: AmortizedRow) => (r.paidThisMonthC ?? 0) > 0;
+
 /** Amortized bills that come less often than monthly (twice-a-month ones also sit in the amortized lane). */
 const laterBills = (view: BudgetView) => view.computation.amortized.rows.filter((r) => r.monthlyC < r.targetC);
 
@@ -278,7 +281,7 @@ function nextDue(month: string, r: AmortizedRow, dueMonths: number[] | undefined
     const n = ((m - 1 + k) % 12) + 1;
     return formatMonth(`${y + Math.floor((m - 1 + k) / 12)}-${String(n).padStart(2, "0")}-01`);
   };
-  const paid = r.paidThisMonthC != null;
+  const paid = paidThisMonth(r);
   if (dueMonths?.length) {
     for (let k = paid ? 1 : 0; k <= 12; k++) if (dueMonths.includes(((m - 1 + k) % 12) + 1)) return at(k);
     return null;
@@ -298,14 +301,14 @@ export function monthReportFrom(view: BudgetView, lanes: CategoryFlow[]): MonthR
   const dl = (c: number) => Math.round(c) / 100;
   // A bill paid this month used up its set-aside, so it starts over at zero.
   const bills = laterBills(view).map((r) => {
-    const paidThisMonth = r.paidThisMonthC != null;
+    const paid = paidThisMonth(r);
     return {
       name: r.name,
-      saved: paidThisMonth ? 0 : dl(r.accruedC),
+      saved: paid ? 0 : dl(r.accruedC),
       target: dl(r.targetC),
       monthly: dl(r.monthlyC),
       due: nextDue(view.month, r, view.billDueMonths[r.recurringExpenseId]),
-      paidThisMonth,
+      paidThisMonth: paid,
     };
   });
   if (bills.length === 0) return report;

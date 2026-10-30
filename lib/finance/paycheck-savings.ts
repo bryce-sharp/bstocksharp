@@ -4,9 +4,11 @@
 // income deposit within 10% of the take-home a paycheck deposits. Same-day
 // deposits from one payer are added together first (a paycheck split across
 // accounts), and one of them can match alone (a bonus paid beside the
-// paycheck). A deposit of another size, like a bonus, adds no paycheck
-// savings: the deposit cannot say what was withheld from it. A month with no
-// income recorded falls back to the calendar (the 15th and the last day).
+// paycheck); each deposit counts once, closest match first, so two people
+// paid together each get their own. A deposit of another size, like a bonus,
+// adds no paycheck savings: the deposit cannot say what was withheld from it.
+// A month with no income recorded falls back to the calendar (the 15th and
+// the last day).
 // Weekly and every-two-weeks pay land a varying number of times a month
 // against an averaged plan, so they accrue evenly by date instead.
 
@@ -29,37 +31,46 @@ export function paycheckSavedSoFarC(
   day: number,
   daysInMonth: number,
 ): number {
+  const valid = deposits.filter((d) => d.amountC > 0);
+  // A paycheck is one deposit, or a payer's whole day of deposits (a split check).
+  const candidates = valid.map((d, i) => ({ ids: [i], amountC: d.amountC, at: d.postedOn }));
   const groups = new Map<string, number[]>();
-  for (const d of deposits) {
-    if (d.amountC <= 0) continue;
+  valid.forEach((d, i) => {
     const key = `${d.postedOn}|${(d.merchant ?? "").trim().toUpperCase()}`;
-    groups.set(key, [...(groups.get(key) ?? []), d.amountC]);
+    groups.set(key, [...(groups.get(key) ?? []), i]);
+  });
+  for (const ids of groups.values()) {
+    if (ids.length > 1) candidates.push({ ids, amountC: ids.reduce((s, i) => s + valid[i]!.amountC, 0), at: valid[ids[0]!]!.postedOn });
   }
-  const counted = new Set<string>();
+
+  // Closest match first, so who claims a deposit never depends on list order.
+  const pairs: { plan: number; cand: number; off: number }[] = [];
+  plans.forEach((p, plan) => {
+    if (CHECKS_PER_MONTH[p.payFrequency] === undefined || p.netPerCheckC <= 0) return;
+    candidates.forEach((x, cand) => {
+      const off = Math.abs(x.amountC - p.netPerCheckC) / p.netPerCheckC;
+      if (off <= CLOSE) pairs.push({ plan, cand, off });
+    });
+  });
+  pairs.sort((a, b) => a.off - b.off || candidates[a.cand]!.at.localeCompare(candidates[b.cand]!.at) || a.plan - b.plan || a.cand - b.cand);
+  const used = new Set<number>();
+  const checks = plans.map(() => 0);
+  for (const { plan, cand } of pairs) {
+    const x = candidates[cand]!;
+    if (checks[plan]! >= CHECKS_PER_MONTH[plans[plan]!.payFrequency]! || x.ids.some((i) => used.has(i))) continue;
+    x.ids.forEach((i) => used.add(i));
+    checks[plan]!++;
+  }
 
   let c = 0;
-  for (const p of plans) {
-    const slots = CHECKS_PER_MONTH[p.payFrequency];
-    if (slots === undefined) {
+  plans.forEach((p, plan) => {
+    if (CHECKS_PER_MONTH[p.payFrequency] === undefined) {
       c += Math.round((p.perCheckC * (PER_YEAR[p.payFrequency] ?? 26) * day) / 12 / daysInMonth);
-      continue;
-    }
-    if (groups.size === 0) {
+    } else if (valid.length === 0) {
       c += calendarChecks(p.payFrequency, day, daysInMonth) * p.perCheckC;
-      continue;
+    } else {
+      c += checks[plan]! * p.perCheckC;
     }
-    const close = (a: number) => p.netPerCheckC > 0 && Math.abs(a - p.netPerCheckC) <= p.netPerCheckC * CLOSE;
-    let checks = 0;
-    for (const [key, amounts] of groups) {
-      if (checks >= slots) break;
-      if (counted.has(key)) continue;
-      const total = amounts.reduce((s, a) => s + a, 0);
-      if (close(total) || amounts.some(close)) {
-        counted.add(key);
-        checks++;
-      }
-    }
-    c += checks * p.perCheckC;
-  }
+  });
   return Math.min(c, planC);
 }
