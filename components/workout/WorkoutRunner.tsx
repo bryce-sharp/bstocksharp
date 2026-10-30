@@ -215,6 +215,32 @@ function Dial({
   );
 }
 
+const PREF_EVENT = "workout-pref";
+const subscribePref = (onChange: () => void) => {
+  window.addEventListener(PREF_EVENT, onChange);
+  return () => window.removeEventListener(PREF_EVENT, onChange);
+};
+
+/** A yes/no setting kept in localStorage; the server renders the fallback. */
+function useStoredFlag(key: string, fallback: boolean): [boolean, (v: boolean) => void] {
+  const value = React.useSyncExternalStore(
+    subscribePref,
+    () => {
+      const v = localStorage.getItem(key);
+      return v == null ? fallback : v === "1";
+    },
+    () => fallback,
+  );
+  const set = React.useCallback(
+    (v: boolean) => {
+      localStorage.setItem(key, v ? "1" : "0");
+      window.dispatchEvent(new Event(PREF_EVENT));
+    },
+    [key],
+  );
+  return [value, set];
+}
+
 export default function WorkoutRunner({
   workoutId,
   workoutName,
@@ -239,8 +265,8 @@ export default function WorkoutRunner({
   const [finished, setFinished] = React.useState(false); // timer hit 0, awaiting manual Next
   const [awaitingStart, setAwaitingStart] = React.useState(false); // manual mode: timed step ready, not started
   const [flash, setFlash] = React.useState(false);
-  const [autoAdvance, setAutoAdvance] = React.useState(true);
-  const [muted, setMuted] = React.useState(false);
+  const [autoAdvance, setAutoAdvance] = useStoredFlag("workout.autoAdvance", true);
+  const [muted, setMuted] = useStoredFlag("workout.muted", false);
   const [tipIndex, setTipIndex] = React.useState(0);
 
   const deadlineRef = React.useRef(0);
@@ -269,23 +295,9 @@ export default function WorkoutRunner({
   const step = steps[stepIndex];
   const plan = step ? planFor(step) : null;
 
-  // Load auto-advance preference.
-  React.useEffect(() => {
-    const v = localStorage.getItem("workout.autoAdvance");
-    if (v != null) setAutoAdvance(v === "1");
-  }, []);
-  React.useEffect(() => {
-    localStorage.setItem("workout.autoAdvance", autoAdvance ? "1" : "0");
-  }, [autoAdvance]);
-
-  // Mute preference — mirrored into a ref so the clock loop reads it live.
-  React.useEffect(() => {
-    const v = localStorage.getItem("workout.muted");
-    if (v != null) setMuted(v === "1");
-  }, []);
+  // Mute is mirrored into a ref so the clock loop reads it live.
   React.useEffect(() => {
     mutedRef.current = muted;
-    localStorage.setItem("workout.muted", muted ? "1" : "0");
   }, [muted]);
 
   // ── Cues ────────────────────────────────────────────────────────────────────
@@ -366,8 +378,8 @@ export default function WorkoutRunner({
 
   // ── Step init ─────────────────────────────────────────────────────────────
   const initStep = React.useCallback(
-    (idx: number) => {
-      const s = steps[idx];
+    (idx: number, list = steps, auto = autoAdvance) => {
+      const s = list[idx];
       if (!s) return;
       const p = planFor(s);
       setFinished(false);
@@ -385,7 +397,7 @@ export default function WorkoutRunner({
       setTipIndex(t.length ? Math.floor(Math.random() * t.length) : 0);
       // A rest timer always auto-runs; a WORK timer waits for a Start tap in
       // manual mode (nothing auto-starts when you're driving it yourself).
-      const autoRun = p.type === "timer" && p.label === "rest" ? true : autoAdvance;
+      const autoRun = p.type === "timer" && p.label === "rest" ? true : auto;
       if (p.type === "manual") {
         setRunning(false);
         setRemaining(0);
@@ -419,13 +431,15 @@ export default function WorkoutRunner({
     [steps, autoAdvance],
   );
 
-  React.useEffect(() => {
-    if (started && !done) {
-      initStep(stepIndex);
-      anchorKeyRef.current = anchorKey(steps, stepIndex);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stepIndex, started, autoAdvance]);
+  // Moves to a step and starts it fresh. `list` and `auto` are the step list and auto-advance it runs under.
+  const goTo = React.useCallback(
+    (idx: number, list = steps, auto = autoAdvance) => {
+      setStepIndex(idx);
+      initStep(idx, list, auto);
+      anchorKeyRef.current = anchorKey(list, idx);
+    },
+    [steps, autoAdvance, initStep],
+  );
 
   // Flipping auto-advance rebuilds `steps` (lead-ins appear/disappear), so the
   // re-anchored index must land in the same update or a render indexes past the end.
@@ -438,9 +452,7 @@ export default function WorkoutRunner({
       const target = key
         ? nextSteps.findIndex((_, i) => stepKey(nextSteps, i) === key)
         : -1;
-      setStepIndex(
-        target >= 0 ? target : Math.min(stepIndex, nextSteps.length - 1),
-      );
+      goTo(target >= 0 ? target : Math.min(stepIndex, nextSteps.length - 1), nextSteps, next);
     }
     setAutoAdvance(next);
   };
@@ -451,9 +463,9 @@ export default function WorkoutRunner({
       setDone(true);
       wakeRef.current?.release().catch(() => {});
     } else {
-      setStepIndex(stepIndex + 1);
+      goTo(stepIndex + 1);
     }
-  }, [stepIndex, steps.length]);
+  }, [stepIndex, steps.length, goTo]);
 
   // ── Rotating tip (cadence set by RUN_TIMING.tipRotateSeconds) ────────────────
   const tips = step && step.kind === "work" ? parseTips(step.item.tips) : [];
@@ -560,6 +572,7 @@ export default function WorkoutRunner({
     }
     acquireWake();
     setStarted(true);
+    goTo(stepIndex);
   }
 
   // Start a timed WORK step that's been sitting on its Start button (manual mode).
@@ -588,7 +601,7 @@ export default function WorkoutRunner({
   }
 
   function prev() {
-    setStepIndex((i) => Math.max(0, i - 1));
+    if (stepIndex > 0) goTo(stepIndex - 1);
   }
   function restart() {
     initStep(stepIndex);
@@ -834,7 +847,7 @@ export default function WorkoutRunner({
         />
         <Stack direction="row" sx={{ alignItems: "center" }}>
           <IconButton
-            onClick={() => setMuted((m) => !m)}
+            onClick={() => setMuted(!muted)}
             aria-label={muted ? "Unmute cues" : "Mute cues"}
           >
             {muted ? <VolumeOffIcon /> : <VolumeUpIcon />}

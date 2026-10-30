@@ -37,12 +37,19 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Row({ label, value, color }: { label: string; value: string; color?: string }) {
+function Row({ label, note, value, color }: { label: string; note?: string; value: string; color?: string }) {
   return (
     <Stack direction="row" sx={{ justifyContent: "space-between" }} spacing={2}>
-      <Typography variant="body2" sx={{ color: "text.secondary" }}>
-        {label}
-      </Typography>
+      <Box>
+        <Typography variant="body2" sx={{ color: "text.secondary" }}>
+          {label}
+        </Typography>
+        {note ? (
+          <Typography variant="caption" sx={{ color: "text.disabled" }}>
+            {note}
+          </Typography>
+        ) : null}
+      </Box>
       <Typography variant="body2" sx={{ fontWeight: 600, color: color, textAlign: "right" }}>
         {value}
       </Typography>
@@ -103,6 +110,20 @@ export function CashFlowDetails({ d }: { d: CashFlowDetailsData }) {
           {income.map((s) => (
             <Row key={s.source ?? "—"} label={s.source ?? "—"} value={formatMoney(s.amount)} />
           ))}
+        </Section>
+      ) : null}
+
+      {d.report?.setAside ? (
+        <Section title="Set aside for later bills">
+          {d.report.setAside.bills.map((b, i) => (
+            <Row
+              key={`${b.name}-${i}`}
+              label={b.name}
+              note={[`${formatMoney(b.monthly)} a month`, b.due && !b.paidThisMonth ? `due ${b.due}` : null].filter(Boolean).join(" · ")}
+              value={b.paidThisMonth ? "paid this month" : `${formatMoney(b.saved)} so far of ${formatMoney(b.target)}`}
+            />
+          ))}
+          <Row label="Total set aside so far" value={formatMoney(d.report.setAside.total)} />
         </Section>
       ) : null}
 

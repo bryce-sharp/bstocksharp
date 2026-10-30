@@ -27,13 +27,15 @@ function safePath(from: string): string {
 // The global sign-in form: passkey first (one Face ID tap), password as the
 // universal fallback. autoComplete hints matter on the password path — they're
 // what lets iCloud Keychain offer the saved login behind a Face ID prompt.
+const noopSubscribe = () => () => {};
+
 export default function LoginForm({ from, notice }: { from: string; notice?: string }) {
   const [state, formAction] = React.useActionState(loginAction, null);
 
   const [passkeyBusy, setPasskeyBusy] = React.useState(false);
   const [passkeyError, setPasskeyError] = React.useState<string | null>(null);
-  const [supported, setSupported] = React.useState(false); // until mounted
-  React.useEffect(() => setSupported(browserSupportsWebAuthn()), []);
+  // No passkey button on the server; the browser answers once hydrated.
+  const supported = React.useSyncExternalStore(noopSubscribe, browserSupportsWebAuthn, () => false);
 
   async function signInWithPasskey() {
     setPasskeyBusy(true);
