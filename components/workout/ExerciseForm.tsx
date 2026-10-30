@@ -99,7 +99,7 @@ export default function ExerciseForm({
             }
             label="Hold the last rep (super-set finish)"
           />
-          <Typography variant="caption" color="text.secondary" display="block">
+          <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>
             Only kicks in when both Reps and a per-rep Time are set — the final
             rep gets a longer HOLD.
           </Typography>
@@ -116,7 +116,7 @@ export default function ExerciseForm({
             }
             label="Performed per side (do both sides)"
           />
-          <Typography variant="caption" color="text.secondary" display="block">
+          <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>
             For split squats, planks each side, etc. — the runner plays the set
             once per side with a short switch between. Put the <strong>per-side</strong>{" "}
             amount in Reps/Time (e.g. <code>8</code>, not <code>8 each leg</code>).

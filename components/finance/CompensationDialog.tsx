@@ -161,7 +161,7 @@ export default function CompensationDialog({
                 ))}
               </TextField>
             </Box>
-            <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
+            <Typography variant="caption" sx={{ color: "text.secondary", mt: -1 }}>
               Net pay is derived: gross − payroll deductions. The rest is optional context.
             </Typography>
             <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr 1fr" } }}>

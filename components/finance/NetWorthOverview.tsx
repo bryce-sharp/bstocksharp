@@ -156,7 +156,7 @@ export default function NetWorthOverview({
     <>
       <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2.5 }, mb: 2 }}>
         <Typography variant="h6">Growth</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+        <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
           Tap a month to see where it was.
         </Typography>
 
@@ -196,7 +196,7 @@ export default function NetWorthOverview({
         </Box>
 
         {fromPay > 0 && last > 0 ? (
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          <Typography variant="body2" sx={{ color: "text.secondary", mt: 1 }}>
             Of the {formatMoneyDelta(totals[last] - totals[0])} {rangePhrase},{" "}
             <strong>{formatMoneyDelta(fromPay)}</strong> went straight from paychecks into{" "}
             {payNames.join(" and ")}.
@@ -206,10 +206,10 @@ export default function NetWorthOverview({
       </Paper>
 
       <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2.5 }, mb: 2 }}>
-        <Stack direction="row" alignItems="flex-start" justifyContent="space-between" sx={{ flexWrap: "wrap", gap: 1, mb: 1.5 }}>
+        <Stack direction="row" sx={{ alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 1, mb: 1.5 }}>
           <Box>
             <Typography variant="h6">Where it lives</Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
               End of {formatMonth(months[at])}
               {at !== last ? (
                 <Button size="small" onClick={() => setSel(last)} sx={{ ml: 1, py: 0, minWidth: 0 }}>
@@ -289,7 +289,7 @@ export default function NetWorthOverview({
               <Typography variant="h6" component="div" sx={{ lineHeight: 1.1 }}>
                 {formatMoneyShort(total)}
               </Typography>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{ color: "text.secondary" }}>
                 net worth
               </Typography>
             </Box>
@@ -322,10 +322,10 @@ export default function NetWorthOverview({
                 >
                   <Box sx={{ width: 10, height: 10, borderRadius: 0.5, bgcolor: s.color }} />
                   <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="body2" fontWeight={600} noWrap>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
                       {s.label}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary" noWrap component="div">
+                    <Typography variant="caption" sx={{ color: "text.secondary" }} noWrap component="div">
                       {s.sub}
                     </Typography>
                   </Box>
@@ -335,7 +335,7 @@ export default function NetWorthOverview({
                     ) : null}
                   </Box>
                   <Box sx={{ textAlign: "right", minWidth: 64 }}>
-                    <Typography variant="body2" fontWeight={600}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
                       {s.value == null ? "—" : <Money value={s.value} />}
                     </Typography>
                     {s.change != null ? (
@@ -349,7 +349,7 @@ export default function NetWorthOverview({
             })}
           </Stack>
         </Box>
-        <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 1.5 }}>
+        <Typography variant="caption" component="p" sx={{ color: "text.secondary", mt: 1.5 }}>
           Changes are {rangePhrase}
           {at !== last ? `, through ${formatMonth(months[at])}` : ""}.
           {group === "accounts" ? " Tap an account for its details." : ""}

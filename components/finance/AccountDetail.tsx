@@ -35,13 +35,13 @@ const tone = (n: number | null | undefined) =>
 function Stat({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
     <Paper variant="outlined" sx={{ p: 1.5 }}>
-      <Typography variant="caption" color="text.secondary" component="div">
+      <Typography variant="caption" sx={{ color: "text.secondary" }} component="div">
         {label}
       </Typography>
-      <Typography fontWeight={600} sx={{ color }}>
+      <Typography sx={{ fontWeight: 600, color }}>
         {value}
         {sub ? (
-          <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.75 }}>
+          <Typography component="span" variant="caption" sx={{ color: "text.secondary", ml: 0.75 }}>
             {sub}
           </Typography>
         ) : null}
@@ -54,7 +54,7 @@ function Line({ label, value, color }: { label: string; value: string; color?: s
   return (
     <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, py: 0.5 }}>
       <Typography variant="body2">{label}</Typography>
-      <Typography variant="body2" fontWeight={600} sx={{ color }}>
+      <Typography variant="body2" sx={{ fontWeight: 600, color }}>
         {value}
       </Typography>
     </Box>
@@ -199,7 +199,7 @@ export default function AccountDetail({
             {movedOut !== 0 ? <Line label="Moved out to your accounts" value={formatMoneyDelta(-movedOut)} /> : null}
             {landedTotal !== 0 ? <Line label="Income that landed here" value={formatMoneyDelta(landedTotal)} /> : null}
           </Box>
-          <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 0.5 }}>
+          <Typography variant="caption" component="p" sx={{ color: "text.secondary", mt: 0.5 }}>
             {contributions && contributions.you + contributions.employer > 0
               ? `${contributions.names.join(" and ")} adds ${formatMoneyWhole(contributions.you + contributions.employer)}/mo${
                   contributions.employer > 0
@@ -214,7 +214,7 @@ export default function AccountDetail({
 
       {!investing && (landed.length > 0 || movedIn !== 0 || movedOut !== 0) ? (
         <Box sx={{ mt: 2 }}>
-          <Typography variant="subtitle2" color="text.secondary">
+          <Typography variant="subtitle2" sx={{ color: "text.secondary" }}>
             Money that landed here
           </Typography>
           {landed.slice(0, 6).map((l) => (
@@ -254,7 +254,7 @@ export default function AccountDetail({
         />
       </Box>
 
-      <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 3, mb: 0.5 }}>
+      <Typography variant="subtitle2" sx={{ color: "text.secondary", mt: 3, mb: 0.5 }}>
         Monthly balances
       </Typography>
       <Stack divider={<Box sx={{ borderTop: 1, borderColor: "divider" }} />}>
@@ -267,7 +267,7 @@ export default function AccountDetail({
             >
               <Typography variant="body2">{formatMonth(months[i])}</Typography>
               <Box sx={{ textAlign: "right" }}>
-                <Typography variant="body2" component="span" fontWeight={600}>
+                <Typography variant="body2" component="span" sx={{ fontWeight: 600 }}>
                   {balances[i] == null ? "—" : formatMoney(balances[i])}
                 </Typography>
                 {c ? (
@@ -276,7 +276,7 @@ export default function AccountDetail({
                     {c.span > 1 ? ` · ${c.span} mo` : ""}
                   </Typography>
                 ) : i === 0 ? (
-                  <Typography variant="caption" component="span" color="text.secondary" sx={{ ml: 1 }}>
+                  <Typography variant="caption" component="span" sx={{ color: "text.secondary", ml: 1 }}>
                     starting point
                   </Typography>
                 ) : null}

@@ -30,16 +30,14 @@ import Chip from "@mui/material/Chip";
 function ItemRow({ index, it }: { index: number; it: ResolvedItem }) {
   return (
     <Paper variant="outlined" sx={{ p: 2 }}>
-      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+      <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
         <Typography
           variant="subtitle1"
-          fontWeight={700}
-          color="text.secondary"
-          sx={{ minWidth: 22, textAlign: "center" }}
+          sx={{ fontWeight: 700, color: "text.secondary", minWidth: 22, textAlign: "center" }}
         >
           {index}
         </Typography>
-        <Typography variant="subtitle1" fontWeight={600}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
           {it.name}
         </Typography>
         <ExerciseInfoButton name={it.name} description={it.description} />
@@ -50,7 +48,7 @@ function ItemRow({ index, it }: { index: number; it: ResolvedItem }) {
           label={formatTarget(it)}
         />
         {it.weight ? (
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
             {it.weight}
           </Typography>
         ) : null}
@@ -58,8 +56,7 @@ function ItemRow({ index, it }: { index: number; it: ResolvedItem }) {
       {it.note ? (
         <Typography
           variant="body2"
-          color="text.secondary"
-          sx={{ pl: "30px", mt: 0.5 }}
+          sx={{ color: "text.secondary", pl: "30px", mt: 0.5 }}
         >
           {it.note}
         </Typography>
@@ -97,10 +94,8 @@ export default async function WorkoutDetailPage({
           width to wrap, so a long name can't force horizontal scroll on mobile. */}
       <Stack
         direction="row"
-        justifyContent="space-between"
-        alignItems="center"
         spacing={1}
-        sx={{ mb: 2 }}
+        sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}
       >
         <Button component={Link} href="/workout" startIcon={<ArrowBackIcon />}>
           All workouts
@@ -139,11 +134,9 @@ export default async function WorkoutDetailPage({
       <Stack
         direction="row"
         spacing={1}
-        alignItems="center"
-        flexWrap="wrap"
-        sx={{ mb: 4 }}
+        sx={{ alignItems: "center", flexWrap: "wrap", mb: 4 }}
       >
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{ color: "text.secondary" }}>
           {items.length} exercise{items.length === 1 ? "" : "s"}
         </Typography>
         {creatorName ? (
@@ -176,8 +169,7 @@ export default async function WorkoutDetailPage({
               <Stack
                 direction="row"
                 spacing={1}
-                alignItems="center"
-                sx={{ mb: isCircuit ? 0.5 : 1.5 }}
+                sx={{ alignItems: "center", mb: isCircuit ? 0.5 : 1.5 }}
               >
                 <Typography variant="h5" component="h2">
                   {s.label}
@@ -195,8 +187,7 @@ export default async function WorkoutDetailPage({
               {isCircuit ? (
                 <Typography
                   variant="body2"
-                  color="text.secondary"
-                  sx={{ mb: 1.5 }}
+                  sx={{ color: "text.secondary", mb: 1.5 }}
                 >
                   Rotate through these {workout.rounds} times.
                 </Typography>

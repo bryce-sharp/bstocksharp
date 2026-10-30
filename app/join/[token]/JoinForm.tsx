@@ -28,13 +28,13 @@ export default function JoinForm({
     <Paper variant="outlined" sx={{ p: { xs: 3, md: 4 } }}>
       <form action={formAction}>
         <Stack spacing={2.5}>
-          <Stack direction="row" spacing={1.5} alignItems="center">
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
             <CelebrationOutlinedIcon color="primary" />
             <Typography variant="h5" component="h1">
               You&apos;re invited
             </Typography>
           </Stack>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
             {groupName && personName ? (
               <>
                 Make a login to join <strong>{groupName}</strong> as{" "}
@@ -84,7 +84,7 @@ export default function JoinForm({
           <SubmitButton variant="contained" size="large" pendingLabel="Creating…">
             Create my login
           </SubmitButton>
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{ color: "text.secondary" }}>
             Tip: after signing in you can add a passkey (Face ID) from the
             profile menu, so you never type this password again.
           </Typography>

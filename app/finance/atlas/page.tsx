@@ -168,10 +168,8 @@ export default async function AtlasPage({
     <Container maxWidth="md" sx={{ py: { xs: 3, md: 6 } }}>
       <Stack
         direction="row"
-        alignItems="flex-start"
-        justifyContent="space-between"
         spacing={2}
-        sx={{ mb: 3, flexWrap: "wrap", rowGap: 2 }}
+        sx={{ alignItems: "flex-start", justifyContent: "space-between", mb: 3, flexWrap: "wrap", rowGap: 2 }}
       >
         <Stack spacing={0.5}>
           <Typography variant="h3" component="h1" sx={{ fontSize: { xs: "2.25rem", sm: undefined } }}>
@@ -180,9 +178,7 @@ export default async function AtlasPage({
           <Typography
             variant="h6"
             component="p"
-            color="text.secondary"
-            fontWeight={400}
-            sx={{ fontSize: { xs: "1rem", sm: undefined } }}
+            sx={{ color: "text.secondary", fontWeight: 400, fontSize: { xs: "1rem", sm: undefined } }}
           >
             Asset Tracking and Long-term Accounting System
           </Typography>
@@ -250,8 +246,7 @@ export default async function AtlasPage({
           </Typography>
           <Typography
             variant="caption"
-            color="text.secondary"
-            sx={{ px: 1, mb: 1.5, display: "block" }}
+            sx={{ color: "text.secondary", px: 1, mb: 1.5, display: "block" }}
           >
             The monthly plan: paycheck → deductions &amp; net → bills, savings
             goal &amp; discretionary. Hover a ribbon for the numbers; on a phone,

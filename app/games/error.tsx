@@ -4,7 +4,7 @@ import Container from "@mui/material/Container";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
-import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutlined";
 
 export default function GamesError({
   reset,
@@ -19,7 +19,7 @@ export default function GamesError({
         <Typography variant="h6" gutterBottom>
           Couldn&apos;t load the game
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        <Typography variant="body2" sx={{ color: "text.secondary", mb: 3 }}>
           Something went wrong. Give it a moment and try again.
         </Typography>
         <Button variant="contained" onClick={reset}>

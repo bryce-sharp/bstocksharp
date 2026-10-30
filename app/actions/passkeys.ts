@@ -11,7 +11,6 @@ import {
   type AuthenticationResponseJSON,
   type PublicKeyCredentialCreationOptionsJSON,
   type PublicKeyCredentialRequestOptionsJSON,
-  type AuthenticatorTransportFuture,
 } from "@simplewebauthn/server";
 import { db } from "@/lib/db";
 import { accounts, passkeys } from "@/lib/db/schema";
@@ -61,7 +60,7 @@ export async function startPasskeyRegistration(): Promise<PublicKeyCredentialCre
     // Don't re-register a credential we already have.
     excludeCredentials: existing.map((p) => ({
       id: p.id,
-      transports: p.transports as AuthenticatorTransportFuture[],
+      transports: p.transports,
     })),
     authenticatorSelection: {
       residentKey: "required", // discoverable → enables usernameless login
@@ -168,7 +167,7 @@ export async function finishPasskeyLogin(
         id: passkey.id,
         publicKey: new Uint8Array(Buffer.from(passkey.publicKey, "base64url")),
         counter: passkey.counter,
-        transports: passkey.transports as AuthenticatorTransportFuture[],
+        transports: passkey.transports,
       },
     });
     verified = result.verified;

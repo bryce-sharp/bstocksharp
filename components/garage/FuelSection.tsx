@@ -24,8 +24,7 @@ function Stat({ label, value }: { label: string; value: string }) {
       </Typography>
       <Typography
         variant="caption"
-        color="text.secondary"
-        sx={{ textTransform: "uppercase", letterSpacing: "0.04em" }}
+        sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.04em" }}
       >
         {label}
       </Typography>
@@ -48,9 +47,7 @@ export default async function FuelSection({
     <Box>
       <Stack
         direction="row"
-        justifyContent="space-between"
-        alignItems="center"
-        sx={{ mb: 2 }}
+        sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}
       >
         <Typography variant="h6">Fuel &amp; MPG</Typography>
         {editor ? (
@@ -71,7 +68,7 @@ export default async function FuelSection({
           <LocalGasStationOutlinedIcon
             sx={{ fontSize: 40, color: "text.disabled", mb: 1 }}
           />
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
             {editor
               ? "No fill-ups yet — log one to start tracking MPG."
               : "No fill-ups logged yet."}
@@ -102,15 +99,14 @@ export default async function FuelSection({
           <Stack spacing={1.5}>
             {rows.map((r) => (
               <Paper key={r.id} variant="outlined" sx={{ p: 2 }}>
-                <Stack direction="row" justifyContent="space-between" spacing={1}>
+                <Stack direction="row" sx={{ justifyContent: "space-between" }} spacing={1}>
                   <Box sx={{ minWidth: 0 }}>
                     <Stack
                       direction="row"
                       spacing={1}
-                      alignItems="center"
-                      flexWrap="wrap"
+                      sx={{ alignItems: "center", flexWrap: "wrap" }}
                     >
-                      <Typography variant="subtitle1" fontWeight={600}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                         {formatDate(r.fillDate)}
                       </Typography>
                       {r.mpg != null ? (
@@ -125,7 +121,7 @@ export default async function FuelSection({
                         <Chip size="small" variant="outlined" label="partial" />
                       ) : null}
                     </Stack>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
                       {[
                         r.odometer != null ? formatMiles(r.odometer) : null,
                         r.gallons != null
@@ -141,8 +137,7 @@ export default async function FuelSection({
                   </Box>
                   <Typography
                     variant="subtitle1"
-                    fontWeight={600}
-                    sx={{ flexShrink: 0 }}
+                    sx={{ fontWeight: 600, flexShrink: 0 }}
                   >
                     {formatMoney(r.totalCost)}
                   </Typography>
@@ -151,8 +146,7 @@ export default async function FuelSection({
                 {r.notes ? (
                   <Typography
                     variant="body2"
-                    color="text.secondary"
-                    sx={{ mt: 1, whiteSpace: "pre-wrap" }}
+                    sx={{ color: "text.secondary", mt: 1, whiteSpace: "pre-wrap" }}
                   >
                     {r.notes}
                   </Typography>
@@ -162,8 +156,7 @@ export default async function FuelSection({
                   <Stack
                     direction="row"
                     spacing={0.5}
-                    justifyContent="flex-end"
-                    sx={{ mt: 1 }}
+                    sx={{ justifyContent: "flex-end", mt: 1 }}
                   >
                     <Tooltip title="Edit">
                       <IconButton

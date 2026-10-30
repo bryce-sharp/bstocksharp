@@ -60,7 +60,7 @@ export default async function SchedulePage({
       <Typography variant="h4" component="h1">
         {activeProfile.name}&apos;s schedule
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+      <Typography variant="body2" sx={{ color: "text.secondary", mb: 3 }}>
         Pick a workout for each day (or leave it as Rest). Changes save instantly.
       </Typography>
 

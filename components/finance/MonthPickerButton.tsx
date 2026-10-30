@@ -63,7 +63,7 @@ export default function MonthPickerButton({
         transformOrigin={{ vertical: "top", horizontal: "center" }}
       >
         <Box sx={{ p: 1.5, width: 244 }}>
-          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+          <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", mb: 1 }}>
             <IconButton
               size="small"
               onClick={() => setYear((y) => y - 1)}
@@ -72,7 +72,7 @@ export default function MonthPickerButton({
             >
               <ChevronLeftIcon fontSize="small" />
             </IconButton>
-            <Typography fontWeight={600}>{year}</Typography>
+            <Typography sx={{ fontWeight: 600 }}>{year}</Typography>
             <IconButton
               size="small"
               onClick={() => setYear((y) => y + 1)}

@@ -26,14 +26,14 @@ const percent = (from: number, to: number) => (from === 0 ? "" : `${to >= from ?
 function Tile({ label, value, sub, wide = false }: { label: string; value: string; sub?: string; wide?: boolean }) {
   return (
     <Paper variant="outlined" sx={{ p: 1.5, minWidth: 0, gridColumn: wide ? { xs: "1 / -1", sm: "auto" } : undefined }}>
-      <Typography variant="caption" color="text.secondary" component="div" noWrap>
+      <Typography variant="caption" sx={{ color: "text.secondary" }} component="div" noWrap>
         {label}
       </Typography>
       <Typography variant="h6" component="div" sx={{ lineHeight: 1.3 }}>
         {value}
       </Typography>
       {sub ? (
-        <Typography variant="caption" color="text.secondary" component="div" noWrap>
+        <Typography variant="caption" sx={{ color: "text.secondary" }} component="div" noWrap>
           {sub}
         </Typography>
       ) : null}
@@ -128,7 +128,7 @@ export default function BillHistory({
 
   if (!h.latest) {
     return (
-      <Typography color="text.secondary">
+      <Typography sx={{ color: "text.secondary" }}>
         No payments are linked to this bill yet. Once one posts, its price history starts here.
       </Typography>
     );
@@ -166,12 +166,12 @@ export default function BillHistory({
       <BillPriceChart months={h.months} />
 
       {view.isEstimate ? (
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{ color: "text.secondary" }}>
           This bill varies month to month, so its changes are not listed.
         </Typography>
       ) : h.changes.length ? (
         <Box>
-          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
+          <Typography variant="subtitle2" sx={{ color: "text.secondary", mb: 0.5 }}>
             Price changes
           </Typography>
           {shown.map((c) => (
@@ -201,12 +201,12 @@ export default function BillHistory({
           ) : null}
         </Box>
       ) : (
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{ color: "text.secondary" }}>
           The price has not changed in this history.
         </Typography>
       )}
 
-      <Typography variant="caption" color="text.secondary">
+      <Typography variant="caption" sx={{ color: "text.secondary" }}>
         From the payments linked to this bill. A month counts its largest payment, so a late payment or a small extra
         charge does not read as a price change.
       </Typography>

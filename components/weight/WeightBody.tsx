@@ -60,8 +60,7 @@ function Tile({
     <Paper variant="outlined" sx={{ p: 2 }}>
       <Typography
         variant="caption"
-        color="text.secondary"
-        sx={{ textTransform: "uppercase", letterSpacing: "0.04em" }}
+        sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.04em" }}
       >
         {label}
       </Typography>
@@ -71,7 +70,7 @@ function Tile({
         </Typography>
       ) : null}
       {sub ? (
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+        <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>
           {sub}
         </Typography>
       ) : null}
@@ -321,10 +320,7 @@ export default function WeightBody({
         <Stack
           direction="row"
           spacing={1}
-          alignItems="center"
-          justifyContent="space-between"
-          flexWrap="wrap"
-          sx={{ mb: 1.5, px: 1, rowGap: 1 }}
+          sx={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", mb: 1.5, px: 1, rowGap: 1 }}
         >
           <Typography variant="h6">{maintain ? "Maintaining" : "Trend"}</Typography>
           <ToggleButtonGroup
@@ -358,12 +354,9 @@ export default function WeightBody({
         />
         <Stack
           direction="row"
-          justifyContent="space-between"
-          alignItems="center"
-          flexWrap="wrap"
-          sx={{ px: 1, mt: 0.5, gap: 1 }}
+          sx={{ justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", px: 1, mt: 0.5, gap: 1 }}
         >
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{ color: "text.secondary" }}>
             {maintain && holdWeight != null && holdRange != null
               ? `Holding ${holdWeight} ±${holdRange} lb · ${WINDOW_LABEL[win]} trend`
               : hasGoal && planPace != null
@@ -371,7 +364,7 @@ export default function WeightBody({
                 : ""}
           </Typography>
           {topBadges.length > 0 ? (
-            <Stack direction="row" flexWrap="wrap" useFlexGap sx={{ gap: 0.75 }}>
+            <Stack direction="row" useFlexGap sx={{ flexWrap: "wrap", gap: 0.75 }}>
               {topBadges.map((b) => (
                 <Chip key={b.label} size="small" color={b.color} variant="filled" label={b.label} />
               ))}

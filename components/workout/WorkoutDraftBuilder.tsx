@@ -18,7 +18,7 @@ import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import CloseIcon from "@mui/icons-material/Close";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import LoopIcon from "@mui/icons-material/Loop";
 import TimerOutlinedIcon from "@mui/icons-material/TimerOutlined";
 import RepeatOutlinedIcon from "@mui/icons-material/RepeatOutlined";
@@ -200,7 +200,7 @@ export default function WorkoutDraftBuilder({
           const isCircuit = s.value === "main" && rounds > 1;
           return (
             <Box key={s.value}>
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1.5 }}>
                 <Typography variant="h5" component="h2">
                   {s.label}
                 </Typography>
@@ -216,7 +216,7 @@ export default function WorkoutDraftBuilder({
 
               <Stack spacing={1} sx={{ mb: 1.5 }}>
                 {sectionItems.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" sx={{ color: "text.secondary" }}>
                     Nothing here yet.
                   </Typography>
                 ) : (
@@ -248,7 +248,7 @@ export default function WorkoutDraftBuilder({
         })}
 
         <Box>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+          <Typography variant="body2" sx={{ color: "text.secondary", mb: 1.5 }}>
             Nothing is saved until you create it — close this page and the draft
             just disappears.
           </Typography>
@@ -310,7 +310,7 @@ function DraftItemRow({
 
   return (
     <Paper variant="outlined" sx={{ p: 1.5 }}>
-      <Stack direction="row" alignItems="center" spacing={1}>
+      <Stack direction="row" sx={{ alignItems: "center" }} spacing={1}>
         <Stack sx={{ flexShrink: 0 }} spacing={0.75}>
           <IconButton
             aria-label="Move up"
@@ -331,8 +331,8 @@ function DraftItemRow({
         </Stack>
 
         <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-            <Typography variant="body1" fontWeight={600}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
+            <Typography variant="body1" sx={{ fontWeight: 600 }}>
               {d.exercise.name}
             </Typography>
             {target ? (
@@ -344,13 +344,13 @@ function DraftItemRow({
               />
             ) : null}
             {d.weight.trim() ? (
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{ color: "text.secondary" }}>
                 {d.weight}
               </Typography>
             ) : null}
           </Stack>
           {d.note.trim() ? (
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
               {d.note}
             </Typography>
           ) : null}
@@ -445,7 +445,7 @@ function DraftItemRow({
                 }
                 label="Hold the last rep"
               />
-              <Typography variant="caption" color="text.secondary" display="block">
+              <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>
                 Only kicks in when both Reps and a per-rep Time are set above.
               </Typography>
             </Box>

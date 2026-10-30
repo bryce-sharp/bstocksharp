@@ -31,7 +31,7 @@ export default async function NewWorkoutPage({
       <Typography variant="h4" component="h1" sx={{ mb: 1 }}>
         New workout
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+      <Typography variant="body2" sx={{ color: "text.secondary", mb: 3 }}>
         Name it, stack the exercises, tweak the numbers — it all saves in one go
         when you hit Create.
       </Typography>

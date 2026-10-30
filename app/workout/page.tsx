@@ -45,8 +45,7 @@ export default async function WorkoutDashboard({
         <Typography
           variant="h6"
           component="p"
-          color="text.secondary"
-          fontWeight={400}
+          sx={{ color: "text.secondary", fontWeight: 400 }}
         >
           Tonight&apos;s exercises — pick a day and press start.
         </Typography>
@@ -67,10 +66,8 @@ export default async function WorkoutDashboard({
       {/* Shared workout library */}
       <Stack
         direction="row"
-        alignItems="center"
-        justifyContent="space-between"
         spacing={2}
-        sx={{ mb: 2 }}
+        sx={{ alignItems: "center", justifyContent: "space-between", mb: 2 }}
       >
         <Typography variant="h5" component="h2">
           Workout library
@@ -88,7 +85,7 @@ export default async function WorkoutDashboard({
         ) : null}
       </Stack>
       {library.length === 0 ? (
-        <Typography color="text.secondary">No workouts saved yet.</Typography>
+        <Typography sx={{ color: "text.secondary" }}>No workouts saved yet.</Typography>
       ) : (
         <Box
           sx={{
@@ -112,8 +109,7 @@ export default async function WorkoutDashboard({
                     <Stack
                       direction="row"
                       spacing={1}
-                      alignItems="center"
-                      flexWrap="wrap"
+                      sx={{ alignItems: "center", flexWrap: "wrap" }}
                     >
                       {w.rounds > 1 ? (
                         <Chip
@@ -122,7 +118,7 @@ export default async function WorkoutDashboard({
                         />
                       ) : null}
                       {w.createdByName ? (
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" sx={{ color: "text.secondary" }}>
                           saved by {w.createdByName}
                         </Typography>
                       ) : null}

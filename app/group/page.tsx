@@ -128,7 +128,7 @@ export default async function GroupPage({
               invites={inviteRows}
               canMintHubs={siteAdmin}
             />
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{ color: "text.secondary" }}>
               Links are single-use and expire in 7 days unless you say
               otherwise. An invite makes them a member of this hub
               {siteAdmin

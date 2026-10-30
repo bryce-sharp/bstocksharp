@@ -22,9 +22,7 @@ export default async function MaintenanceSection({
     <Box>
       <Stack
         direction="row"
-        justifyContent="space-between"
-        alignItems="center"
-        sx={{ mb: 2 }}
+        sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}
       >
         <Typography variant="h6">Service history</Typography>
         {editor ? (
@@ -45,7 +43,7 @@ export default async function MaintenanceSection({
           <BuildOutlinedIcon
             sx={{ fontSize: 40, color: "text.disabled", mb: 1 }}
           />
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
             {editor
               ? "No service records yet — add the first one."
               : "No service records yet."}

@@ -106,7 +106,7 @@ export default function WrappedModal({
         <Typography variant="h3" component="div" sx={{ fontWeight: 800, lineHeight: 1.1 }}>
           {slide.big}
         </Typography>
-        <Typography variant="h6" component="div" color="text.secondary" fontWeight={400} sx={{ mt: 1 }}>
+        <Typography variant="h6" component="div" sx={{ color: "text.secondary", fontWeight: 400, mt: 1 }}>
           {slide.small}
         </Typography>
 

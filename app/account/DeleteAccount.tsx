@@ -31,7 +31,7 @@ export default function DeleteAccount({ username, alone }: { username: string; a
         </Typography>
         {alone ? (
           <>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
               Deletes your login and everything saved to it, games included. There is no undo.
             </Typography>
             <Button color="error" variant="outlined" startIcon={<DeleteForeverIcon />} onClick={() => setOpen(true)}>
@@ -39,7 +39,7 @@ export default function DeleteAccount({ username, alone }: { username: string; a
             </Button>
           </>
         ) : (
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
             Your login shares a hub with other people. Leave the hub, or hand it over if you own it, from{" "}
             <MuiLink component={Link} href="/group?tab=settings">
               Hub settings
@@ -53,7 +53,7 @@ export default function DeleteAccount({ username, alone }: { username: string; a
         <DialogTitle>Delete your account?</DialogTitle>
         <DialogContent>
           <Stack spacing={2}>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
               Your login, your person and everything saved to them are deleted, and you are signed out. Type{" "}
               <strong>{username}</strong> to confirm.
             </Typography>

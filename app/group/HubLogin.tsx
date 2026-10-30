@@ -56,7 +56,7 @@ export default function HubLogin({
       <Stack spacing={1.25}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: { xs: "wrap", sm: "nowrap" } }}>
           <TabletMacIcon fontSize="small" color="primary" />
-          <Typography fontWeight={600} noWrap sx={{ flexGrow: 1, minWidth: 0 }}>
+          <Typography noWrap sx={{ fontWeight: 600, flexGrow: 1, minWidth: 0 }}>
             {hubName} (shared login){login ? `: ${login.username}` : ""}
           </Typography>
           {login ? (
@@ -77,7 +77,7 @@ export default function HubLogin({
             </Button>
           )}
         </Box>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{ color: "text.secondary" }}>
           One shared login for a kitchen screen or family tablet. It is no particular person: anyone using it can view
           everyone, but can only change people without their own login (like the kids), and only in the apps you pick.
         </Typography>

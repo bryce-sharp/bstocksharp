@@ -3,7 +3,7 @@
 import { useFormStatus } from "react-dom";
 import IconButton from "@mui/material/IconButton";
 import CircularProgress from "@mui/material/CircularProgress";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 
 function Inner({ label }: { label: string }) {
   const { pending } = useFormStatus();

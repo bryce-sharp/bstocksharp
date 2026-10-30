@@ -16,7 +16,7 @@ import AccordionDetails from "@mui/material/AccordionDetails";
 import MuiLink from "@mui/material/Link";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import CheckBoxOutlineBlankIcon from "@mui/icons-material/CheckBoxOutlineBlank";
-import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
+import HelpOutlineIcon from "@mui/icons-material/HelpOutlined";
 import ReportProblemOutlinedIcon from "@mui/icons-material/ReportProblemOutlined";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
@@ -259,7 +259,7 @@ export default function BuyingGuidePage() {
       <Typography variant="h3" component="h1" gutterBottom>
         Buying guide
       </Typography>
-      <Typography variant="h6" component="p" color="text.secondary" fontWeight={400}>
+      <Typography variant="h6" component="p" sx={{ color: "text.secondary", fontWeight: 400 }}>
         Your goal isn&apos;t to find a perfect Miata — it&apos;s to find one
         someone else didn&apos;t ruin. A clean, stock, maintained 170k-mile car
         beats a 90k-mile eBay-turbo with cut springs every time.
@@ -279,7 +279,7 @@ export default function BuyingGuidePage() {
       <Stack spacing={2}>
         {INSPECTION.map((group) => (
           <Paper key={group.category} variant="outlined" sx={{ p: { xs: 2, md: 2.5 } }}>
-            <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }} gutterBottom>
               {group.category}
             </Typography>
             <List dense disablePadding>
@@ -295,8 +295,7 @@ export default function BuyingGuidePage() {
             {group.note ? (
               <Typography
                 variant="body2"
-                color="text.secondary"
-                sx={{ mt: 1, fontStyle: "italic" }}
+                sx={{ color: "text.secondary", mt: 1, fontStyle: "italic" }}
               >
                 {group.note}
               </Typography>
@@ -310,7 +309,7 @@ export default function BuyingGuidePage() {
       <Typography variant="h4" component="h2" gutterBottom>
         Test drive
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+      <Typography variant="body2" sx={{ color: "text.secondary", mb: 2 }}>
         {TEST_DRIVE.intro}
       </Typography>
       <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 } }}>
@@ -340,7 +339,7 @@ export default function BuyingGuidePage() {
               </ListItemIcon>
               <ListItemText
                 primary={g.title}
-                primaryTypographyProps={{ fontWeight: 600 }}
+                slotProps={{ primary: { sx: { fontWeight: 600 } } }}
                 secondary={g.body}
               />
             </ListItem>
@@ -368,7 +367,7 @@ export default function BuyingGuidePage() {
 
       <Accordion variant="outlined" disableGutters sx={{ mt: 3 }}>
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography variant="subtitle1" fontWeight={700}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
             VIN sticker locations (for matching numbers)
           </Typography>
         </AccordionSummary>
@@ -377,7 +376,7 @@ export default function BuyingGuidePage() {
             {VIN_LOCATIONS.map((loc, i) => (
               <ListItem key={loc} disableGutters sx={{ py: 0.25, alignItems: "flex-start" }}>
                 <ListItemIcon sx={{ minWidth: 28, mt: 0.25 }}>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" sx={{ color: "text.secondary" }}>
                     {i + 1}.
                   </Typography>
                 </ListItemIcon>
@@ -388,7 +387,7 @@ export default function BuyingGuidePage() {
         </AccordionDetails>
       </Accordion>
 
-      <Typography variant="body2" color="text.secondary" sx={{ mt: 3 }}>
+      <Typography variant="body2" sx={{ color: "text.secondary", mt: 3 }}>
         Condensed from{" "}
         <MuiLink
           href="https://www.miata.net/garage/Checking%20Out%20a%20Used%20Miata%20-%20Update%202018.pdf"

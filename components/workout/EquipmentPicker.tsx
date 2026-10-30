@@ -35,13 +35,12 @@ export default function EquipmentPicker({
   return (
     <Box>
       <input type="hidden" name={name} value={JSON.stringify(selected)} />
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+      <Typography variant="body2" sx={{ color: "text.secondary", mb: 0.5 }}>
         {label}
       </Typography>
       <Typography
         variant="caption"
-        color="text.secondary"
-        sx={{ display: "block", mb: 1 }}
+        sx={{ color: "text.secondary", display: "block", mb: 1 }}
       >
         {helperText}
       </Typography>

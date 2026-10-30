@@ -65,13 +65,13 @@ export default function LoginForm({ from, notice }: { from: string; notice?: str
     <Container maxWidth="xs" sx={{ py: { xs: 6, md: 10 } }}>
       <Paper variant="outlined" sx={{ p: { xs: 3, md: 4 } }}>
         <Stack spacing={2.5}>
-          <Stack direction="row" spacing={1.5} alignItems="center">
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
             <LockOutlinedIcon color="primary" />
             <Typography variant="h5" component="h1">
               Sign in
             </Typography>
           </Stack>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
             This hub is private — sign in to continue.
           </Typography>
           {notice ? <Alert severity="success">{notice}</Alert> : null}
@@ -95,7 +95,7 @@ export default function LoginForm({ from, notice }: { from: string; notice?: str
                 {passkeyBusy ? "Waiting for Face ID…" : "Sign in with a passkey"}
               </Button>
               <Divider>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{ color: "text.secondary" }}>
                   or use a password
                 </Typography>
               </Divider>
@@ -127,7 +127,7 @@ export default function LoginForm({ from, notice }: { from: string; notice?: str
               </SubmitButton>
             </Stack>
           </form>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
             Here for the games?{" "}
             <MuiLink component={Link} href={from ? `/signup?from=${encodeURIComponent(from)}` : "/signup"}>
               Create an account

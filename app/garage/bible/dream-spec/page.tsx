@@ -9,7 +9,7 @@ import ListItem from "@mui/material/ListItem";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutlined";
 
 export const metadata = { title: "Dream spec — The Miata Bible" };
 
@@ -45,7 +45,7 @@ export default function DreamSpecPage() {
       <Typography variant="h3" component="h1" gutterBottom>
         Dream spec — OEM+
       </Typography>
-      <Typography variant="h6" component="p" color="text.secondary" fontWeight={400} sx={{ mb: 3 }}>
+      <Typography variant="h6" component="p" sx={{ color: "text.secondary", fontWeight: 400, mb: 3 }}>
         Tasteful, reliable, and unmistakably yours. Nothing flashy — just
         something that makes every drive to the grocery store feel like an event.
       </Typography>

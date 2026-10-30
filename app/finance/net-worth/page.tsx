@@ -88,16 +88,14 @@ export default async function NetWorthPage({
     <Container maxWidth="md" sx={{ py: { xs: 4, md: 6 } }}>
       <Stack
         direction="row"
-        alignItems="flex-start"
-        justifyContent="space-between"
         spacing={2}
-        sx={{ mb: 2, flexWrap: "wrap", rowGap: 2 }}
+        sx={{ alignItems: "flex-start", justifyContent: "space-between", mb: 2, flexWrap: "wrap", rowGap: 2 }}
       >
         <Stack spacing={0.5}>
           <Typography variant="h3" component="h1">
             Net Worth
           </Typography>
-          <Typography variant="h6" component="p" color="text.secondary" fontWeight={400}>
+          <Typography variant="h6" component="p" sx={{ color: "text.secondary", fontWeight: 400 }}>
             Balances across your accounts
           </Typography>
         </Stack>
@@ -130,7 +128,7 @@ export default async function NetWorthPage({
       {!hasData || !dash.stats ? (
         <Paper variant="outlined" sx={{ p: 5, textAlign: "center" }}>
           <SavingsOutlinedIcon sx={{ fontSize: 44, color: "text.disabled", mb: 1 }} />
-          <Typography color="text.secondary">
+          <Typography sx={{ color: "text.secondary" }}>
             {snapshotAccounts.length === 0
               ? editor
                 ? "Start with Accounts — add the places your money lives, then log your first month."

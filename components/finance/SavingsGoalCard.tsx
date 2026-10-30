@@ -36,14 +36,14 @@ export default function SavingsGoalCard({
 
   return (
     <Paper id="savings" variant="outlined" sx={{ p: { xs: 1.5, sm: 2.5 }, mb: 3, scrollMarginTop: 88 }}>
-      <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="space-between" sx={{ flexWrap: "wrap", rowGap: 1 }}>
-        <Stack direction="row" spacing={1.5} alignItems="center">
+      <Stack direction="row" spacing={1.5} sx={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", rowGap: 1 }}>
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
           <SavingsOutlinedIcon color="action" />
           <div>
             <Typography variant="h6" component="h2">
               Savings goal
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
               {has
                 ? `${formatMoney(goal + paycheckSavings)} a month${since ? `, since ${formatMonth(since)}` : ""}`
                 : "Not set — everything left after bills counts as discretionary."}
@@ -67,7 +67,7 @@ export default function SavingsGoalCard({
           {formatMoney(goal)} from take-home pay
         </Typography>
       ) : null}
-      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+      <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 1 }}>
         Savings counts every account you own, so your paycheck&apos;s 401k and HSA money
         is part of it. Only the take-home part comes off the top before your discretionary
         budget, and it never needs a transaction.

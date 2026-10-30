@@ -68,17 +68,15 @@ export default async function VehiclePage({
 
       <Stack
         direction="row"
-        justifyContent="space-between"
-        alignItems="flex-start"
         spacing={2}
-        sx={{ mb: editor ? 2 : 3 }}
+        sx={{ justifyContent: "space-between", alignItems: "flex-start", mb: editor ? 2 : 3 }}
       >
         <Box>
           <Typography variant="h4" component="h1">
             {vehicle.name}
           </Typography>
           {subtitle ? (
-            <Typography variant="subtitle1" color="text.secondary">
+            <Typography variant="subtitle1" sx={{ color: "text.secondary" }}>
               {subtitle}
             </Typography>
           ) : null}

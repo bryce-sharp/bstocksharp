@@ -71,7 +71,7 @@ export default async function DayPage({
 
       {a ? (
         <Paper variant="outlined" sx={{ p: { xs: 2.5, md: 3 } }}>
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 2 }}>
             <Typography variant="h5" component="h2">
               {a.workoutName}
             </Typography>
@@ -84,7 +84,7 @@ export default async function DayPage({
               />
             ) : null}
           </Stack>
-          <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap>
+          <Stack direction="row" spacing={1.5} sx={{ flexWrap: "wrap" }} useFlexGap>
             <Button
               component={Link}
               href={`/workout/${a.workoutId}/run`}
@@ -130,8 +130,7 @@ export default async function DayPage({
             </Typography>
             <Typography
               variant="body2"
-              color="text.secondary"
-              sx={{ mb: editor ? 2 : 0 }}
+              sx={{ color: "text.secondary", mb: editor ? 2 : 0 }}
             >
               Nothing scheduled for this day yet.
             </Typography>
@@ -165,15 +164,14 @@ export default async function DayPage({
               </Typography>
               <Typography
                 variant="body2"
-                color="text.secondary"
-                sx={{ mb: 1.5 }}
+                sx={{ color: "text.secondary", mb: 1.5 }}
               >
                 Start any saved workout — this won&apos;t change your schedule.
               </Typography>
               <QuickStartList workouts={library} />
             </Box>
           ) : (
-            <Typography color="text.secondary" sx={{ mt: 2 }}>
+            <Typography sx={{ color: "text.secondary", mt: 2 }}>
               Enjoy the rest day. 💤
             </Typography>
           )}

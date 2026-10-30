@@ -17,12 +17,12 @@ function Line({ label, sub, value }: { label: React.ReactNode; sub?: React.React
       <Box sx={{ minWidth: 0 }}>
         <Typography variant="body2">{label}</Typography>
         {sub ? (
-          <Typography variant="caption" color="text.secondary" component="div">
+          <Typography variant="caption" sx={{ color: "text.secondary" }} component="div">
             {sub}
           </Typography>
         ) : null}
       </Box>
-      <Typography variant="body2" fontWeight={600} sx={{ whiteSpace: "nowrap" }}>
+      <Typography variant="body2" sx={{ fontWeight: 600, whiteSpace: "nowrap" }}>
         {value}
       </Typography>
     </Box>
@@ -69,7 +69,7 @@ export default function NetWorthInsights({
     >
       {outlook && p ? (
         <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2.5 } }}>
-          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ gap: 1, flexWrap: "wrap" }}>
+          <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", gap: 1, flexWrap: "wrap" }}>
             <Typography variant="h6">Outlook</Typography>
             {pace.short && pace.long && pace.short.months !== pace.long.months ? (
               <ToggleButtonGroup
@@ -87,7 +87,7 @@ export default function NetWorthInsights({
               </ToggleButtonGroup>
             ) : null}
           </Stack>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
             At {formatMoneyDelta(p.perMonth)}/mo, your average over the last {p.months} months
           </Typography>
           {outlook.projections.map((pr) => (
@@ -100,7 +100,7 @@ export default function NetWorthInsights({
           ))}
           {outlook.milestones.length ? (
             <>
-              <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1.5 }}>
+              <Typography variant="subtitle2" sx={{ color: "text.secondary", mt: 1.5 }}>
                 Next milestones
               </Typography>
               {outlook.milestones.map((m) => (
@@ -108,7 +108,7 @@ export default function NetWorthInsights({
               ))}
             </>
           ) : null}
-          <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 1 }}>
+          <Typography variant="caption" component="p" sx={{ color: "text.secondary", mt: 1 }}>
             A straight line: every future month adds what your average month did. Market growth on top
             of that is not assumed.
           </Typography>
@@ -118,7 +118,7 @@ export default function NetWorthInsights({
       {runway ? (
         <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2.5 } }}>
           <Typography variant="h6">Runway</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
             How long {formatMoneyWhole(runway.cash)} in bank savings lasts with no income
           </Typography>
           {runway.avgOut ? (
@@ -136,13 +136,13 @@ export default function NetWorthInsights({
             />
           ) : null}
           {runway.avgOut ? (
-            <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 0.5 }}>
+            <Typography variant="caption" component="p" sx={{ color: "text.secondary", mt: 0.5 }}>
               At today&apos;s spending that lasts until about {lastsUntil(runway.cash / runway.avgOut)}.
             </Typography>
           ) : null}
           {runway.brokerage > 0 && (runway.avgOut || runway.bills) ? (
             <>
-              <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1.5 }}>
+              <Typography variant="subtitle2" sx={{ color: "text.secondary", mt: 1.5 }}>
                 Adding brokerage ({formatMoneyShort(runway.brokerage)})
               </Typography>
               {runway.avgOut ? (
@@ -153,7 +153,7 @@ export default function NetWorthInsights({
               ) : null}
             </>
           ) : null}
-          <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 1 }}>
+          <Typography variant="caption" component="p" sx={{ color: "text.secondary", mt: 1 }}>
             Bills only is the floor if all free spending stopped. Without a paycheck, payroll items like
             health insurance would become bills too.
           </Typography>

@@ -90,8 +90,7 @@ function Tile({
     >
       <Typography
         variant="caption"
-        color="text.secondary"
-        sx={{ textTransform: "uppercase", letterSpacing: "0.04em" }}
+        sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.04em" }}
       >
         {label}
       </Typography>
@@ -103,8 +102,7 @@ function Tile({
       {sub ? (
         <Typography
           variant="caption"
-          color="text.secondary"
-          sx={{ display: "block" }}
+          sx={{ color: "text.secondary", display: "block" }}
         >
           {sub}
         </Typography>
@@ -177,9 +175,7 @@ export default function ExpensesSection({
     <>
       <Stack
         direction="row"
-        alignItems="center"
-        justifyContent="space-between"
-        sx={{ mb: 1.5, flexWrap: "wrap", rowGap: 1 }}
+        sx={{ alignItems: "center", justifyContent: "space-between", mb: 1.5, flexWrap: "wrap", rowGap: 1 }}
       >
         <Typography variant="h5" component="h2">
           Recurring spend
@@ -240,7 +236,7 @@ export default function ExpensesSection({
         >
           <Stack spacing={0.5} sx={{ mt: 1 }}>
             {totals.expectedOutflows.length === 0 ? (
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{ color: "text.secondary" }}>
                 Assign bills to accounts to see the split.
               </Typography>
             ) : (
@@ -248,14 +244,14 @@ export default function ExpensesSection({
                 <Stack
                   key={o.name}
                   direction="row"
-                  justifyContent="space-between"
+                  sx={{ justifyContent: "space-between" }}
                   spacing={1}
                 >
-                  <Typography variant="body2" color="text.secondary" noWrap>
+                  <Typography variant="body2" sx={{ color: "text.secondary" }} noWrap>
                     {o.name}
                     {o.includesDiscretion ? " · incl. discretionary" : ""}
                   </Typography>
-                  <Typography variant="body2" fontWeight={600}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
                     {formatMoney(o.monthly)}
                   </Typography>
                 </Stack>
@@ -269,8 +265,7 @@ export default function ExpensesSection({
         <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
           <Typography
             variant="caption"
-            color="text.secondary"
-            sx={{ textTransform: "uppercase", letterSpacing: "0.04em" }}
+            sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.04em" }}
           >
             Where the fixed money goes
           </Typography>
@@ -285,7 +280,7 @@ export default function ExpensesSection({
                 <Stack
                   key={n.necessity}
                   direction="row"
-                  alignItems="center"
+                  sx={{ alignItems: "center" }}
                   spacing={1.5}
                 >
                   <Chip
@@ -315,7 +310,7 @@ export default function ExpensesSection({
 
       {expenses.length === 0 ? (
         <Paper variant="outlined" sx={{ p: 4, textAlign: "center" }}>
-          <Typography color="text.secondary">
+          <Typography sx={{ color: "text.secondary" }}>
             {editable
               ? "No recurring expenses yet — add rent, utilities, subscriptions…"
               : "No recurring expenses yet."}
@@ -329,14 +324,13 @@ export default function ExpensesSection({
               <React.Fragment key={cat}>
                 <Stack
                   direction="row"
-                  justifyContent="space-between"
                   spacing={1}
-                  sx={{ px: 1.5, py: 1, bgcolor: "action.hover", borderTop: 1, borderColor: "divider", mt: "-1px" }}
+                  sx={{ justifyContent: "space-between", px: 1.5, py: 1, bgcolor: "action.hover", borderTop: 1, borderColor: "divider", mt: "-1px" }}
                 >
-                  <Typography variant="body2" fontWeight={700} noWrap>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>
                     {cat}
                   </Typography>
-                  <Typography variant="body2" fontWeight={700} sx={{ whiteSpace: "nowrap" }}>
+                  <Typography variant="body2" sx={{ fontWeight: 700, whiteSpace: "nowrap" }}>
                     {formatMoney(categorySubtotal.get(cat) ?? 0)}/mo
                   </Typography>
                 </Stack>
@@ -349,14 +343,14 @@ export default function ExpensesSection({
                   const row = (
                     <>
                       <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-                        <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
-                          <Typography variant="body2" fontWeight={600} noWrap>
+                        <Stack direction="row" spacing={1} sx={{ alignItems: "center", minWidth: 0 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
                             {e.name}
                           </Typography>
                           {e.isEstimate ? <Chip label="estimate" size="small" variant="outlined" /> : null}
                           <NewPriceChip suggestion={suggestions[e.id]} />
                         </Stack>
-                        <Typography variant="caption" color="text.secondary" component="div" noWrap>
+                        <Typography variant="caption" sx={{ color: "text.secondary" }} component="div" noWrap>
                           <Box component="span" sx={{ color: NECESSITY_TEXT[meta.color] }}>
                             {meta.label}
                           </Box>
@@ -373,10 +367,10 @@ export default function ExpensesSection({
                         </Typography>
                       </Box>
                       <Box sx={{ textAlign: "right", flexShrink: 0 }}>
-                        <Typography variant="body2" fontWeight={600}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
                           {formatMoney(e.amount)}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary" component="div">
+                        <Typography variant="caption" sx={{ color: "text.secondary" }} component="div">
                           {e.paymentsPerYear === 12
                             ? "monthly"
                             : `×${e.paymentsPerYear}/yr · ${formatMoney(e.monthly)}/mo`}
@@ -459,7 +453,7 @@ export default function ExpensesSection({
                               <Typography
                                 component="span"
                                 variant="caption"
-                                color="text.secondary"
+                                sx={{ color: "text.secondary" }}
                               >
                                 {" "}
                                 ×{e.paymentsPerYear}/yr

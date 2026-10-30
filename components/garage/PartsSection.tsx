@@ -29,9 +29,7 @@ export default async function PartsSection({
     <Box>
       <Stack
         direction="row"
-        justifyContent="space-between"
-        alignItems="center"
-        sx={{ mb: 2 }}
+        sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}
       >
         <Typography variant="h6">Parts inventory</Typography>
         {editor ? (
@@ -52,7 +50,7 @@ export default async function PartsSection({
           <InventoryOutlinedIcon
             sx={{ fontSize: 40, color: "text.disabled", mb: 1 }}
           />
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
             {editor ? "No parts logged yet — add one." : "No parts logged yet."}
           </Typography>
         </Paper>
@@ -60,22 +58,21 @@ export default async function PartsSection({
         <Stack spacing={1.5}>
           {items.map((p) => (
             <Paper key={p.id} variant="outlined" sx={{ p: 2 }}>
-              <Stack direction="row" justifyContent="space-between" spacing={1}>
+              <Stack direction="row" sx={{ justifyContent: "space-between" }} spacing={1}>
                 <Box sx={{ minWidth: 0 }}>
                   <Stack
                     direction="row"
                     spacing={1}
-                    alignItems="center"
-                    flexWrap="wrap"
+                    sx={{ alignItems: "center", flexWrap: "wrap" }}
                   >
-                    <Typography variant="subtitle1" fontWeight={600}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                       {p.name}
                     </Typography>
                     {p.category ? (
                       <Chip size="small" variant="outlined" label={p.category} />
                     ) : null}
                   </Stack>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" sx={{ color: "text.secondary" }}>
                     {[
                       p.brand,
                       p.partNumber ? `#${p.partNumber}` : null,
@@ -88,10 +85,9 @@ export default async function PartsSection({
                 <Stack
                   direction="row"
                   spacing={0.5}
-                  alignItems="center"
-                  sx={{ flexShrink: 0 }}
+                  sx={{ alignItems: "center", flexShrink: 0 }}
                 >
-                  <Typography variant="subtitle1" fontWeight={600}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                     {formatMoney(p.cost)}
                   </Typography>
                   {p.link ? (
@@ -114,8 +110,7 @@ export default async function PartsSection({
               {p.notes ? (
                 <Typography
                   variant="body2"
-                  color="text.secondary"
-                  sx={{ mt: 1, whiteSpace: "pre-wrap" }}
+                  sx={{ color: "text.secondary", mt: 1, whiteSpace: "pre-wrap" }}
                 >
                   {p.notes}
                 </Typography>
@@ -125,8 +120,7 @@ export default async function PartsSection({
                 <Stack
                   direction="row"
                   spacing={0.5}
-                  justifyContent="flex-end"
-                  sx={{ mt: 1 }}
+                  sx={{ justifyContent: "flex-end", mt: 1 }}
                 >
                   <Tooltip title="Edit">
                     <IconButton

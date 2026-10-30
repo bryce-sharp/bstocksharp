@@ -200,20 +200,18 @@ export default async function BudgetPage({
       <RefreshAfterSync active={stale.length > 0} />
       <Stack
         direction="row"
-        alignItems="flex-start"
-        justifyContent="space-between"
         spacing={2}
-        sx={{ mb: 3, flexWrap: "wrap", rowGap: 2 }}
+        sx={{ alignItems: "flex-start", justifyContent: "space-between", mb: 3, flexWrap: "wrap", rowGap: 2 }}
       >
         <Stack spacing={0.5}>
           <Typography variant="h3" component="h1">
             Budget
           </Typography>
-          <Typography variant="h6" component="p" color="text.secondary" fontWeight={400}>
+          <Typography variant="h6" component="p" sx={{ color: "text.secondary", fontWeight: 400 }}>
             {month === currentMonth ? "This month's spending, live" : formatMonth(month)}
           </Typography>
         </Stack>
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
           <AtlasMonthSwitcher
             month={month}
             earliestMonth={earliestMonth}
@@ -366,7 +364,7 @@ export default async function BudgetPage({
         />
         {c.needsReviewCount > 0 && editor ? (
           <Box sx={{ mt: 2 }}>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{ color: "text.secondary" }}>
               Tip: the ⚠ rows need a look (an unreadable alert, a one-sided
               transfer, or a charge the bank dropped). Open the ⋮ menu (or tap the
               row on a phone) to set their details.

@@ -120,7 +120,7 @@ export default function AccountsManager({
           <DialogContent>
             <Stack spacing={1} sx={{ mt: 0.5 }}>
               {accounts.length === 0 ? (
-                <Typography color="text.secondary">
+                <Typography sx={{ color: "text.secondary" }}>
                   No accounts yet — add the places your money lives (checking,
                   savings, brokerage, 401K…).
                 </Typography>
@@ -131,9 +131,8 @@ export default function AccountsManager({
                   <Stack
                     key={a.id}
                     direction="row"
-                    alignItems="center"
                     spacing={1}
-                    sx={{ opacity: a.archived ? 0.6 : 1, flexWrap: "wrap" }}
+                    sx={{ alignItems: "center", opacity: a.archived ? 0.6 : 1, flexWrap: "wrap" }}
                   >
                     <Stack direction="row" sx={{ flexShrink: 0 }}>
                       <IconButton
@@ -153,7 +152,7 @@ export default function AccountsManager({
                         <ArrowDownwardIcon fontSize="small" />
                       </IconButton>
                     </Stack>
-                    <Typography fontWeight={600} sx={{ flexGrow: 1, minWidth: 120 }}>
+                    <Typography sx={{ fontWeight: 600, flexGrow: 1, minWidth: 120 }}>
                       {a.name}
                     </Typography>
                     <Chip
@@ -205,8 +204,7 @@ export default function AccountsManager({
             {accounts.length > 1 ? (
               <Typography
                 variant="caption"
-                color="text.secondary"
-                sx={{ display: "block", mt: 2 }}
+                sx={{ color: "text.secondary", display: "block", mt: 2 }}
               >
                 This order drives the history table&apos;s columns and the chart&apos;s
                 stacking — arrange them however you read them.
@@ -270,7 +268,7 @@ export default function AccountsManager({
                 label={
                   <>
                     Track monthly balance
-                    <Typography variant="caption" color="text.secondary" display="block">
+                    <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>
                       Untick for accounts that only pay bills (a credit card) —
                       they skip the monthly ritual.
                     </Typography>
@@ -287,7 +285,7 @@ export default function AccountsManager({
                 label={
                   <>
                     Free spending happens here
-                    <Typography variant="caption" color="text.secondary" display="block">
+                    <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>
                       Routes the discretionary budget to this account (usually
                       just your main card). NOT needed to track its
                       transactions — bills paid from any account are always in

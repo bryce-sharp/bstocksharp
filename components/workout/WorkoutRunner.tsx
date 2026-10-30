@@ -629,7 +629,7 @@ export default function WorkoutRunner({
         <Typography variant="h3" component="h1" sx={{ mb: 1 }}>
           Nice work! 💪
         </Typography>
-        <Typography color="text.secondary" sx={{ mb: 4 }}>
+        <Typography sx={{ color: "text.secondary", mb: 4 }}>
           {workoutName} — done.
         </Typography>
         <Stack direction="row" spacing={1.5}>
@@ -648,14 +648,14 @@ export default function WorkoutRunner({
     const first = steps.find((s) => s.kind === "work");
     return (
       <Screen>
-        <Typography variant="overline" color="text.secondary">
+        <Typography variant="overline" sx={{ color: "text.secondary" }}>
           {steps.length} steps
         </Typography>
         <Typography variant="h3" component="h1" sx={{ mb: 1 }}>
           {workoutName}
         </Typography>
         {first && first.kind === "work" ? (
-          <Typography color="text.secondary" sx={{ mb: 4 }}>
+          <Typography sx={{ color: "text.secondary", mb: 4 }}>
             First up: {first.item.name}
           </Typography>
         ) : null}
@@ -712,7 +712,7 @@ export default function WorkoutRunner({
           {clock(remaining)}
         </Typography>
         {isRest ? (
-          <Typography color="text.secondary">{restLabel}</Typography>
+          <Typography sx={{ color: "text.secondary" }}>{restLabel}</Typography>
         ) : null}
       </>
     );
@@ -753,7 +753,7 @@ export default function WorkoutRunner({
         <Typography sx={{ fontSize: "4rem", fontWeight: 800, lineHeight: 1 }}>
           {rep}
         </Typography>
-        <Typography color="text.secondary">of {plan.reps} reps</Typography>
+        <Typography sx={{ color: "text.secondary" }}>of {plan.reps} reps</Typography>
       </>
     );
   } else {
@@ -767,7 +767,7 @@ export default function WorkoutRunner({
           {plan?.repsText ?? "Go"}
         </Typography>
         {plan?.repsText ? (
-          <Typography color="text.secondary">reps</Typography>
+          <Typography sx={{ color: "text.secondary" }}>reps</Typography>
         ) : null}
       </>
     );
@@ -833,7 +833,7 @@ export default function WorkoutRunner({
         }}
       >
       {/* Top bar */}
-      <Stack direction="row" alignItems="center" justifyContent="space-between">
+      <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
         <FormControlLabel
           control={
             <Switch
@@ -845,7 +845,7 @@ export default function WorkoutRunner({
           label={<Typography variant="caption">Auto-advance</Typography>}
           sx={{ ml: 0 }}
         />
-        <Stack direction="row" alignItems="center">
+        <Stack direction="row" sx={{ alignItems: "center" }}>
           <IconButton
             onClick={() => setMuted(!muted)}
             aria-label={muted ? "Unmute cues" : "Mute cues"}
@@ -863,7 +863,7 @@ export default function WorkoutRunner({
         value={((stepIndex + 1) / steps.length) * 100}
         sx={{ height: 6, borderRadius: 1, mb: 1 }}
       />
-      <Typography variant="caption" color="text.secondary" sx={{ mb: 2 }}>
+      <Typography variant="caption" sx={{ color: "text.secondary", mb: 2 }}>
         {header} · step {stepIndex + 1}/{steps.length}
       </Typography>
 
@@ -872,8 +872,7 @@ export default function WorkoutRunner({
         <Typography
           variant="overline"
           color="primary"
-          textAlign="center"
-          sx={{ display: "block" }}
+          sx={{ textAlign: "center", display: "block" }}
         >
           {leadInLabel}
         </Typography>
@@ -881,11 +880,9 @@ export default function WorkoutRunner({
       <Stack
         direction="row"
         spacing={0.5}
-        alignItems="center"
-        justifyContent="center"
-        sx={{ mb: 0.5 }}
+        sx={{ alignItems: "center", justifyContent: "center", mb: 0.5 }}
       >
-        <Typography variant="h4" component="h1" textAlign="center">
+        <Typography variant="h4" component="h1" sx={{ textAlign: "center" }}>
           {featured ? featured.name : restLabel}
         </Typography>
         {featured ? (
@@ -901,14 +898,13 @@ export default function WorkoutRunner({
         <Typography
           variant="subtitle2"
           color="primary"
-          textAlign="center"
-          sx={{ fontWeight: 700, mb: 0.5 }}
+          sx={{ textAlign: "center", fontWeight: 700, mb: 0.5 }}
         >
           {featuredSide.label}
         </Typography>
       ) : null}
       {featured?.weight ? (
-        <Typography color="text.secondary" textAlign="center" sx={{ mb: 1 }}>
+        <Typography sx={{ color: "text.secondary", textAlign: "center", mb: 1 }}>
           {featured.weight}
         </Typography>
       ) : null}
@@ -948,9 +944,9 @@ export default function WorkoutRunner({
           }}
         >
           <Typography
-            color="text.secondary"
-            textAlign="center"
             sx={{
+              color: "text.secondary",
+              textAlign: "center",
               display: "-webkit-box",
               WebkitLineClamp: 2,
               WebkitBoxOrient: "vertical",
@@ -966,9 +962,7 @@ export default function WorkoutRunner({
       {upNext && !isLeadIn ? (
         <Typography
           variant="body2"
-          color="text.secondary"
-          textAlign="center"
-          sx={{ mb: 2 }}
+          sx={{ color: "text.secondary", textAlign: "center", mb: 2 }}
         >
           Up next:{" "}
           {upNext.kind === "work"
@@ -1021,7 +1015,7 @@ export default function WorkoutRunner({
       ) : null}
 
       {/* Controls */}
-      <Stack direction="row" justifyContent="center" spacing={1}>
+      <Stack direction="row" sx={{ justifyContent: "center" }} spacing={1}>
         <IconButton
           onClick={prev}
           disabled={stepIndex === 0}

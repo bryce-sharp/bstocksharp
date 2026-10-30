@@ -265,7 +265,7 @@ export default async function HistoryPage({
         <Typography variant="h3" component="h1">
           History
         </Typography>
-        <Typography variant="h6" component="p" color="text.secondary" fontWeight={400}>
+        <Typography variant="h6" component="p" sx={{ color: "text.secondary", fontWeight: 400 }}>
           Everything that came in and went out
         </Typography>
       </Stack>
@@ -296,8 +296,8 @@ export default async function HistoryPage({
         }
       />
 
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5, px: 0.5, flexWrap: "wrap", rowGap: 1 }}>
-        <Typography variant="body2" color="text.secondary">
+      <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1.5, px: 0.5, flexWrap: "wrap", rowGap: 1 }}>
+        <Typography variant="body2" sx={{ color: "text.secondary" }}>
           {listSummary.count === 0
             ? "No matches"
             : `${listSummary.count.toLocaleString()} ${

@@ -31,8 +31,8 @@ export default function BookLanes({ book, lanes }: { book: string; lanes: BookLa
           <Paper key={l.bookId} variant="outlined" sx={{ p: 2 }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: lines.length ? 1 : 0.5 }}>
               <MenuBookOutlinedIcon fontSize="small" color="action" />
-              <Typography fontWeight={600}>{l.name}</Typography>
-              <Typography variant="caption" color="text.secondary">
+              <Typography sx={{ fontWeight: 600 }}>{l.name}</Typography>
+              <Typography variant="caption" sx={{ color: "text.secondary" }}>
                 money between books
               </Typography>
             </Box>
@@ -40,7 +40,7 @@ export default function BookLanes({ book, lanes }: { book: string; lanes: BookLa
               <Stack spacing={0.25} sx={{ mb: 1 }}>
                 {lines.map(([label, amount]) => (
                   <Box key={label} sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{ color: "text.secondary" }}>
                       {label}
                     </Typography>
                     <Typography variant="body2" sx={{ fontVariantNumeric: "tabular-nums" }}>
@@ -50,7 +50,7 @@ export default function BookLanes({ book, lanes }: { book: string; lanes: BookLa
                 ))}
               </Stack>
             ) : (
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+              <Typography variant="body2" sx={{ color: "text.secondary", mb: 0.5 }}>
                 Nothing between them this month.
               </Typography>
             )}

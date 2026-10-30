@@ -78,7 +78,7 @@ export default function PlanDialog({
 
             {isNew ? (
               <Box>
-                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+                <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mb: 0.5 }}>
                   Plan type
                 </Typography>
                 <ToggleButtonGroup
@@ -142,7 +142,7 @@ export default function PlanDialog({
                 </Box>
 
                 <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+                  <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mb: 0.5 }}>
                     Define the target by…
                   </Typography>
                   <ToggleButtonGroup

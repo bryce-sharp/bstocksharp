@@ -91,7 +91,7 @@ export default function MaintenanceList({
 
       {filtered.length === 0 ? (
         <Paper variant="outlined" sx={{ p: 3, textAlign: "center" }}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
             No records match your filter.
           </Typography>
         </Paper>
@@ -105,15 +105,14 @@ export default function MaintenanceList({
 
             return (
               <Paper key={r.id} variant="outlined" sx={{ p: 2 }}>
-                <Stack direction="row" justifyContent="space-between" spacing={1}>
+                <Stack direction="row" sx={{ justifyContent: "space-between" }} spacing={1}>
                   <Box sx={{ minWidth: 0 }}>
                     <Stack
                       direction="row"
                       spacing={1}
-                      alignItems="center"
-                      flexWrap="wrap"
+                      sx={{ alignItems: "center", flexWrap: "wrap" }}
                     >
-                      <Typography variant="subtitle1" fontWeight={600}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                         {r.serviceType}
                       </Typography>
                       {r.category ? (
@@ -125,7 +124,7 @@ export default function MaintenanceList({
                         />
                       ) : null}
                     </Stack>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
                       {[
                         formatDate(r.serviceDate),
                         r.mileage != null ? formatMiles(r.mileage) : null,
@@ -137,8 +136,7 @@ export default function MaintenanceList({
                   </Box>
                   <Typography
                     variant="subtitle1"
-                    fontWeight={600}
-                    sx={{ flexShrink: 0 }}
+                    sx={{ fontWeight: 600, flexShrink: 0 }}
                   >
                     {formatMoney(r.cost)}
                   </Typography>
@@ -147,8 +145,7 @@ export default function MaintenanceList({
                 {r.notes ? (
                   <Typography
                     variant="body2"
-                    color="text.secondary"
-                    sx={{ mt: 1, whiteSpace: "pre-wrap" }}
+                    sx={{ color: "text.secondary", mt: 1, whiteSpace: "pre-wrap" }}
                   >
                     {r.notes}
                   </Typography>
@@ -168,8 +165,7 @@ export default function MaintenanceList({
                   <Stack
                     direction="row"
                     spacing={0.5}
-                    justifyContent="flex-end"
-                    sx={{ mt: 1 }}
+                    sx={{ justifyContent: "flex-end", mt: 1 }}
                   >
                     <Tooltip title="Edit">
                       <IconButton

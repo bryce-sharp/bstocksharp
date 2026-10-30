@@ -112,10 +112,7 @@ export default function CatalogList({
       <Stack
         direction="row"
         spacing={1}
-        alignItems="center"
-        justifyContent="space-between"
-        flexWrap="wrap"
-        sx={{ mb: 3, minHeight: 40 }}
+        sx={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", mb: 3, minHeight: 40 }}
       >
         {filterActive ? (
           <FormControlLabel
@@ -129,7 +126,7 @@ export default function CatalogList({
             label="Hide what I can't do"
           />
         ) : editor ? (
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{ color: "text.secondary" }}>
             Set your equipment to filter the catalog to what you can do.
           </Typography>
         ) : (
@@ -146,7 +143,7 @@ export default function CatalogList({
       </Stack>
 
       {filtered.length === 0 ? (
-        <Typography color="text.secondary">
+        <Typography sx={{ color: "text.secondary" }}>
           No exercises match “{q}”.
         </Typography>
       ) : (
@@ -168,17 +165,15 @@ export default function CatalogList({
                     variant="outlined"
                     sx={{ p: 2, opacity: doable ? 1 : 0.6 }}
                   >
-                    <Stack direction="row" spacing={1} alignItems="flex-start">
+                    <Stack direction="row" spacing={1} sx={{ alignItems: "flex-start" }}>
                       <Box sx={{ flexGrow: 1, minWidth: 0 }}>
                         <Stack
                           direction="row"
                           spacing={1}
-                          alignItems="center"
-                          flexWrap="wrap"
                           useFlexGap
-                          sx={{ mb: e.description ? 1 : 0 }}
+                          sx={{ alignItems: "center", flexWrap: "wrap", mb: e.description ? 1 : 0 }}
                         >
-                          <Typography variant="subtitle1" fontWeight={600}>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                             {e.name}
                           </Typography>
                           <Chip
@@ -192,7 +187,7 @@ export default function CatalogList({
                             label={summary(e)}
                           />
                           {e.defaultWeight ? (
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{ color: "text.secondary" }}>
                               {e.defaultWeight}
                             </Typography>
                           ) : null}

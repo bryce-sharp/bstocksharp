@@ -57,7 +57,7 @@ export default function MonthlyLog({
   return (
     <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2.5 }, mb: 2 }}>
       <Typography variant="h6">Monthly log</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+      <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
         Each row is the balances at the end of that month. Tap one for every account.
       </Typography>
       <Stack divider={<Box sx={{ borderTop: 1, borderColor: "divider" }} />}>
@@ -70,7 +70,7 @@ export default function MonthlyLog({
               >
                 <Box>
                   <Typography variant="body2">{formatMonth(e.month)}</Typography>
-                  <Typography variant="caption" color="warning.main">
+                  <Typography variant="caption" sx={{ color: "warning.main" }}>
                     Not logged
                   </Typography>
                 </Box>
@@ -107,17 +107,17 @@ export default function MonthlyLog({
                 }}
               >
                 <Box sx={{ minWidth: 0 }}>
-                  <Typography variant="body2" fontWeight={600}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
                     {formatMonth(m)}
                   </Typography>
                   {i < windowStart ? (
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
                       Starting point
                     </Typography>
                   ) : null}
                 </Box>
                 <Box sx={{ textAlign: "right" }}>
-                  <Typography variant="body2" fontWeight={600}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
                     <Money value={totals[i]} />
                   </Typography>
                   {c ? (
@@ -150,7 +150,7 @@ export default function MonthlyLog({
                     const v = balances[a.id]?.[i] ?? null;
                     return (
                       <Box key={a.id} sx={{ minWidth: 0 }}>
-                        <Typography variant="caption" color="text.secondary" noWrap component="div">
+                        <Typography variant="caption" sx={{ color: "text.secondary" }} noWrap component="div">
                           {a.name}
                         </Typography>
                         <Typography variant="body2" sx={{ color: v == null ? "text.disabled" : undefined }}>
@@ -161,7 +161,7 @@ export default function MonthlyLog({
                   })}
                 </Box>
                 {editor ? (
-                  <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 0.75, pb: 1.5 }}>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: "center", px: 0.75, pb: 1.5 }}>
                     <Button
                       size="small"
                       variant="outlined"

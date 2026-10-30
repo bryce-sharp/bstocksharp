@@ -185,7 +185,7 @@ export default function BankConnections({
 
   return (
     <Paper variant="outlined" sx={{ p: { xs: 2, sm: 2.5 } }}>
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1.5 }}>
         <Typography variant="h6" sx={{ flexGrow: 1 }}>
           Bank connections
         </Typography>
@@ -196,7 +196,7 @@ export default function BankConnections({
           </Button>
         ) : null}
       </Stack>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+      <Typography variant="body2" sx={{ color: "text.secondary", mb: 2 }}>
         Transactions from your banks, synced through Plaid. Card alerts from the
         shortcut still post instantly, and the bank confirms them later.
         {sandbox ? " Sandbox mode: banks connected here are Plaid's test banks, not real accounts." : ""}
@@ -209,24 +209,24 @@ export default function BankConnections({
       ) : null}
 
       {hiddenNote ? (
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography variant="body2" sx={{ color: "text.secondary", mb: 2 }}>
           {hiddenNote}
         </Typography>
       ) : null}
 
       {connections.length === 0 ? (
-        <Typography color="text.secondary">No banks connected yet.</Typography>
+        <Typography sx={{ color: "text.secondary" }}>No banks connected yet.</Typography>
       ) : (
         <Stack spacing={2.5}>
           {connections.map((c) => {
             const status = STATUS[c.status] ?? STATUS.error;
             return (
               <Stack key={c.id} spacing={1.25}>
-                <Stack direction="row" alignItems="center" spacing={1} sx={{ flexWrap: "wrap", rowGap: 1 }}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap", rowGap: 1 }}>
                   <AccountBalanceIcon fontSize="small" color="action" />
                   <Typography sx={{ fontWeight: 500 }}>{c.institutionName}</Typography>
                   <Chip size="small" color={status.color} variant="outlined" label={status.label} />
-                  <Typography variant="caption" color="text.secondary" sx={{ flexGrow: 1 }}>
+                  <Typography variant="caption" sx={{ color: "text.secondary", flexGrow: 1 }}>
                     {c.lastSynced ? `synced ${c.lastSynced}` : "not synced yet"}
                     {` · importing from ${formatDate(c.syncFrom)}`}
                   </Typography>
@@ -253,7 +253,7 @@ export default function BankConnections({
                     />
                   ) : null}
                 </Stack>
-                <Typography variant="caption" color="text.secondary" sx={{ pl: { sm: 3.5 }, mt: -0.75 }}>
+                <Typography variant="caption" sx={{ color: "text.secondary", pl: { sm: 3.5 }, mt: -0.75 }}>
                   {c.lastWebhook
                     ? `Plaid last reported changes ${c.lastWebhook}`
                     : "Plaid has not reported changes yet"}
@@ -267,11 +267,10 @@ export default function BankConnections({
                   <Stack
                     key={a.id}
                     direction={{ xs: "column", sm: "row" }}
-                    alignItems={{ xs: "stretch", sm: "center" }}
                     spacing={1}
-                    sx={{ pl: { sm: 3.5 } }}
+                    sx={{ alignItems: { xs: "stretch", sm: "center" }, pl: { sm: 3.5 } }}
                   >
-                    <Typography variant="body2" color="text.secondary" sx={{ flexGrow: 1 }} noWrap>
+                    <Typography variant="body2" sx={{ color: "text.secondary", flexGrow: 1 }} noWrap>
                       {a.name}
                       {a.mask ? ` ending ${a.mask}` : ""}
                     </Typography>

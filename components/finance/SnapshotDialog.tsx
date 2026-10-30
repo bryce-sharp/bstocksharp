@@ -69,7 +69,7 @@ export default function SnapshotDialog({
           <Stack spacing={2.5}>
             {error ? <Alert severity="error">{error}</Alert> : null}
             <MonthYearField name="month" value={ym} onChange={setYm} years={yearOptions} />
-            <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
+            <Typography variant="caption" sx={{ color: "text.secondary", mt: -1 }}>
               {alreadyLogged
                 ? "This month is already logged — saving overwrites it. Blank fields stay untouched."
                 : "Blank fields are left untouched — log what you have."}

@@ -47,7 +47,7 @@ export default async function CategoriesPage({
         <Typography variant="h3" component="h1">
           Categories
         </Typography>
-        <Typography variant="h6" component="p" color="text.secondary" fontWeight={400}>
+        <Typography variant="h6" component="p" sx={{ color: "text.secondary", fontWeight: 400 }}>
           Group your merchants and income sources, and tag each group
         </Typography>
       </Stack>

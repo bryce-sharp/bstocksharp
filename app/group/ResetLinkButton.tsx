@@ -81,7 +81,7 @@ export default function ResetLinkButton({
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             <TextField value={link ?? ""} label="Link" fullWidth slotProps={{ input: { readOnly: true } }} />
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
               Send this to {username}. They open it on their own device and pick a new password, so
               you never see it. It works once, expires in 24 hours, and signs {username} out on every
               device. They will see that you sent it.

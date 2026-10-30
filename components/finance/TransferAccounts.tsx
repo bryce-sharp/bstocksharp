@@ -36,7 +36,7 @@ export default function TransferAccounts({
           ))}
         </TextField>
       </Box>
-      <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 0.75 }}>
+      <Typography variant="caption" component="p" sx={{ color: "text.secondary", mt: 0.75 }}>
         Money moving between your own accounts, or between two of your money books. It is not
         spending or income, so it does not change your budget or your savings.
       </Typography>
