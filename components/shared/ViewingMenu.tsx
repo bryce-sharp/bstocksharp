@@ -54,7 +54,7 @@ export default function ViewingMenu({ active, people }: { active: ViewingPick; p
         <KeyboardArrowDownIcon fontSize="small" />
       </Button>
       <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={close}>
-        <Typography variant="overline" color="text.secondary" sx={{ px: 2, display: "block" }}>
+        <Typography variant="overline" sx={{ color: "text.secondary", px: 2, display: "block" }}>
           Viewing
         </Typography>
         {people.map((p) => (
@@ -72,7 +72,7 @@ export default function ViewingMenu({ active, people }: { active: ViewingPick; p
             <ListItemText>
               {p.name}
               {p.you || p.private ? (
-                <Typography component="span" variant="body2" color="text.secondary">
+                <Typography component="span" variant="body2" sx={{ color: "text.secondary" }}>
                   {p.you ? " (you)" : " (private here)"}
                 </Typography>
               ) : null}

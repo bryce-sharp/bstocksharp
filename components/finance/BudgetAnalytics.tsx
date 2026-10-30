@@ -26,8 +26,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     <Box>
       <Typography
         variant="caption"
-        color="text.secondary"
-        sx={{ textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}
+        sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}
       >
         {title}
       </Typography>
@@ -40,11 +39,11 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function Row({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <Stack direction="row" justifyContent="space-between" spacing={2}>
-      <Typography variant="body2" color="text.secondary">
+    <Stack direction="row" sx={{ justifyContent: "space-between" }} spacing={2}>
+      <Typography variant="body2" sx={{ color: "text.secondary" }}>
         {label}
       </Typography>
-      <Typography variant="body2" fontWeight={600} color={color} sx={{ textAlign: "right" }}>
+      <Typography variant="body2" sx={{ fontWeight: 600, color: color, textAlign: "right" }}>
         {value}
       </Typography>
     </Stack>
@@ -67,7 +66,7 @@ export function MoreDetails({ children }: { children: React.ReactNode }) {
       }}
     >
       <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-        <Typography variant="body2" color="text.secondary" fontWeight={600}>
+        <Typography variant="body2" sx={{ color: "text.secondary", fontWeight: 600 }}>
           More details
         </Typography>
       </AccordionSummary>
@@ -107,7 +106,7 @@ export function CashFlowDetails({ d }: { d: CashFlowDetailsData }) {
         </Section>
       ) : null}
 
-      <Link component={AppLink} href={d.historyHref} variant="body2" fontWeight={600} underline="hover">
+      <Link component={AppLink} href={d.historyHref} variant="body2" sx={{ fontWeight: 600 }} underline="hover">
         Compare months in History →
       </Link>
     </MoreDetails>

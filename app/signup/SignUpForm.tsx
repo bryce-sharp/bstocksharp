@@ -43,13 +43,13 @@ export default function SignUpForm({ from, siteKey, action }: { from: string; si
       <Paper variant="outlined" sx={{ p: { xs: 3, md: 4 } }}>
         <form action={formAction}>
           <Stack spacing={2.5}>
-            <Stack direction="row" spacing={1.5} alignItems="center">
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
               <SportsEsportsIcon color="primary" />
               <Typography variant="h5" component="h1">
                 Create an account
               </Typography>
             </Stack>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
               Save your games so they follow you to every device.
             </Typography>
 
@@ -95,7 +95,7 @@ export default function SignUpForm({ from, siteKey, action }: { from: string; si
             <SubmitButton variant="contained" size="large" pendingLabel="Creating…" disabled={!siteKey}>
               Create my account
             </SubmitButton>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
               Already have one?{" "}
               <MuiLink component={Link} href={from ? `/login?from=${encodeURIComponent(from)}` : "/login"}>
                 Sign in

@@ -28,7 +28,7 @@ export default async function NewMaintenancePage({
       <Typography variant="h4" component="h1">
         Add service record
       </Typography>
-      <Typography variant="subtitle1" color="text.secondary" sx={{ mb: 3 }}>
+      <Typography variant="subtitle1" sx={{ color: "text.secondary", mb: 3 }}>
         {vehicle.name}
       </Typography>
       <Paper variant="outlined" sx={{ p: { xs: 2.5, md: 4 } }}>

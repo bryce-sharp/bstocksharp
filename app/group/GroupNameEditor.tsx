@@ -30,7 +30,7 @@ export default function GroupNameEditor({
           setEditing(false);
         }}
       >
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
           <GroupsIcon color="primary" />
           <TextField
             name="name"
@@ -52,7 +52,7 @@ export default function GroupNameEditor({
   }
 
   return (
-    <Stack direction="row" spacing={1.5} alignItems="center">
+    <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
       <GroupsIcon color="primary" />
       <Typography variant="h5" component="h1">
         {name}

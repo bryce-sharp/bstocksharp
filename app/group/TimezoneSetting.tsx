@@ -57,9 +57,9 @@ export default function TimezoneSetting({
 
   if (!editing) {
     return (
-      <Stack direction="row" spacing={1} alignItems="center">
+      <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
         <ScheduleIcon fontSize="small" color="action" />
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{ color: "text.secondary" }}>
           Timezone: <strong>{timezone}</strong>
         </Typography>
         {canEdit ? (
@@ -87,7 +87,7 @@ export default function TimezoneSetting({
         setEditing(false);
       }}
     >
-      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+      <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }} useFlexGap>
         <TextField
           name="timezone"
           label="Timezone"
@@ -115,7 +115,7 @@ export default function TimezoneSetting({
           Cancel
         </Button>
       </Stack>
-      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+      <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 0.5 }}>
         Sets when the finance app rolls to the next day — your budget, the widget,
         and incoming card texts all use this.
       </Typography>

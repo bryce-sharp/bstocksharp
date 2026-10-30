@@ -104,7 +104,7 @@ export default function BuildPlanPage() {
         Build philosophy
       </Typography>
 
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
+      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mb: 2 }}>
         {ORDER.map((o, i) => (
           <Chip
             key={o}
@@ -115,7 +115,7 @@ export default function BuildPlanPage() {
         ))}
       </Stack>
 
-      <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+      <Typography variant="body1" sx={{ color: "text.secondary", mb: 3 }}>
         A Miata rewards doing things in the right order:{" "}
         <strong>reliability first, safety second, handling third, power last.</strong>{" "}
         Get the car dependable and safe before chasing speed.
@@ -149,7 +149,7 @@ export default function BuildPlanPage() {
       <Stack spacing={2}>
         {PHASES.map((p) => (
           <Paper key={p.n} variant="outlined" sx={{ p: { xs: 2, md: 2.5 } }}>
-            <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }} gutterBottom>
               {p.n}. {p.name}
             </Typography>
             <List dense disablePadding>
@@ -171,7 +171,7 @@ export default function BuildPlanPage() {
       </Stack>
 
       <Divider sx={{ my: 3 }} />
-      <Typography variant="body2" color="text.secondary">
+      <Typography variant="body2" sx={{ color: "text.secondary" }}>
         Tip: once you own it, mirror these phases in the car&apos;s{" "}
         <strong>Build</strong> tab and check them off as you go.
       </Typography>

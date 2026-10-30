@@ -93,7 +93,7 @@ export default function MaintenanceForm({
           defaultValue={r?.notes ?? ""}
         />
 
-        <Typography variant="subtitle2" color="text.secondary">
+        <Typography variant="subtitle2" sx={{ color: "text.secondary" }}>
           Next service reminder (optional)
         </Typography>
         <Box

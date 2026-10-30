@@ -13,7 +13,7 @@ import Divider from "@mui/material/Divider";
 import Typography from "@mui/material/Typography";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import TabletMacIcon from "@mui/icons-material/TabletMac";
-import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
+import PersonOutlineIcon from "@mui/icons-material/PersonOutlined";
 import DarkModeIcon from "@mui/icons-material/DarkModeOutlined";
 import LightModeIcon from "@mui/icons-material/LightModeOutlined";
 import GroupsIcon from "@mui/icons-material/Groups";
@@ -80,7 +80,7 @@ export default function AccountMenu({
 
       <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={closeMenu}>
         {username ? (
-          <Typography variant="body2" color="text.secondary" sx={{ px: 2, py: 0.75 }}>
+          <Typography variant="body2" sx={{ color: "text.secondary", px: 2, py: 0.75 }}>
             Signed in as <strong>{username}</strong>
             {me ? ` (${me.name})` : hubLogin ? ` (${hubName}'s shared login)` : ""}
           </Typography>

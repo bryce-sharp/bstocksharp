@@ -40,7 +40,7 @@ export default function DetailSheet({
     >
       <DialogTitle component="div" sx={{ pr: 7, pb: 1 }}>
         {overline ? (
-          <Typography variant="caption" color="text.secondary" component="div">
+          <Typography variant="caption" sx={{ color: "text.secondary" }} component="div">
             {overline}
           </Typography>
         ) : null}

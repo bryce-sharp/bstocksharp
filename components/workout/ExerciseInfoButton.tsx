@@ -38,7 +38,7 @@ export default function ExerciseInfoButton({
       <Dialog open={open} onClose={() => setOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>{name}</DialogTitle>
         <DialogContent>
-          <Typography variant="body1" color="text.secondary">
+          <Typography variant="body1" sx={{ color: "text.secondary" }}>
             {description}
           </Typography>
         </DialogContent>

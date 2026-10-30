@@ -42,16 +42,14 @@ export default async function CatalogPage({
 
       <Stack
         direction="row"
-        alignItems="flex-start"
-        justifyContent="space-between"
         spacing={2}
-        sx={{ mb: 3 }}
+        sx={{ alignItems: "flex-start", justifyContent: "space-between", mb: 3 }}
       >
         <Stack spacing={1}>
           <Typography variant="h3" component="h1">
             Exercise catalog
           </Typography>
-          <Typography variant="h6" component="p" color="text.secondary" fontWeight={400}>
+          <Typography variant="h6" component="p" sx={{ color: "text.secondary", fontWeight: 400 }}>
             The building blocks for your workouts — {exercises.length} exercises.
           </Typography>
         </Stack>

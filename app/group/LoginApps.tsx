@@ -74,7 +74,7 @@ export default function LoginApps({
           <DialogContent>
             {error ? <Alert severity="error">{error}</Alert> : null}
             <AppChecks hubApps={hubApps} checked={apps ?? hubApps} />
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{ color: "text.secondary" }}>
               Unchecked apps are hidden and blocked for this login, even by their address.
             </Typography>
           </DialogContent>

@@ -59,7 +59,7 @@ export default function DangerZone({
             >
               Leave this hub
             </Button>
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+            <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 0.5 }}>
               Deletes your login (and its passkeys). People and data stay.
             </Typography>
           </Box>
@@ -67,7 +67,7 @@ export default function DangerZone({
           <>
             {others.length > 0 ? (
               <form action={transferOwnershipAction}>
-                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }} useFlexGap>
                   <TextField
                     name="newOwnerId"
                     label="Transfer ownership to"
@@ -88,7 +88,7 @@ export default function DangerZone({
                     Transfer
                   </SubmitButton>
                 </Stack>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 0.5 }}>
                   They take over invites and member removal; your data and claims are untouched.
                   You can leave the hub afterward if you want out entirely.
                 </Typography>
@@ -104,7 +104,7 @@ export default function DangerZone({
               >
                 Delete this hub forever
               </Button>
-              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+              <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 0.5 }}>
                 Everything goes: people, cars, workouts, weigh-ins, logins, invites. No undo.
               </Typography>
             </Box>
@@ -116,7 +116,7 @@ export default function DangerZone({
       <Dialog open={leaveOpen} onClose={() => setLeaveOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Leave {groupName}?</DialogTitle>
         <DialogContent>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
             Your login is deleted immediately and you&apos;ll be signed out. The
             people and data in this hub stay exactly as they are — you just
             can&apos;t get in anymore unless someone invites you again.
@@ -144,7 +144,7 @@ export default function DangerZone({
         <DialogTitle>Delete {groupName} forever?</DialogTitle>
         <DialogContent>
           <Stack spacing={2}>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
               This deletes <strong>everything</strong> — every person, car,
               workout, weigh-in, login and invite in this hub. There is no
               undo. Type <strong>{groupName}</strong> to confirm.

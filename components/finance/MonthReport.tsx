@@ -62,7 +62,7 @@ export default function MonthReport({ report, inProgress }: { report: Report; in
                 <TableCell>
                   <Typography variant="body2">{l.label}</Typography>
                   {l.note ? (
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
                       {l.note}
                     </Typography>
                   ) : null}
@@ -102,7 +102,7 @@ export default function MonthReport({ report, inProgress }: { report: Report; in
                 <TableRow>
                   <TableCell>
                     <Typography variant="body2">From your paycheck</Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
                       401k, HSA, and other deductions into your accounts
                     </Typography>
                   </TableCell>
@@ -139,7 +139,7 @@ export default function MonthReport({ report, inProgress }: { report: Report; in
         {report.verdict}
       </Typography>
       {inProgress ? (
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+        <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 1 }}>
           Month in progress: bills and paychecks still to come show as under plan until they post.
         </Typography>
       ) : null}

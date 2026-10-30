@@ -50,20 +50,18 @@ export default function WeekSchedule({
           variant="outlined"
           sx={{ p: 2.5, mb: 4, borderColor: "primary.main" }}
         >
-          <Typography variant="overline" color="text.secondary">
+          <Typography variant="overline" sx={{ color: "text.secondary" }}>
             Today · {WEEKDAYS[today].label}
           </Typography>
           {todayA ? (
             <Stack
               direction="row"
-              justifyContent="space-between"
-              alignItems="center"
               spacing={2}
-              sx={{ mt: 0.5 }}
+              sx={{ justifyContent: "space-between", alignItems: "center", mt: 0.5 }}
             >
               <Box sx={{ minWidth: 0 }}>
                 <Typography variant="h6">{todayA.workoutName}</Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{ color: "text.secondary" }}>
                   {todayA.rounds > 1
                     ? `${todayA.rounds} rounds`
                     : "Ready when you are."}
@@ -82,12 +80,10 @@ export default function WeekSchedule({
           ) : (
             <Stack
               direction="row"
-              justifyContent="space-between"
-              alignItems="center"
               spacing={1}
-              sx={{ mt: 0.5 }}
+              sx={{ justifyContent: "space-between", alignItems: "center", mt: 0.5 }}
             >
-              <Typography color="text.secondary">
+              <Typography sx={{ color: "text.secondary" }}>
                 Rest day — nothing scheduled. 💤
               </Typography>
               <Button
@@ -107,10 +103,7 @@ export default function WeekSchedule({
       <Stack
         direction="row"
         spacing={1}
-        alignItems="center"
-        flexWrap="wrap"
-        justifyContent="space-between"
-        sx={{ mb: 1.5 }}
+        sx={{ alignItems: "center", flexWrap: "wrap", justifyContent: "space-between", mb: 1.5 }}
       >
         <Typography variant="h5" component="h2">
           {profileName}&apos;s week
@@ -168,8 +161,8 @@ export default function WeekSchedule({
                   component={Link}
                   href={`/workout/day/${d}?profile=${profileId}`}
                   underline="hover"
-                  color="text.secondary"
                   sx={{
+                    color: "text.secondary",
                     flexGrow: 1,
                     display: "flex",
                     alignItems: "center",

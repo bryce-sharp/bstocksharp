@@ -210,12 +210,12 @@ export default function CashFlowHistory({
   return (
     <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2.5 }, mb: 2 }}>
       <Typography variant="h6">Money in &amp; out</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+      <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
         {rangeLabel} · {flowText(totalIn, totalOut)}
       </Typography>
 
       {months.length === 0 ? (
-        <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
+        <Typography variant="body2" sx={{ color: "text.secondary", py: 3 }}>
           Nothing in this range.
         </Typography>
       ) : mounted ? (
@@ -247,19 +247,17 @@ export default function CashFlowHistory({
 
       <Stack
         direction="row"
-        alignItems="center"
-        justifyContent="space-between"
         spacing={1}
-        sx={{ mb: 1.5, flexWrap: "wrap", rowGap: 1 }}
+        sx={{ alignItems: "center", justifyContent: "space-between", mb: 1.5, flexWrap: "wrap", rowGap: 1 }}
       >
         <Box>
-          <Typography variant="subtitle1" fontWeight={600}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
             {/* A Type filter already names its side inside rangeLabel. */}
             {sel ? monthName(sel.month, true) : rangeLabel}
             {lockedFlow && !sel ? "" : income ? " income" : " spending"} by tag
           </Typography>
           {sel ? (
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
               {flowText(sel.moneyIn, sel.moneyOut)}
             </Typography>
           ) : null}
@@ -315,7 +313,7 @@ export default function CashFlowHistory({
         <Box sx={{ mt: 1.5 }}>
           <MoreDetails>
             {reportCaption && !sel ? (
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{ color: "text.secondary" }}>
                 {reportCaption}
               </Typography>
             ) : null}

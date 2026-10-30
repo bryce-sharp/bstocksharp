@@ -18,7 +18,7 @@ import MenuItem from "@mui/material/MenuItem";
 import Alert from "@mui/material/Alert";
 import AddIcon from "@mui/icons-material/Add";
 import SavingsOutlinedIcon from "@mui/icons-material/SavingsOutlined";
-import CloseFundIcon from "@mui/icons-material/RemoveCircleOutline";
+import CloseFundIcon from "@mui/icons-material/RemoveCircleOutlined";
 import SubmitButton from "@/components/shared/SubmitButton";
 import NumberField from "@/components/shared/NumberField";
 import { formatMoney } from "@/lib/format";
@@ -82,8 +82,8 @@ export default function FundsPanel({
 
   return (
     <Paper variant="outlined" sx={{ p: { xs: 2, sm: 2.5 }, mt: 3 }}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
-        <Stack direction="row" spacing={1} alignItems="center">
+      <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", mb: 1.5 }}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
           <SavingsOutlinedIcon fontSize="small" color="action" />
           <Typography variant="h6">Funds</Typography>
         </Stack>
@@ -95,7 +95,7 @@ export default function FundsPanel({
       </Stack>
 
       {funds.length === 0 ? (
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{ color: "text.secondary" }}>
           No funds yet. A fund is a bucket you set aside — a vacation pot, or an
           allowance — that you draw from without touching the monthly budget.
         </Typography>
@@ -107,8 +107,8 @@ export default function FundsPanel({
               sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}
             >
               <Box sx={{ flexGrow: 1, minWidth: 140 }}>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Typography fontWeight={600} component="span">
+                <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                  <Typography sx={{ fontWeight: 600 }} component="span">
                     {f.name}
                   </Typography>
                   {f.ownerName ? (
@@ -116,7 +116,7 @@ export default function FundsPanel({
                   ) : null}
                 </Stack>
                 {f.drawnThisMonth !== 0 ? (
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" sx={{ color: "text.secondary" }}>
                     {f.drawnThisMonth > 0
                       ? `−${formatMoney(f.drawnThisMonth)} this month`
                       : `+${formatMoney(-f.drawnThisMonth)} added this month`}
@@ -154,7 +154,7 @@ export default function FundsPanel({
       )}
 
       {editable ? (
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 2 }}>
+        <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 2 }}>
           To spend from a fund, set a transaction&apos;s category to{" "}
           <strong>Fund</strong> and pick it — that draws the balance down. To save money
           in one, mark income as <strong>Put it in a fund</strong>.
@@ -180,7 +180,7 @@ export default function FundsPanel({
                   </MenuItem>
                 ))}
               </TextField>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{ color: "text.secondary" }}>
                 Starting balance is just a number — it doesn&apos;t move any real
                 account. Great for allowances or pretend money.
               </Typography>
@@ -206,7 +206,7 @@ export default function FundsPanel({
               {error ? <Alert severity="error">{error}</Alert> : null}
               <NumberField name="amount" label="Amount" prefix="$" decimalScale={2} allowNegative />
               <TextField name="note" label="Note (optional)" placeholder="e.g. lost a bet 😄" fullWidth />
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{ color: "text.secondary" }}>
                 A positive amount adds; a <strong>negative</strong> amount removes
                 (e.g. −{depositFor ? formatMoney(depositFor.balance) : "153.33"} to zero it
                 out). Pure bucket money — no real account is touched.

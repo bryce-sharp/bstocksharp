@@ -58,8 +58,8 @@ export default function PersonInvite({
       <Box
         sx={{ display: "flex", alignItems: "center", gap: 1, mt: 0.5, pl: { xs: 0, sm: 5.5 }, flexWrap: { xs: "wrap", sm: "nowrap" } }}
       >
-        <LinkIcon fontSize="small" color="primary" />
-        <Typography variant="body2" color="text.secondary" sx={{ flexGrow: 1, minWidth: 0 }}>
+        <LinkIcon sx={{ fontSize: "small" }} color="primary" />
+        <Typography variant="body2" sx={{ color: "text.secondary", flexGrow: 1, minWidth: 0 }}>
           Sign-in link ready ({pending.expiresInDays} {pending.expiresInDays === 1 ? "day" : "days"} left)
         </Typography>
         <CopyLinkButton link={link} />

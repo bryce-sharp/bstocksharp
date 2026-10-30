@@ -43,16 +43,14 @@ export default async function GaragePage() {
     <Container maxWidth="lg" sx={{ py: { xs: 4, md: 6 } }}>
       <Stack
         direction="row"
-        justifyContent="space-between"
-        alignItems="center"
         spacing={2}
-        sx={{ mb: 3 }}
+        sx={{ justifyContent: "space-between", alignItems: "center", mb: 3 }}
       >
         <Box>
           <Typography variant="h4" component="h1">
             The Garage
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
             {vehicles.length} {vehicles.length === 1 ? "vehicle" : "vehicles"}
           </Typography>
         </Box>
@@ -76,7 +74,7 @@ export default async function GaragePage() {
           <Typography variant="h6" gutterBottom>
             No vehicles yet
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography variant="body2" sx={{ color: "text.secondary", mb: 2 }}>
             Add your first vehicle to start tracking maintenance, fuel, and the build.
           </Typography>
           {editor ? (

@@ -49,7 +49,7 @@ export default function BuilderItemRow({
 
   return (
     <Paper variant="outlined" sx={{ p: 1.5 }}>
-      <Stack direction="row" alignItems="center" spacing={1}>
+      <Stack direction="row" sx={{ alignItems: "center" }} spacing={1}>
         <Stack sx={{ flexShrink: 0 }} spacing={0.75}>
           <form action={moveWorkoutItem.bind(null, itemId, workoutId, "up")}>
             <IconButton type="submit" aria-label="Move up" disabled={isFirst} sx={arrowSx}>
@@ -64,8 +64,8 @@ export default function BuilderItemRow({
         </Stack>
 
         <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-            <Typography variant="body1" fontWeight={600}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
+            <Typography variant="body1" sx={{ fontWeight: 600 }}>
               {it.name}
             </Typography>
             <Chip
@@ -79,13 +79,13 @@ export default function BuilderItemRow({
               label={formatTarget(it)}
             />
             {it.weight ? (
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{ color: "text.secondary" }}>
                 {it.weight}
               </Typography>
             ) : null}
           </Stack>
           {it.note ? (
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
               {it.note}
             </Typography>
           ) : null}

@@ -56,7 +56,7 @@ export default function AddPersonButton({ origin }: { origin: string | null }) {
                 <Alert severity="success" action={<CopyLinkButton link={link} />}>
                   Their sign-in link is ready.
                 </Alert>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{ color: "text.secondary" }}>
                   Copy it and send it to them. Opening it lets them pick a username and password, and that login is
                   this person. It works once, expires in 7 days, and also waits on their card under People.
                 </Typography>
@@ -100,7 +100,7 @@ export default function AddPersonButton({ origin }: { origin: string | null }) {
                   />
                 ) : null}
                 {error ? <Alert severity="error">{error}</Alert> : null}
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{ color: "text.secondary" }}>
                   Without a sign-in, a person is open to everyone in this hub
                   (good for a young kid). With one, their stuff is theirs alone.
                 </Typography>

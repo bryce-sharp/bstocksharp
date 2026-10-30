@@ -10,7 +10,7 @@ import ListItem from "@mui/material/ListItem";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutline";
+import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutlined";
 import ForumOutlinedIcon from "@mui/icons-material/ForumOutlined";
 import BuildOutlinedIcon from "@mui/icons-material/BuildOutlined";
 import ArticleOutlinedIcon from "@mui/icons-material/ArticleOutlined";
@@ -65,7 +65,7 @@ export default function ResourcesPage() {
 
       <Stack spacing={2} sx={{ mt: 2 }}>
         <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 } }}>
-          <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }} gutterBottom>
             Guides
           </Typography>
           <List dense disablePadding>
@@ -92,7 +92,7 @@ export default function ResourcesPage() {
         </Paper>
 
         <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 } }}>
-          <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }} gutterBottom>
             YouTube
           </Typography>
           <List dense disablePadding>
@@ -118,7 +118,7 @@ export default function ResourcesPage() {
         </Paper>
 
         <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 } }}>
-          <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }} gutterBottom>
             Forums
           </Typography>
           <List dense disablePadding>
@@ -140,10 +140,10 @@ export default function ResourcesPage() {
         </Paper>
 
         <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 } }}>
-          <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }} gutterBottom>
             Specs to keep handy
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
             Fill these in once you have the car — they save time on every job.
           </Typography>
           <List dense disablePadding>

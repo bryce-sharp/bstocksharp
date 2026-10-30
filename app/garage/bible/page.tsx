@@ -56,7 +56,7 @@ export default function BiblePage() {
         <Typography variant="h3" component="h1">
           The Miata Bible
         </Typography>
-        <Typography variant="h6" component="p" color="text.secondary" fontWeight={400}>
+        <Typography variant="h6" component="p" sx={{ color: "text.secondary", fontWeight: 400 }}>
           Everything worth knowing before and after buying the dream NA — in one
           place, so it never gets lost in a chat log again.
         </Typography>
@@ -78,7 +78,7 @@ export default function BiblePage() {
                   <Typography variant="h5" component="h2">
                     {s.title}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" sx={{ color: "text.secondary" }}>
                     {s.desc}
                   </Typography>
                 </Stack>

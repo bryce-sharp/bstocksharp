@@ -63,11 +63,11 @@ function MiniLane({
         "&:hover": { bgcolor: active ? "action.selected" : "action.hover" },
       }}
     >
-      <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.25 }}>
-        <Typography variant="caption" color="text.secondary">
+      <Stack direction="row" sx={{ justifyContent: "space-between", mb: 0.25 }}>
+        <Typography variant="caption" sx={{ color: "text.secondary" }}>
           {label}
         </Typography>
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" sx={{ color: "text.secondary" }}>
           {formatMoney(spent)} / {formatMoney(budget)}
         </Typography>
       </Stack>
@@ -89,7 +89,7 @@ function MiniLane({
 function UnlinkedBills({ count }: { count: number }) {
   const filter = useTableFilter();
   return (
-    <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 1.5, color: "warning.main" }}>
+    <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", mt: 1.5, color: "warning.main" }}>
       <WarningAmberIcon sx={{ fontSize: 16 }} />
       <Link
         component="button"
@@ -123,8 +123,7 @@ function Stat({
     <Box>
       <Typography
         variant="caption"
-        color="text.secondary"
-        sx={{ textTransform: "uppercase", letterSpacing: "0.04em" }}
+        sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.04em" }}
       >
         {label}
       </Typography>
@@ -132,7 +131,7 @@ function Stat({
         {value}
       </Typography>
       {sub ? (
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+        <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>
           {sub}
         </Typography>
       ) : null}
@@ -230,12 +229,12 @@ export default function BudgetSummary({
           />
         ) : null}
       </Box>
-      <Stack direction="row" justifyContent="space-between" sx={{ mt: 0.5 }}>
-        <Typography variant="caption" color="text.secondary">
+      <Stack direction="row" sx={{ justifyContent: "space-between", mt: 0.5 }}>
+        <Typography variant="caption" sx={{ color: "text.secondary" }}>
           {formatMoneySigned(-d.netSpent)} spent
         </Typography>
         {isCurrentMonth ? (
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{ color: "text.secondary" }}>
             tick = on-pace ({formatMoney(d.allowedSoFar)})
           </Typography>
         ) : null}

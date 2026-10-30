@@ -325,8 +325,7 @@ export default function ExpenseDialog({
               </Box>
               <Typography
                 variant="caption"
-                color="text.secondary"
-                sx={{ mt: -1 }}
+                sx={{ color: "text.secondary", mt: -1 }}
               >
                 The real price at its real cadence — 12/yr = monthly, 2 = every
                 six months, 1 = yearly. The monthly figure is derived.
@@ -367,8 +366,7 @@ export default function ExpenseDialog({
                     Amount is an estimate
                     <Typography
                       variant="caption"
-                      color="text.secondary"
-                      display="block"
+                      sx={{ color: "text.secondary", display: "block" }}
                     >
                       Label for variable bills (electric, water).
                     </Typography>
@@ -400,8 +398,7 @@ export default function ExpenseDialog({
                   <Stack
                     direction="row"
                     spacing={1}
-                    alignItems="center"
-                    flexWrap="wrap"
+                    sx={{ alignItems: "center", flexWrap: "wrap" }}
                     useFlexGap
                   >
                     <Typography

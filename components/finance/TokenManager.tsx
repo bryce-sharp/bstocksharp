@@ -67,32 +67,29 @@ export default function TokenManager({
     <Paper variant="outlined" sx={{ p: { xs: 2, sm: 2.5 } }}>
       <Stack
         direction="row"
-        alignItems="center"
-        justifyContent="space-between"
-        sx={{ mb: 1.5 }}
+        sx={{ alignItems: "center", justifyContent: "space-between", mb: 1.5 }}
       >
         <Typography variant="h6">Connected devices</Typography>
         <Button size="small" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}>
           New token
         </Button>
       </Stack>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+      <Typography variant="body2" sx={{ color: "text.secondary", mb: 2 }}>
         Tokens let your phone shortcuts send transactions in and read the budget
         widget. One per device or feed, so you can revoke a lost phone without
         touching the others.
       </Typography>
 
       {tokens.length === 0 ? (
-        <Typography color="text.secondary">No tokens yet.</Typography>
+        <Typography sx={{ color: "text.secondary" }}>No tokens yet.</Typography>
       ) : (
         <Stack spacing={1}>
           {tokens.map((t) => (
             <Stack
               key={t.id}
               direction="row"
-              alignItems="center"
               spacing={1}
-              sx={{ flexWrap: "wrap" }}
+              sx={{ alignItems: "center", flexWrap: "wrap" }}
             >
               <Typography sx={{ flexGrow: 1, minWidth: 120 }} noWrap>
                 {t.label}
@@ -104,7 +101,7 @@ export default function TokenManager({
                 label={t.scope === "ingest" ? "sends txns" : "reads widget"}
               />
               {t.accountName ? <Chip size="small" label={t.accountName} /> : null}
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{ color: "text.secondary" }}>
                 {t.lastUsedAt ? `used ${formatDate(t.lastUsedAt)}` : "never used"}
               </Typography>
               <DeleteIconButton

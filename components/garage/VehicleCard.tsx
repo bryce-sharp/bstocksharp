@@ -47,21 +47,19 @@ export default function VehicleCard({
               {vehicle.name}
             </Typography>
             {subtitle ? (
-              <Typography variant="body2" color="text.secondary" noWrap>
+              <Typography variant="body2" sx={{ color: "text.secondary" }} noWrap>
                 {subtitle}
               </Typography>
             ) : null}
           </Box>
           <Stack
             direction="row"
-            justifyContent="space-between"
-            alignItems="center"
-            sx={{ mt: 1.5 }}
+            sx={{ justifyContent: "space-between", alignItems: "center", mt: 1.5 }}
           >
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
               {formatMiles(vehicle.currentMileage)}
             </Typography>
-            <Stack direction="row" spacing={0.5} alignItems="center">
+            <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
               {vehicle.visibility === "private" ? (
                 <Chip
                   size="small"

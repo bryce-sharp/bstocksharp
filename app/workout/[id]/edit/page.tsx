@@ -94,7 +94,7 @@ export default async function WorkoutBuilderPage({
       <Typography variant="h4" component="h1" sx={{ mb: 0.5 }}>
         Edit workout
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+      <Typography variant="body2" sx={{ color: "text.secondary", mb: 3 }}>
         Everything here saves automatically.
       </Typography>
 
@@ -111,16 +111,14 @@ export default async function WorkoutBuilderPage({
           <Stack
             direction="row"
             spacing={1}
-            alignItems="center"
-            justifyContent="space-between"
-            flexWrap="wrap"
+            sx={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}
             useFlexGap
           >
             <Box sx={{ minWidth: 0 }}>
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
                 Equipment this workout uses
               </Typography>
-              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }} useFlexGap>
                 {usedEquipment.map((slug) => (
                   <Chip
                     key={slug}
@@ -146,8 +144,7 @@ export default async function WorkoutBuilderPage({
             <Stack
               direction="row"
               spacing={1}
-              alignItems="center"
-              sx={{ mt: 1.5, color: "warning.main" }}
+              sx={{ alignItems: "center", mt: 1.5, color: "warning.main" }}
             >
               <WarningAmberOutlinedIcon fontSize="small" />
               <Typography variant="body2">
@@ -166,7 +163,7 @@ export default async function WorkoutBuilderPage({
           const isCircuit = s.value === "main" && workout.rounds > 1;
           return (
             <Box key={s.value}>
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1.5 }}>
                 <Typography variant="h5" component="h2">
                   {s.label}
                 </Typography>
@@ -182,7 +179,7 @@ export default async function WorkoutBuilderPage({
 
               <Stack spacing={1} sx={{ mb: 1.5 }}>
                 {sectionRows.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" sx={{ color: "text.secondary" }}>
                     Nothing here yet.
                   </Typography>
                 ) : (
@@ -225,13 +222,13 @@ export default async function WorkoutBuilderPage({
 
       <Divider sx={{ my: 4 }} />
 
-      <Stack direction="row" alignItems="center" spacing={1}>
+      <Stack direction="row" sx={{ alignItems: "center" }} spacing={1}>
         <DeleteIconButton
           action={deleteWorkout.bind(null, workoutId)}
           confirmMessage={`Delete the workout "${workout.name}"? This can't be undone.`}
           label="Delete workout"
         />
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{ color: "text.secondary" }}>
           Delete this workout (also removes it from any day it&apos;s assigned to).
         </Typography>
       </Stack>

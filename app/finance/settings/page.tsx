@@ -67,7 +67,7 @@ export default async function FinanceSettingsPage() {
         <Typography variant="h4" component="h1">
           Connections
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{ color: "text.secondary" }}>
           Your banks, synced through Plaid, and the tokens that link your phone
           to the budget: the shortcut that sends card alerts in, and the
           lock-screen widget that reads it back.

@@ -1,6 +1,6 @@
 "use client";
 
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import SubmitButton from "@/components/shared/SubmitButton";
 
 export default function DeleteVehicleButton({

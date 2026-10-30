@@ -47,7 +47,7 @@ export default async function HubPage() {
             {me?.name ?? hubName ?? "Your apps"}
           </Typography>
           {me ? (
-            <Typography variant="h6" component="p" color="text.secondary" fontWeight={400}>
+            <Typography variant="h6" component="p" sx={{ color: "text.secondary", fontWeight: 400 }}>
               Your apps
             </Typography>
           ) : null}
@@ -71,7 +71,7 @@ export default async function HubPage() {
                       <Typography variant="h5" component="h2">
                         {a.name}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant="body2" sx={{ color: "text.secondary" }}>
                         {a.tagline}
                       </Typography>
                     </Stack>

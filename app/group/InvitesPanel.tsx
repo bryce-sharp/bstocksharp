@@ -91,12 +91,12 @@ export default function InvitesPanel({
           variant="outlined"
           sx={{ p: 2, display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}
         >
-          <LinkIcon fontSize="small" color="disabled" />
+          <LinkIcon sx={{ fontSize: "small" }} color="disabled" />
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-            <Typography fontWeight={600} component="span">
+            <Typography sx={{ fontWeight: 600 }} component="span">
               {inv.note ?? "Invite link"}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
               {inv.household ? `joins ${groupName}` : "gets their own hub"}
               {" · "}
               {inv.reusable ? "reusable" : "single use"}

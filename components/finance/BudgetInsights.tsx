@@ -84,13 +84,13 @@ function PillRow({
       }}
     >
       <Box sx={{ minWidth: 0 }}>
-        <Typography variant="body2" noWrap fontWeight={600}>
+        <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
           {label}
         </Typography>
         {sub ? (
           <Typography
             variant="caption"
-            color="text.secondary"
+            sx={{ color: "text.secondary" }}
             noWrap
             component="div"
           >
@@ -100,8 +100,7 @@ function PillRow({
       </Box>
       <Typography
         variant="body2"
-        fontWeight={700}
-        sx={{ whiteSpace: "nowrap" }}
+        sx={{ fontWeight: 700, whiteSpace: "nowrap" }}
       >
         {value}
       </Typography>
@@ -120,11 +119,11 @@ function Column({
 }) {
   return (
     <Box>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+      <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }} spacing={1}>
         <Typography
           variant="caption"
-          color="text.secondary"
           sx={{
+            color: "text.secondary",
             textTransform: "uppercase",
             letterSpacing: "0.05em",
             fontWeight: 600,
@@ -149,10 +148,9 @@ function Tile({ label, value, sub, color }: TileData) {
     <Box sx={{ bgcolor: "action.hover", borderRadius: 1, px: { xs: 1, sm: 1.5 }, py: { xs: 1, sm: 1.25 }, minWidth: 0 }}>
       <Typography
         variant="caption"
-        color="text.secondary"
         component="div"
         noWrap
-        sx={{ textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600, fontSize: { xs: 10.5, sm: undefined } }}
+        sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600, fontSize: { xs: 10.5, sm: undefined } }}
       >
         {label}
       </Typography>
@@ -163,7 +161,7 @@ function Tile({ label, value, sub, color }: TileData) {
       >
         {value}
       </Typography>
-      <Typography variant="caption" color="text.secondary" component="div" sx={{ lineHeight: 1.3 }}>
+      <Typography variant="caption" component="div" sx={{ color: "text.secondary", lineHeight: 1.3 }}>
         {sub}
       </Typography>
     </Box>
@@ -275,7 +273,7 @@ function AllMoney({ d }: { d: BudgetInsightsData["all"] }) {
       </TileRow>
 
       <Box sx={{ mt: 2 }}>
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" sx={{ color: "text.secondary" }}>
           Money out so far — {d.trend.thisLabel} vs {d.trend.lastLabel}
         </Typography>
         <SpendTrendChart
@@ -356,7 +354,7 @@ function DiscretionaryView({ d }: { d: BudgetInsightsData }) {
 
       {/* Spend vs last month */}
       <Box sx={{ mt: 2 }}>
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" sx={{ color: "text.secondary" }}>
           Spending so far — {d.trend.thisLabel} vs {d.trend.lastLabel}
         </Typography>
         <SpendTrendChart
@@ -420,8 +418,7 @@ function DiscretionaryView({ d }: { d: BudgetInsightsData }) {
           </Box>
           <Typography
             variant="caption"
-            color="text.secondary"
-            sx={{ display: "block", mt: 1.5 }}
+            sx={{ color: "text.secondary", display: "block", mt: 1.5 }}
           >
             Discretionary only
           </Typography>
@@ -448,12 +445,10 @@ export default function BudgetInsights({ d }: { d: BudgetInsightsData }) {
     <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2.5 }, mb: 3 }}>
       <Stack
         direction="row"
-        alignItems="center"
-        justifyContent="space-between"
         spacing={1}
-        sx={{ mb: 0.5, flexWrap: "wrap", rowGap: 1 }}
+        sx={{ alignItems: "center", justifyContent: "space-between", mb: 0.5, flexWrap: "wrap", rowGap: 1 }}
       >
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
           <InsightsIcon fontSize="small" color="action" />
           <Typography variant="h6">Insights</Typography>
         </Stack>

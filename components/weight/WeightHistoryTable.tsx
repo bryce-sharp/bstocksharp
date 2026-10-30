@@ -86,7 +86,7 @@ export default function WeightHistoryTable({
                 </TableCell>
                 {editor ? (
                   <TableCell align="right">
-                    <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                    <Stack direction="row" spacing={0.5} sx={{ justifyContent: "flex-end" }}>
                       <Tooltip title="Edit">
                         <IconButton
                           size="small"
@@ -111,7 +111,7 @@ export default function WeightHistoryTable({
       </TableContainer>
 
       {rows.length === 0 ? (
-        <Typography color="text.secondary" sx={{ mt: 2 }}>
+        <Typography sx={{ color: "text.secondary", mt: 2 }}>
           No weigh-ins yet.
         </Typography>
       ) : null}

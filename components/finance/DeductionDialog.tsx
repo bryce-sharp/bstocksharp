@@ -190,7 +190,7 @@ export default function DeductionDialog({
             </Box>
             <input type="hidden" name="amountMode" value={amountMode} readOnly />
             {amountMode === "percent" ? (
-              <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
+              <Typography variant="caption" sx={{ color: "text.secondary", mt: -1 }}>
                 Percent rows follow the paycheck — a raise updates the dollar
                 amount automatically.
               </Typography>
@@ -248,7 +248,7 @@ export default function DeductionDialog({
             {deduction ? (
               <>
                 <Divider />
-                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }} useFlexGap>
                   <Typography variant="overline" sx={{ color: "error.main", mr: 1 }}>
                     Danger zone
                   </Typography>

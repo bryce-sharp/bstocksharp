@@ -25,8 +25,7 @@ function Stat({ label, value }: { label: string; value: string }) {
       </Typography>
       <Typography
         variant="caption"
-        color="text.secondary"
-        sx={{ textTransform: "uppercase", letterSpacing: "0.04em" }}
+        sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.04em" }}
       >
         {label}
       </Typography>
@@ -86,20 +85,19 @@ export default function WishlistView({
       <Stack spacing={1.5}>
         {optimisticItems.map((i) => (
           <Paper key={i.id} variant="outlined" sx={{ p: 1.5 }}>
-            <Stack direction="row" alignItems="flex-start" spacing={1}>
+            <Stack direction="row" sx={{ alignItems: "flex-start" }} spacing={1}>
               <Checkbox
                 checked={i.purchased}
                 onChange={() => toggle(i)}
                 disabled={!editor}
                 sx={{ p: 0.5, mt: "-2px" }}
-                inputProps={{ "aria-label": `Mark ${i.item} purchased` }}
+                slotProps={{ input: { "aria-label": `Mark ${i.item} purchased` } }}
               />
               <Box sx={{ flexGrow: 1, minWidth: 0 }}>
                 <Stack
                   direction="row"
                   spacing={1}
-                  alignItems="center"
-                  flexWrap="wrap"
+                  sx={{ alignItems: "center", flexWrap: "wrap" }}
                 >
                   <Typography
                     variant="body1"
@@ -115,12 +113,12 @@ export default function WishlistView({
                     <Chip size="small" variant="outlined" color="error" label="high" />
                   ) : null}
                   {i.rating ? (
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
                       {"★".repeat(i.rating)}
                     </Typography>
                   ) : null}
                 </Stack>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{ color: "text.secondary" }}>
                   {[i.brand, i.price ? formatMoney(i.price) : null]
                     .filter(Boolean)
                     .join(" · ")}
@@ -128,8 +126,7 @@ export default function WishlistView({
                 {i.notes ? (
                   <Typography
                     variant="body2"
-                    color="text.secondary"
-                    sx={{ whiteSpace: "pre-wrap" }}
+                    sx={{ color: "text.secondary", whiteSpace: "pre-wrap" }}
                   >
                     {i.notes}
                   </Typography>

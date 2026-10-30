@@ -71,9 +71,9 @@ export default function BuildPlan({
   return (
     <Box>
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-        <Stack direction="row" justifyContent="space-between" sx={{ mb: 1 }}>
+        <Stack direction="row" sx={{ justifyContent: "space-between", mb: 1 }}>
           <Typography variant="subtitle2">Overall progress</Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
             {doneCount}/{total} done
           </Typography>
         </Stack>
@@ -91,13 +91,12 @@ export default function BuildPlan({
             <Box key={g.key}>
               <Stack
                 direction="row"
-                justifyContent="space-between"
-                alignItems="center"
+                sx={{ justifyContent: "space-between", alignItems: "center" }}
               >
-                <Typography variant="subtitle1" fontWeight={700}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
                   {g.name}
                 </Typography>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{ color: "text.secondary" }}>
                   {gDone}/{g.tasks.length}
                 </Typography>
               </Stack>
@@ -111,20 +110,19 @@ export default function BuildPlan({
                   const done = t.status === "done";
                   return (
                     <Paper key={t.id} variant="outlined" sx={{ p: 1.5 }}>
-                      <Stack direction="row" alignItems="flex-start" spacing={1}>
+                      <Stack direction="row" sx={{ alignItems: "flex-start" }} spacing={1}>
                         <Checkbox
                           checked={done}
                           onChange={() => toggle(t)}
                           disabled={!editor}
                           sx={{ p: 0.5, mt: "-2px" }}
-                          inputProps={{ "aria-label": `Mark ${t.title} done` }}
+                          slotProps={{ input: { "aria-label": `Mark ${t.title} done` } }}
                         />
                         <Box sx={{ flexGrow: 1, minWidth: 0 }}>
                           <Stack
                             direction="row"
                             spacing={1}
-                            alignItems="center"
-                            flexWrap="wrap"
+                            sx={{ alignItems: "center", flexWrap: "wrap" }}
                           >
                             <Typography
                               variant="body1"
@@ -153,7 +151,7 @@ export default function BuildPlan({
                               />
                             ) : null}
                             {t.costEstimate ? (
-                              <Typography variant="caption" color="text.secondary">
+                              <Typography variant="caption" sx={{ color: "text.secondary" }}>
                                 {formatMoney(t.costEstimate)}
                               </Typography>
                             ) : null}
@@ -161,8 +159,7 @@ export default function BuildPlan({
                           {t.description ? (
                             <Typography
                               variant="body2"
-                              color="text.secondary"
-                              sx={{ whiteSpace: "pre-wrap" }}
+                              sx={{ color: "text.secondary", whiteSpace: "pre-wrap" }}
                             >
                               {t.description}
                             </Typography>

@@ -35,7 +35,7 @@ export default function AtlasMonthSwitcher({
   const isCurrent = month === currentMonth;
 
   return (
-    <Stack direction="row" spacing={0.5} alignItems="center">
+    <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
       <IconButton
         size="small"
         component={Link}

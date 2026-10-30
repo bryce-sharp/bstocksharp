@@ -105,7 +105,7 @@ export default async function PeopleTab({
 
   return (
     <Stack spacing={2.5}>
-      <Typography variant="body2" color="text.secondary">
+      <Typography variant="body2" sx={{ color: "text.secondary" }}>
         Everyone here shares this hub&apos;s data, except what a person keeps
         private (the eye button). Each person can have their
         own login, made from the sign-in link on their card: signing in jumps
@@ -145,7 +145,7 @@ export default async function PeopleTab({
                   {initial(p.name)}
                 </Avatar>
                 <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                  <Typography fontWeight={600} component="span">
+                  <Typography sx={{ fontWeight: 600 }} component="span">
                     {p.name}
                   </Typography>
                   {archived ? <Chip size="small" label="Archived" sx={{ ml: 1 }} /> : null}
@@ -227,7 +227,7 @@ export default async function PeopleTab({
                     </>
                   ) : (
                     <>
-                      <Typography variant="body2" color="text.secondary" sx={{ flexGrow: 1 }}>
+                      <Typography variant="body2" sx={{ color: "text.secondary", flexGrow: 1 }}>
                         No login: everyone here can see and change their stuff
                       </Typography>
                       <form action={claimProfileAction.bind(null, p.id)}>
@@ -246,7 +246,7 @@ export default async function PeopleTab({
 
               {claim && pending.has(claim.id) ? (
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 0.5, pl: { xs: 0, sm: 5.5 } }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ flexGrow: 1 }}>
+                  <Typography variant="caption" sx={{ color: "text.secondary", flexGrow: 1 }}>
                     A reset link is waiting, expires in {hoursLeft(pending.get(claim.id)!)} h
                   </Typography>
                   <form action={revokeResetLinkAction.bind(null, pending.get(claim.id)!.id)}>
@@ -277,7 +277,7 @@ export default async function PeopleTab({
 
       {unlinked.length ? (
         <Stack spacing={1}>
-          <Typography variant="subtitle2" color="text.secondary">
+          <Typography variant="subtitle2" sx={{ color: "text.secondary" }}>
             Logins not tied to a person
           </Typography>
           {unlinked.map((m) => (
@@ -287,7 +287,7 @@ export default async function PeopleTab({
               sx={{ p: 2, display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}
             >
               <KeyIcon fontSize="small" color="disabled" />
-              <Typography fontWeight={600} sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
+              <Typography sx={{ fontWeight: 600, flexGrow: 1, minWidth: 0 }} noWrap>
                 {m.username}
               </Typography>
               {m.id === ownerAccountId ? <Chip size="small" label="owner" color="secondary" /> : null}
@@ -307,7 +307,7 @@ export default async function PeopleTab({
               ) : null}
               {pending.has(m.id) ? (
                 <Box sx={{ width: "100%", display: "flex", alignItems: "center", gap: 1 }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ flexGrow: 1 }}>
+                  <Typography variant="caption" sx={{ color: "text.secondary", flexGrow: 1 }}>
                     A reset link is waiting, expires in {hoursLeft(pending.get(m.id)!)} h
                   </Typography>
                   <form action={revokeResetLinkAction.bind(null, pending.get(m.id)!.id)}>
@@ -322,7 +322,7 @@ export default async function PeopleTab({
         </Stack>
       ) : null}
 
-      <Typography variant="caption" color="text.secondary">
+      <Typography variant="caption" sx={{ color: "text.secondary" }}>
         To give someone their own login, add them as a person, then send them
         the <strong>sign-in link</strong> from their card
         {viewerIsOwner ? "" : " (the hub owner makes these)"}. Opening it makes a

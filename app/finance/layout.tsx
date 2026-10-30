@@ -23,7 +23,7 @@ export default async function FinanceLayout({
           <Typography variant="h5" component="h1" gutterBottom>
             No money book for this login
           </Typography>
-          <Typography color="text.secondary" sx={{ mb: 2 }}>
+          <Typography sx={{ color: "text.secondary", mb: 2 }}>
             {me !== null
               ? "Finance shows only the money books you are a member of. Ask a member to add you to theirs, or start your own."
               : login?.isHubLogin

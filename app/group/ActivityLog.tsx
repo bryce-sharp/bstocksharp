@@ -55,7 +55,7 @@ function Row({ row, open, onToggle }: { row: ActivityRow; open: boolean; onToggl
       </ButtonBase>
       <Collapse in={open} unmountOnExit>
         <Box sx={{ px: 2, pb: 1.5, pl: { xs: 2, sm: "calc(112px + 28px)" } }}>
-          <Typography variant="caption" color="text.secondary" component="div">
+          <Typography variant="caption" sx={{ color: "text.secondary" }} component="div">
             {sourceLabel(row.source)} · {row.kind.replace(/_/g, " ")}
             {row.site ? " · belongs to no household" : ""}
           </Typography>
@@ -123,7 +123,7 @@ export default function ActivityLog({
 
   return (
     <Stack spacing={1.5}>
-      <Typography variant="body2" color="text.secondary">
+      <Typography variant="body2" sx={{ color: "text.secondary" }}>
         {owner
           ? "What the site has done for this household, newest first: so far, the banks' change notices and every sync. Kept for 180 days, and only the owner sees it."
           : "Kept for 180 days, newest first."}
@@ -161,7 +161,7 @@ export default function ActivityLog({
       ) : null}
 
       {rows.length === 0 ? (
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{ color: "text.secondary" }}>
           Nothing recorded yet.
         </Typography>
       ) : (

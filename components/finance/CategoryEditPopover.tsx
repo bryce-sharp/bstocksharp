@@ -74,7 +74,7 @@ export default function CategoryEditPopover({
             }
           />
         ) : null}
-        <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ mt: 1.5 }}>
+        <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end", mt: 1.5 }}>
           <Button size="small" color="inherit" onClick={() => onSave(null, false)}>
             Clear
           </Button>

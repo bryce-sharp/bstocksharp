@@ -31,7 +31,7 @@ export default function NetWorthActions({
 
   return (
     <>
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap justifyContent="flex-end">
+      <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", justifyContent: "flex-end" }} useFlexGap>
         <Button
           variant="contained"
           startIcon={<AddchartIcon />}

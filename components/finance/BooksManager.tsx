@@ -21,7 +21,7 @@ import Alert from "@mui/material/Alert";
 import AddIcon from "@mui/icons-material/Add";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import GroupOutlinedIcon from "@mui/icons-material/GroupOutlined";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import SubmitButton from "@/components/shared/SubmitButton";
 import {
   createBookAction,
@@ -83,7 +83,7 @@ function PeopleChecks({
             label={`${hub.name} (shared login)`}
           />
           {!hub.finance ? (
-            <Typography variant="caption" color="text.secondary" sx={{ pl: 4 }}>
+            <Typography variant="caption" sx={{ color: "text.secondary", pl: 4 }}>
               {hub.name} cannot open Finance yet. Turn Finance on for it in Hub settings, People.
             </Typography>
           ) : null}
@@ -128,11 +128,11 @@ export default function BooksManager({
         <Paper key={b.id} variant="outlined" sx={{ p: 2 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-              <Typography fontWeight={600} component="span">
+              <Typography sx={{ fontWeight: 600 }} component="span">
                 {b.name}
               </Typography>
               {b.id === activeId ? <Chip size="small" label="In use" color="primary" sx={{ ml: 1 }} /> : null}
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{ color: "text.secondary" }}>
                 {[...b.members.map(name), ...(b.hub && hub ? [hub.name] : [])].join(", ")}
               </Typography>
             </Box>
@@ -180,7 +180,7 @@ export default function BooksManager({
               <Stack spacing={2} sx={{ pt: 1 }}>
                 {error ? <Alert severity="error">{error}</Alert> : null}
                 <TextField name="name" label="Name" placeholder="Business, Allowance…" autoFocus required />
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{ color: "text.secondary" }}>
                   It starts empty. Who can open it:
                 </Typography>
                 <PeopleChecks people={people} checked={[]} locked={me} hub={hub} hubChecked={false} />
@@ -220,7 +220,7 @@ export default function BooksManager({
               <Stack spacing={1} sx={{ pt: 1 }}>
                 {error ? <Alert severity="error">{error}</Alert> : null}
                 <PeopleChecks people={people} checked={open.book.members} hub={hub} hubChecked={open.book.hub} />
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{ color: "text.secondary" }}>
                   Each person opens the book from their own login, and sees and changes everything in it. People
                   without a login cannot open it until they get one. Keep at least one member who has a login.
                 </Typography>

@@ -28,7 +28,7 @@ export default async function WeightDashboard({
   if (!active) {
     return (
       <Container maxWidth="md" sx={{ py: 6 }}>
-        <Typography color="text.secondary">
+        <Typography sx={{ color: "text.secondary" }}>
           No profiles yet — add someone to start tracking weight.
         </Typography>
       </Container>
@@ -67,16 +67,14 @@ export default async function WeightDashboard({
     <Container maxWidth="md" sx={{ py: { xs: 4, md: 6 } }}>
       <Stack
         direction="row"
-        alignItems="flex-start"
-        justifyContent="space-between"
         spacing={2}
-        sx={{ mb: 3 }}
+        sx={{ alignItems: "flex-start", justifyContent: "space-between", mb: 3 }}
       >
         <Stack spacing={0.5}>
           <Typography variant="h3" component="h1">
             Weight
           </Typography>
-          <Typography variant="h6" component="p" color="text.secondary" fontWeight={400}>
+          <Typography variant="h6" component="p" sx={{ color: "text.secondary", fontWeight: 400 }}>
             {active.name}
             {plan
               ? ` · goal ${Number(plan.goalWeight)} lb`
@@ -115,7 +113,7 @@ export default async function WeightDashboard({
       {weighIns.length === 0 || !stats ? (
         <Paper variant="outlined" sx={{ p: 5, textAlign: "center" }}>
           <MonitorWeightOutlinedIcon sx={{ fontSize: 44, color: "text.disabled", mb: 1 }} />
-          <Typography color="text.secondary">
+          <Typography sx={{ color: "text.secondary" }}>
             {editor
               ? "No weigh-ins yet — hit Log to start the chart."
               : "No weigh-ins logged yet."}

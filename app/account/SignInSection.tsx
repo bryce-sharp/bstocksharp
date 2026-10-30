@@ -85,8 +85,8 @@ export default async function SignInSection({
       <Paper variant="outlined" sx={{ p: 2 }}>
         <Stack spacing={1.5}>
           <div>
-            <Typography fontWeight={600}>Password</Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography sx={{ fontWeight: 600 }}>Password</Typography>
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
               {account?.passwordChangedAt
                 ? `Last changed ${fmtDate.format(account.passwordChangedAt)}.`
                 : "Your fallback when Face ID is not available."}
@@ -94,7 +94,7 @@ export default async function SignInSection({
           </div>
           <ChangePasswordForm fresh={fresh} minLength={MIN_PASSWORD_LENGTH} />
           {resets.length ? (
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{ color: "text.secondary" }}>
               Reset links used:{" "}
               {resets.map((r) => `${fmtDate.format(r.usedAt)} (from ${who(r)})`).join(", ")}
             </Typography>
@@ -105,8 +105,8 @@ export default async function SignInSection({
       <Paper variant="outlined" sx={{ p: 2 }}>
         <Stack spacing={1.5}>
           <div>
-            <Typography fontWeight={600}>Passkeys</Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography sx={{ fontWeight: 600 }}>Passkeys</Typography>
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
               Sign in with Face ID, Touch ID, or your device PIN. Add one per device (an iCloud-synced
               passkey covers all your Apple devices). Your password keeps working as the fallback.
             </Typography>
@@ -119,13 +119,13 @@ export default async function SignInSection({
               sx={{ p: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}
             >
               <Stack spacing={0.25} sx={{ minWidth: 0 }}>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Typography fontWeight={600} noWrap>
+                <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                  <Typography sx={{ fontWeight: 600 }} noWrap>
                     {k.label ?? "Passkey"}
                   </Typography>
                   {k.backedUp ? <Chip label="synced" size="small" variant="outlined" /> : null}
                 </Stack>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{ color: "text.secondary" }}>
                   {k.lastUsedAt
                     ? `Last used ${fmtDate.format(k.lastUsedAt)}`
                     : `Never used · added ${fmtDate.format(k.createdAt)}`}

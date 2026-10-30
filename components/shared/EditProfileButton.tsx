@@ -123,15 +123,13 @@ export default function EditProfileButton({
               <Box>
                 <Typography
                   variant="body2"
-                  color="text.secondary"
-                  sx={{ mb: 0.5 }}
+                  sx={{ color: "text.secondary", mb: 0.5 }}
                 >
                   Apps
                 </Typography>
                 <Typography
                   variant="caption"
-                  color="text.secondary"
-                  sx={{ display: "block", mb: 1 }}
+                  sx={{ color: "text.secondary", display: "block", mb: 1 }}
                 >
                   Uncheck an app to hide it from this person&apos;s hub.
                 </Typography>

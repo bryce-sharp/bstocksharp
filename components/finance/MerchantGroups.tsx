@@ -18,7 +18,7 @@ import Accordion from "@mui/material/Accordion";
 import AccordionSummary from "@mui/material/AccordionSummary";
 import AccordionDetails from "@mui/material/AccordionDetails";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import AddIcon from "@mui/icons-material/Add";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import Link from "@/components/shared/AppLink";
@@ -106,20 +106,19 @@ function GroupCard({
         <Stack
           direction="row"
           spacing={1}
-          alignItems="center"
-          sx={{ flexWrap: "wrap", rowGap: 0.5, pr: 1, width: "100%" }}
+          sx={{ alignItems: "center", flexWrap: "wrap", rowGap: 0.5, pr: 1, width: "100%" }}
         >
-          <Typography fontWeight={600}>{group.name}</Typography>
+          <Typography sx={{ fontWeight: 600 }}>{group.name}</Typography>
           <Chip size="small" label={group.category} sx={{ bgcolor: "action.selected" }} />
           <Box sx={{ flexGrow: 1 }} />
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{ color: "text.secondary" }}>
             {group.txns} txns · {group.names.length} name{group.names.length === 1 ? "" : "s"}
           </Typography>
         </Stack>
       </AccordionSummary>
       <AccordionDetails>
         <Stack spacing={2}>
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap", rowGap: 1 }}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap", rowGap: 1 }}>
             {editable ? (
               <CategorySelect
                 label="Category"
@@ -144,8 +143,7 @@ function GroupCard({
           <Box>
             <Typography
               variant="caption"
-              color="text.secondary"
-              sx={{ textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}
+              sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}
             >
               Match names
             </Typography>
@@ -194,18 +192,17 @@ function GroupCard({
           <Box>
             <Typography
               variant="caption"
-              color="text.secondary"
-              sx={{ textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}
+              sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}
             >
               {flow === "in" ? "Sources" : "Merchants"} ({group.merchants.length})
             </Typography>
             <Stack spacing={0.25} sx={{ mt: 0.75 }}>
               {shown.map((m) => (
-                <Stack key={m.merchant} direction="row" justifyContent="space-between" spacing={2}>
+                <Stack key={m.merchant} direction="row" sx={{ justifyContent: "space-between" }} spacing={2}>
                   <Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>
                     {m.merchant}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" sx={{ color: "text.secondary" }}>
                     {m.count}
                   </Typography>
                 </Stack>
@@ -221,7 +218,7 @@ function GroupCard({
           {editable ? (
             <>
               <Divider />
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap", rowGap: 1 }}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap", rowGap: 1 }}>
                 <TextField
                   size="small"
                   placeholder="Rename group / merge into…"
@@ -255,7 +252,7 @@ function GroupCard({
                   <DeleteOutlineIcon fontSize="small" />
                 </IconButton>
               </Stack>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{ color: "text.secondary" }}>
                 Renaming to an existing group merges them.
               </Typography>
             </>
@@ -313,7 +310,7 @@ export default function MerchantGroups({
         </ToggleButton>
       </ToggleButtonGroup>
 
-      <Typography variant="body2" color="text.secondary">
+      <Typography variant="body2" sx={{ color: "text.secondary" }}>
         A <strong>group</strong> is a name, a tag, and the {noun}
         &ldquo;names&rdquo; that fall into it. Retagging a group re-tags every
         transaction it catches; the longest name always wins, so a specific
@@ -323,7 +320,7 @@ export default function MerchantGroups({
 
       {view.groups.length === 0 && flow === "in" ? (
         <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2.5 } }}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
             No income groups yet. Assign a tag below (Paycheck, Interest…), or
             tag an income row on the History tab with &ldquo;Apply to all&rdquo;.
           </Typography>
@@ -340,12 +337,12 @@ export default function MerchantGroups({
           sx={{ "&:before": { display: "none" } }}
         >
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Stack direction="row" spacing={1} alignItems="baseline" sx={{ pr: 1, width: "100%" }}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: "baseline", pr: 1, width: "100%" }}>
               <Typography variant="h6" component="h2">
                 {s.tag}
               </Typography>
               <Box sx={{ flexGrow: 1 }} />
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{ color: "text.secondary" }}>
                 {s.groups.length} group{s.groups.length === 1 ? "" : "s"} · {s.txns} txns
               </Typography>
             </Stack>
@@ -373,7 +370,7 @@ export default function MerchantGroups({
           <Typography variant="h6" sx={{ mb: 0.5 }}>
             Ungrouped {noun}s
           </Typography>
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{ color: "text.secondary" }}>
             Not caught by any group yet. Assign a category to start a group for each.
           </Typography>
           <Stack spacing={1} sx={{ mt: 1.5 }}>
@@ -382,14 +379,13 @@ export default function MerchantGroups({
                 key={m.merchant}
                 direction="row"
                 spacing={1.5}
-                alignItems="center"
-                justifyContent="space-between"
+                sx={{ alignItems: "center", justifyContent: "space-between" }}
               >
                 <Box sx={{ minWidth: 0 }}>
                   <Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>
                     {m.merchant}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" sx={{ color: "text.secondary" }}>
                     {m.count} txns
                   </Typography>
                 </Box>
@@ -406,7 +402,7 @@ export default function MerchantGroups({
             ))}
           </Stack>
           {view.ungrouped.length > 40 ? (
-            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>
+            <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 1.5 }}>
               +{view.ungrouped.length - 40} more — tag the rest from the History tab.
             </Typography>
           ) : null}

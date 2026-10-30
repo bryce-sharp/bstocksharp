@@ -29,12 +29,12 @@ export default async function JoinPage({
     return (
       <Container maxWidth="xs" sx={{ py: { xs: 6, md: 10 } }}>
         <Paper variant="outlined" sx={{ p: { xs: 3, md: 4 } }}>
-          <Stack spacing={2} alignItems="flex-start">
+          <Stack spacing={2} sx={{ alignItems: "flex-start" }}>
             <LinkOffIcon color="disabled" fontSize="large" />
             <Typography variant="h5" component="h1">
               This invite isn&apos;t valid
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
               The link may have expired, been used already, or been revoked.
               Ask whoever invited you for a fresh one.
             </Typography>
@@ -50,11 +50,11 @@ export default async function JoinPage({
     return (
       <Container maxWidth="xs" sx={{ py: { xs: 6, md: 10 } }}>
         <Paper variant="outlined" sx={{ p: { xs: 3, md: 4 } }}>
-          <Stack spacing={2} alignItems="flex-start">
+          <Stack spacing={2} sx={{ alignItems: "flex-start" }}>
             <Typography variant="h5" component="h1">
               You&apos;re already signed in
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
               This invite creates a <strong>new</strong> login. To use it, sign
               out first (profile menu → Sign out), then open the link again.
             </Typography>

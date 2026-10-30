@@ -29,12 +29,12 @@ export default function ResetForm({
   if (state && "done" in state) {
     return (
       <Paper variant="outlined" sx={{ p: { xs: 3, md: 4 } }}>
-        <Stack spacing={2} alignItems="flex-start">
+        <Stack spacing={2} sx={{ alignItems: "flex-start" }}>
           <LockResetIcon color="success" fontSize="large" />
           <Typography variant="h5" component="h1">
             Password updated
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
             Sign in as <strong>{state.username}</strong> with your new password. Every device that was
             signed in as {state.username} has been signed out.
           </Typography>
@@ -52,13 +52,13 @@ export default function ResetForm({
       <form action={formAction}>
         <input type="hidden" name="token" value={token} />
         <Stack spacing={2.5}>
-          <Stack direction="row" spacing={1.5} alignItems="center">
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
             <LockResetIcon color="primary" />
             <Typography variant="h5" component="h1">
               Reset your password
             </Typography>
           </Stack>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
             Pick a new password for <strong>{username}</strong>. This link works once.
           </Typography>
           {state && "error" in state ? <Alert severity="error">{state.error}</Alert> : null}

@@ -66,14 +66,14 @@ export default function CategoryManager({
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs" fullScreen={fullScreen}>
       <DialogTitle>Categories</DialogTitle>
       <DialogContent>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography variant="body2" sx={{ color: "text.secondary", mb: 2 }}>
           Rename a category everywhere it&apos;s used, or merge it into another.
           New categories appear on their own when you type one on an expense.
         </Typography>
         {error ? <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert> : null}
 
         {usage.length === 0 ? (
-          <Typography color="text.secondary">
+          <Typography sx={{ color: "text.secondary" }}>
             No categories yet — add one when you create an expense.
           </Typography>
         ) : (
@@ -83,7 +83,7 @@ export default function CategoryManager({
               const isMerging = merging === u.category;
               return (
                 <Box key={u.category}>
-                  <Stack direction="row" alignItems="center" spacing={1}>
+                  <Stack direction="row" sx={{ alignItems: "center" }} spacing={1}>
                     <Typography sx={{ flexGrow: 1 }} noWrap>
                       {u.category}
                     </Typography>

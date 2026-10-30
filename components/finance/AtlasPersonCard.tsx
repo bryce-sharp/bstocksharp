@@ -49,8 +49,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
     <Box>
       <Typography
         variant="caption"
-        color="text.secondary"
-        sx={{ textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap" }}
+        sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap" }}
       >
         {label}
       </Typography>
@@ -59,8 +58,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
       </Typography>
       <Typography
         variant="caption"
-        color="text.secondary"
-        sx={{ display: "block", minHeight: "1.2em" }}
+        sx={{ color: "text.secondary", display: "block", minHeight: "1.2em" }}
       >
         {sub ?? ""}
       </Typography>
@@ -127,9 +125,8 @@ export default function AtlasPersonCard({
     <Paper variant="outlined" sx={{ p: { xs: 2, sm: 2.5 }, mb: 3 }}>
       <Stack
         direction="row"
-        alignItems="center"
         spacing={1.5}
-        sx={{ mb: 2, flexWrap: "wrap", rowGap: 1 }}
+        sx={{ alignItems: "center", mb: 2, flexWrap: "wrap", rowGap: 1 }}
       >
         <Avatar
           sx={{
@@ -204,11 +201,9 @@ export default function AtlasPersonCard({
 
           <Stack
             direction="row"
-            alignItems="center"
-            justifyContent="space-between"
-            sx={{ mb: 1, flexWrap: "wrap", rowGap: 1 }}
+            sx={{ alignItems: "center", justifyContent: "space-between", mb: 1, flexWrap: "wrap", rowGap: 1 }}
           >
-            <Typography variant="subtitle2" color="text.secondary">
+            <Typography variant="subtitle2" sx={{ color: "text.secondary" }}>
               Deductions & benefits · investing {formatMoney(comp.investingPerYear)}/yr
             </Typography>
             {editable ? (
@@ -219,7 +214,7 @@ export default function AtlasPersonCard({
           </Stack>
 
           {person.deductions.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
               No deductions yet — add taxes, insurance, 401k… to derive net pay.
             </Typography>
           ) : (
@@ -230,15 +225,15 @@ export default function AtlasPersonCard({
                   const row = (
                     <>
                       <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-                        <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
-                          <Typography variant="body2" fontWeight={600} noWrap>
+                        <Stack direction="row" spacing={1} sx={{ alignItems: "center", minWidth: 0 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
                             {d.name}
                           </Typography>
                           {d.source === "employer" ? (
                             <Chip label="employer-paid" size="small" variant="outlined" />
                           ) : null}
                         </Stack>
-                        <Typography variant="caption" color="text.secondary" component="div" noWrap>
+                        <Typography variant="caption" sx={{ color: "text.secondary" }} component="div" noWrap>
                           {[
                             d.type ? (TYPE_LABEL[d.type] ?? d.type) : null,
                             accountName(d.depositAccountId) ? `into ${accountName(d.depositAccountId)}` : null,
@@ -248,10 +243,10 @@ export default function AtlasPersonCard({
                         </Typography>
                       </Box>
                       <Box sx={{ textAlign: "right", flexShrink: 0 }}>
-                        <Typography variant="body2" fontWeight={600}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
                           {formatMoney(d.monthly)}/mo
                         </Typography>
-                        <Typography variant="caption" color="text.secondary" component="div">
+                        <Typography variant="caption" sx={{ color: "text.secondary" }} component="div">
                           {formatMoney(d.effectivePerPaycheck)}/check
                           {d.pctOfGross != null ? ` · ${d.pctOfGross}%` : ""}
                         </Typography>
@@ -294,7 +289,7 @@ export default function AtlasPersonCard({
                           <Chip label="employer-paid" size="small" sx={{ ml: 1 }} variant="outlined" />
                         ) : null}
                         {accountName(d.depositAccountId) ? (
-                          <Typography variant="caption" color="text.secondary" component="div">
+                          <Typography variant="caption" sx={{ color: "text.secondary" }} component="div">
                             into {accountName(d.depositAccountId)}
                           </Typography>
                         ) : null}
@@ -307,7 +302,7 @@ export default function AtlasPersonCard({
                       <TableCell align="right" sx={{ color: "text.secondary" }}>
                         {d.isPercent ? (
                           <Tooltip title="Defined as % of gross — the dollar amount follows raises automatically">
-                            <Typography component="span" variant="body2" fontWeight={700}>
+                            <Typography component="span" variant="body2" sx={{ fontWeight: 700 }}>
                               {d.pctOfGross}%
                             </Typography>
                           </Tooltip>
@@ -338,7 +333,7 @@ export default function AtlasPersonCard({
           )}
         </>
       ) : (
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{ color: "text.secondary" }}>
           No income set up{editable ? " — add their pay to include them in the household math." : "."}
         </Typography>
       )}

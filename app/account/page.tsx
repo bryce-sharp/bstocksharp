@@ -46,10 +46,10 @@ export default async function AccountPage({
   return (
     <Container maxWidth="sm" sx={{ py: { xs: 4, md: 6 } }}>
       <Stack spacing={2.5}>
-        <Typography variant="h5" component="h1" fontWeight={800}>
+        <Typography variant="h5" component="h1" sx={{ fontWeight: 800 }}>
           Your account
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{ color: "text.secondary" }}>
           Signed in as <strong>{me?.username}</strong>.
         </Typography>
 
@@ -68,8 +68,8 @@ export default async function AccountPage({
                 {mine.name.trim().charAt(0).toUpperCase()}
               </Avatar>
               <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                <Typography fontWeight={600}>{mine.name}</Typography>
-                <Typography variant="caption" color="text.secondary">
+                <Typography sx={{ fontWeight: 600 }}>{mine.name}</Typography>
+                <Typography variant="caption" sx={{ color: "text.secondary" }}>
                   Your name, color, and the apps you see
                 </Typography>
               </Box>
@@ -101,8 +101,8 @@ export default async function AccountPage({
           <Paper variant="outlined" sx={{ p: 2 }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
               <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                <Typography fontWeight={600}>Who can see your stuff</Typography>
-                <Typography variant="caption" color="text.secondary">
+                <Typography sx={{ fontWeight: 600 }}>Who can see your stuff</Typography>
+                <Typography variant="caption" sx={{ color: "text.secondary" }}>
                   Your weight and workouts, app by app
                 </Typography>
               </Box>

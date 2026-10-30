@@ -41,7 +41,7 @@ export default function TodayRedirect({
       }}
     >
       <CircularProgress />
-      <Typography color="text.secondary">
+      <Typography sx={{ color: "text.secondary" }}>
         Finding today&apos;s workout…
       </Typography>
     </Box>

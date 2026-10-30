@@ -27,9 +27,7 @@ export default async function JournalSection({
     <Box>
       <Stack
         direction="row"
-        justifyContent="space-between"
-        alignItems="center"
-        sx={{ mb: 2 }}
+        sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}
       >
         <Typography variant="h6">Build journal</Typography>
         {editor ? (
@@ -50,7 +48,7 @@ export default async function JournalSection({
           <MenuBookOutlinedIcon
             sx={{ fontSize: 40, color: "text.disabled", mb: 1 }}
           />
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
             {editor
               ? "No journal entries yet — write down what you did in the garage."
               : "No journal entries yet."}
@@ -60,14 +58,14 @@ export default async function JournalSection({
         <Stack spacing={1.5}>
           {entries.map((e) => (
             <Paper key={e.id} variant="outlined" sx={{ p: 2 }}>
-              <Stack direction="row" justifyContent="space-between" spacing={1}>
+              <Stack direction="row" sx={{ justifyContent: "space-between" }} spacing={1}>
                 <Box sx={{ minWidth: 0 }}>
                   {e.title ? (
-                    <Typography variant="subtitle1" fontWeight={600}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                       {e.title}
                     </Typography>
                   ) : null}
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" sx={{ color: "text.secondary" }}>
                     {[
                       formatDate(e.entryDate),
                       e.mileage != null ? formatMiles(e.mileage) : null,

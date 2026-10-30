@@ -51,7 +51,7 @@ export default async function BooksPage() {
         <Typography variant="h4" component="h1">
           Money books
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{ color: "text.secondary" }}>
           Each book is its own set of money: its accounts, bills, budget and tags. Only its members can see
           it, and any member can rename it or change who is in it.
         </Typography>

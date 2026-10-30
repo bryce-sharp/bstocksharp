@@ -24,10 +24,9 @@ function Tile({
     <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2 }, minWidth: 0 }}>
       <Typography
         variant="caption"
-        color="text.secondary"
         noWrap
         component="div"
-        sx={{ textTransform: "uppercase", letterSpacing: "0.04em" }}
+        sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.04em" }}
       >
         {label}
       </Typography>
@@ -37,7 +36,7 @@ function Tile({
         </Typography>
       ) : null}
       {sub ? (
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+        <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>
           {sub}
         </Typography>
       ) : null}

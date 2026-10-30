@@ -127,7 +127,7 @@ export default function SharingButton({
                   </RadioGroup>
                 </FormControl>
               ))}
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{ color: "text.secondary" }}>
                 This holds for the hub owner too. {hubName ? `${hubName} (the shared login)` : "A shared login"}{" "}
                 sees what is shared with everyone, and what you tick it for.
               </Typography>

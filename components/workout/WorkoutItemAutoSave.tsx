@@ -12,7 +12,7 @@ import CircularProgress from "@mui/material/CircularProgress";
 import InputAdornment from "@mui/material/InputAdornment";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
-import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutlined";
 import SettingsBackupRestoreIcon from "@mui/icons-material/SettingsBackupRestore";
 import { SECTIONS } from "@/lib/workout";
 import { formSig } from "@/components/workout/formSig";
@@ -24,18 +24,18 @@ import type { WorkoutItem, Exercise } from "@/lib/db/schema";
 function SaveStatus() {
   const { pending } = useFormStatus();
   return (
-    <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minHeight: 20 }}>
+    <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", minHeight: 20 }}>
       {pending ? (
         <>
           <CircularProgress size={14} />
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{ color: "text.secondary" }}>
             Saving…
           </Typography>
         </>
       ) : (
         <>
           <CheckCircleOutlineIcon sx={{ fontSize: 16 }} color="success" />
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{ color: "text.secondary" }}>
             Saved automatically
           </Typography>
         </>
@@ -219,14 +219,14 @@ export default function WorkoutItemAutoSave({
         </Box>
 
         <Box>
-          <Stack direction="row" alignItems="center">
+          <Stack direction="row" sx={{ alignItems: "center" }}>
             <FormControlLabel
               control={
                 <Checkbox
                   name="holdLast"
                   value="1"
                   defaultChecked={holdLast}
-                  inputRef={holdLastRef}
+                  slotProps={{ input: { ref: holdLastRef } }}
                   onChange={save}
                 />
               }
@@ -247,7 +247,7 @@ export default function WorkoutItemAutoSave({
               </Tooltip>
             ) : null}
           </Stack>
-          <Typography variant="caption" color="text.secondary" display="block">
+          <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>
             Only kicks in when both Reps and a per-rep Time are set above.
           </Typography>
         </Box>

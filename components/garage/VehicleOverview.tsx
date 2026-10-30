@@ -17,8 +17,7 @@ function Stat({ label, value }: { label: string; value: string }) {
       </Typography>
       <Typography
         variant="caption"
-        color="text.secondary"
-        sx={{ textTransform: "uppercase", letterSpacing: "0.04em" }}
+        sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.04em" }}
       >
         {label}
       </Typography>
@@ -63,15 +62,14 @@ export default async function VehicleOverview({ vehicle }: { vehicle: Vehicle })
               <Stack
                 key={r.id}
                 direction="row"
-                justifyContent="space-between"
-                alignItems="center"
+                sx={{ justifyContent: "space-between", alignItems: "center" }}
                 spacing={1}
               >
                 <Box sx={{ minWidth: 0 }}>
-                  <Typography variant="body2" fontWeight={600}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
                     {r.serviceType}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" sx={{ color: "text.secondary" }}>
                     {[
                       r.nextDueDate ? `by ${formatDate(r.nextDueDate)}` : null,
                       r.nextDueMileage != null
@@ -119,8 +117,7 @@ export default async function VehicleOverview({ vehicle }: { vehicle: Vehicle })
             <Box key={label}>
               <Typography
                 variant="caption"
-                color="text.secondary"
-                sx={{ textTransform: "uppercase", letterSpacing: "0.04em" }}
+                sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.04em" }}
               >
                 {label}
               </Typography>
@@ -138,8 +135,7 @@ export default async function VehicleOverview({ vehicle }: { vehicle: Vehicle })
             <Divider sx={{ my: 2 }} />
             <Typography
               variant="body2"
-              color="text.secondary"
-              sx={{ whiteSpace: "pre-wrap" }}
+              sx={{ color: "text.secondary", whiteSpace: "pre-wrap" }}
             >
               {vehicle.notes}
             </Typography>

@@ -18,7 +18,7 @@ export default function GamesPage() {
         <Typography variant="h3" component="h1">
           Games
         </Typography>
-        <Typography variant="h6" component="p" color="text.secondary" fontWeight={400}>
+        <Typography variant="h6" component="p" sx={{ color: "text.secondary", fontWeight: 400 }}>
           Little games I have made
         </Typography>
       </Stack>
@@ -33,7 +33,7 @@ export default function GamesPage() {
                   <Typography variant="h5" component="h2">
                     {g.name}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" sx={{ color: "text.secondary" }}>
                     {g.tagline}
                   </Typography>
                 </Stack>
@@ -45,7 +45,7 @@ export default function GamesPage() {
           <Box
             sx={{ aspectRatio: "1200 / 630", display: "grid", placeItems: "center", bgcolor: "action.hover" }}
           >
-            <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: "0.2em" }}>
+            <Typography variant="overline" sx={{ color: "text.secondary", letterSpacing: "0.2em" }}>
               Coming soon
             </Typography>
           </Box>
@@ -54,7 +54,7 @@ export default function GamesPage() {
               <Typography variant="h5" component="h2">
                 A new game
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{ color: "text.secondary" }}>
                 A new daily puzzle is in the works. Check back soon.
               </Typography>
             </Stack>

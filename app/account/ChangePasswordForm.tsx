@@ -39,7 +39,7 @@ export default function ChangePasswordForm({ fresh, minLength }: { fresh: boolea
           <Stack spacing={2}>
             {state && "error" in state ? <Alert severity="error">{state.error}</Alert> : null}
             {fresh ? (
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{ color: "text.secondary" }}>
                 You signed in a moment ago, so your current password is not needed.
               </Typography>
             ) : (

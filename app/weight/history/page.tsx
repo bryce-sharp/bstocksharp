@@ -21,7 +21,7 @@ export default async function WeightHistoryPage({
   if (!active) {
     return (
       <Container maxWidth="md" sx={{ py: 6 }}>
-        <Typography color="text.secondary">No profiles yet.</Typography>
+        <Typography sx={{ color: "text.secondary" }}>No profiles yet.</Typography>
       </Container>
     );
   }
@@ -38,7 +38,7 @@ export default async function WeightHistoryPage({
         <Typography variant="h3" component="h1">
           History
         </Typography>
-        <Typography variant="h6" component="p" color="text.secondary" fontWeight={400}>
+        <Typography variant="h6" component="p" sx={{ color: "text.secondary", fontWeight: 400 }}>
           {active.name} · {rows.length} weigh-in{rows.length === 1 ? "" : "s"}
         </Typography>
       </Stack>

@@ -301,12 +301,12 @@ export default function TransactionDialog({
         <Typography variant="h6" noWrap>
           {txn.merchant ?? (txn.needsReview ? "Unreadable alert" : "Transaction")}
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{ color: "text.secondary" }}>
           {formatDate(txn.postedOn)}
           {txn.bankStatus === "pending" ? " · pending at the bank" : ""}
         </Typography>
       </Box>
-      <Stack alignItems="flex-end" spacing={0.5}>
+      <Stack sx={{ alignItems: "flex-end" }} spacing={0.5}>
         <Typography
           variant="h6"
           sx={{
@@ -337,7 +337,7 @@ export default function TransactionDialog({
             {txn.spendCategory ? <Fact label="Tag">{txn.spendCategory}</Fact> : null}
             {txn.note ? <Fact label="Note">{txn.note}</Fact> : null}
             {txn.home && !txn.between ? (
-              <Typography variant="caption" color="text.secondary" sx={{ pt: 1 }}>
+              <Typography variant="caption" sx={{ color: "text.secondary", pt: 1 }}>
                 {txn.home.book} owns this row, so it is changed there. This book keeps its own tag for it.
               </Typography>
             ) : null}
@@ -485,7 +485,7 @@ export default function TransactionDialog({
             {otherBooks.length && flowOf(txn.category) && category === txn.category ? (
               <Box>
                 <Typography variant="subtitle2">Also count for</Typography>
-                <Typography variant="caption" color="text.secondary" component="p" sx={{ mb: 0.5 }}>
+                <Typography variant="caption" component="p" sx={{ color: "text.secondary", mb: 0.5 }}>
                   It stays in this book. The book you tick counts it too, with its own tag.
                 </Typography>
                 <FormGroup>

@@ -7,7 +7,7 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import TextField from "@mui/material/TextField";
 import CircularProgress from "@mui/material/CircularProgress";
-import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutlined";
 import { RUN_TIMING } from "@/lib/workout-config";
 import { formSig } from "@/components/workout/formSig";
 import type { Workout, Profile } from "@/lib/db/schema";
@@ -17,18 +17,18 @@ import type { Workout, Profile } from "@/lib/db/schema";
 function SaveStatus() {
   const { pending } = useFormStatus();
   return (
-    <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minHeight: 20 }}>
+    <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", minHeight: 20 }}>
       {pending ? (
         <>
           <CircularProgress size={14} />
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{ color: "text.secondary" }}>
             Saving…
           </Typography>
         </>
       ) : (
         <>
           <CheckCircleOutlineIcon sx={{ fontSize: 16 }} color="success" />
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{ color: "text.secondary" }}>
             Saved automatically
           </Typography>
         </>

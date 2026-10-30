@@ -13,12 +13,12 @@ export default function PrivateNotice({
 }) {
   return (
     <Container maxWidth="md" sx={{ py: { xs: 4, md: 6 } }}>
-      <Stack spacing={1} alignItems="flex-start">
+      <Stack spacing={1} sx={{ alignItems: "flex-start" }}>
         <LockOutlinedIcon color="action" />
         <Typography variant="h5" component="h1">
           {title}
         </Typography>
-        <Typography color="text.secondary">{detail}</Typography>
+        <Typography sx={{ color: "text.secondary" }}>{detail}</Typography>
       </Stack>
     </Container>
   );

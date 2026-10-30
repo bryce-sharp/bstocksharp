@@ -4,7 +4,7 @@ import Container from "@mui/material/Container";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
-import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutlined";
 
 // Generic fallback for unexpected errors anywhere in the app tree.
 export default function AppError({
@@ -20,7 +20,7 @@ export default function AppError({
         <Typography variant="h6" gutterBottom>
           Something went wrong
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        <Typography variant="body2" sx={{ color: "text.secondary", mb: 3 }}>
           This is usually temporary. Please try again.
         </Typography>
         <Button variant="contained" onClick={reset}>

@@ -151,7 +151,7 @@ export default function AppSwitcher({
         {isDevSite
           ? [
               <Divider key="dev-divider" />,
-              <Typography key="dev-title" variant="overline" color="text.secondary" sx={{ px: 2, display: "block" }}>
+              <Typography key="dev-title" variant="overline" sx={{ color: "text.secondary", px: 2, display: "block" }}>
                 Dev pages · localhost
               </Typography>,
               ...DEV_PAGES.map((d) => (

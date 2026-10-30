@@ -37,7 +37,7 @@ export default function ColorSwatches({
 
   return (
     <Box>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+      <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
         {label}
       </Typography>
       <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>

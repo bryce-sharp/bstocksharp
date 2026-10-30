@@ -224,11 +224,9 @@ export default function TransactionsTable({
       {title ? (
         <Stack
           direction="row"
-          alignItems="center"
-          justifyContent="space-between"
-          sx={{ mb: 1, px: 0.5, flexWrap: "wrap", rowGap: 1 }}
+          sx={{ alignItems: "center", justifyContent: "space-between", mb: 1, px: 0.5, flexWrap: "wrap", rowGap: 1 }}
         >
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
             <Typography variant="h6">{title}</Typography>
             {reviewCount > 0 ? (
               <Chip size="small" color="warning" label={`${reviewCount} to review`} />
@@ -251,7 +249,7 @@ export default function TransactionsTable({
       ) : null}
 
       {shown.length === 0 ? (
-        <Typography color="text.secondary" sx={{ p: 3, textAlign: "center" }}>
+        <Typography sx={{ color: "text.secondary", p: 3, textAlign: "center" }}>
           {filtering ? "Nothing in this slice this month." : emptyText}
         </Typography>
       ) : (
@@ -291,7 +289,7 @@ export default function TransactionsTable({
           {loading ? (
             <CircularProgress size={22} />
           ) : cursor == null ? (
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{ color: "text.secondary" }}>
               End of results
             </Typography>
           ) : null}

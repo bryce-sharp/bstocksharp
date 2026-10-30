@@ -101,7 +101,7 @@ export default function SavingsGoalDialog({
             {error ? <Alert severity="error">{error}</Alert> : null}
             {activeGoal ? (
               <>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{ color: "text.secondary" }}>
                   Current: <strong>{formatMoney(total)}/mo</strong> since{" "}
                   {formatMonth(activeGoal.startMonth)}.
                 </Typography>
@@ -122,7 +122,7 @@ export default function SavingsGoalDialog({
                 </RadioGroup>
               </>
             ) : (
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{ color: "text.secondary" }}>
                 How much to save each month, counting every account you own.
                 ATLAS sets the take-home part aside before your discretionary
                 budget.
@@ -137,7 +137,7 @@ export default function SavingsGoalDialog({
                 defaultValue={total}
               />
               {paycheckSavings > 0 ? (
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{ color: "text.secondary" }}>
                   Includes the {formatMoney(paycheckSavings)}/mo your paycheck already puts into{" "}
                   {paycheckLabel}. Only the rest comes out of take-home pay.
                 </Typography>
@@ -155,7 +155,7 @@ export default function SavingsGoalDialog({
                 monthLabel="Starting month"
                 yearLabel="Starting year"
               />
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{ color: "text.secondary" }}>
                 The first month this goal counts — set it to your earliest tracked
                 month to measure the whole year.
               </Typography>

@@ -84,7 +84,7 @@ export default function SpendByTag({
 
   if (data.length === 0) {
     return (
-      <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+      <Typography variant="body2" sx={{ color: "text.secondary", py: 2 }}>
         {emptyText}
       </Typography>
     );
@@ -146,7 +146,7 @@ export default function SpendByTag({
           <Typography variant="h6" component="div" sx={{ lineHeight: 1.1 }}>
             {formatMoney(total)}
           </Typography>
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{ color: "text.secondary" }}>
             {centerLabel}
           </Typography>
         </Box>
@@ -175,13 +175,13 @@ export default function SpendByTag({
             }}
           >
             <Box sx={{ width: 10, height: 10, borderRadius: 0.5, bgcolor: d.color }} />
-            <Typography variant="body2" noWrap fontWeight={i === selectedIndex ? 600 : undefined}>
+            <Typography variant="body2" noWrap sx={{ fontWeight: i === selectedIndex ? 600 : undefined }}>
               {nameOf(d.key)}
             </Typography>
-            <Typography variant="body2" fontWeight={600} sx={{ textAlign: "right" }}>
+            <Typography variant="body2" sx={{ fontWeight: 600, textAlign: "right" }}>
               {formatMoney(d.amount)}
             </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ textAlign: "right" }}>
+            <Typography variant="caption" sx={{ color: "text.secondary", textAlign: "right" }}>
               {Math.round((d.amount / total) * 100)}%
             </Typography>
           </ButtonBase>
