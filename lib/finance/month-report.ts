@@ -2,11 +2,12 @@
 // savings goal) against what actually happened, line by line, built so the
 // line differences add up EXACTLY to what you kept vs the goal. Savings
 // counts every account you own, so the paycheck's 401k/HSA money sits on top.
-// Its actual is the ATLAS plan for the paydays that have passed, so a finished
-// month matches the plan and never moves the gap. Discretionary
-// matches the Budget page (net of reimbursements; variable bills reconcile
-// into it, so planned bills absorb the same adjustment), and money in/out
-// match History's cash-flow totals. Pure — shared by History and Budget.
+// Its actual counts the paychecks that have arrived (paycheck-savings.ts).
+// Discretionary matches the Budget page (net of reimbursements; variable bills
+// reconcile into it, so planned bills absorb the same adjustment), and money
+// in matches History's cash-flow totals. Bills that come a few times a year
+// count their monthly set-aside every month, so a quiet month is not "under"
+// and the month the bill posts is not "over". Pure — shared by History and Budget.
 
 import { formatMoney } from "@/lib/format";
 
@@ -23,10 +24,10 @@ export type MonthReportInput = {
     income: number;
     reimbursed: number;
     discretionary: number; // gross (refunds netted), before reimbursements
-    bills: number; // fixed + amortized rows
+    bills: number; // fixed rows + amortized set-asides (see monthReportInput)
     offBudget: number;
     funds: number; // fund purchases (deposits excluded)
-    paycheckSavings: number; // the plan's paycheck savings from paydays that have passed
+    paycheckSavings: number; // the plan's paycheck savings for the paychecks that arrived
   };
 };
 
@@ -40,12 +41,20 @@ export type ReportLine = {
   /** Effect on what you kept: positive helped, negative cost you. */
   effect: number;
 };
+/** Money set aside so far for bills that come a few times a year. */
+export type SetAside = {
+  total: number;
+  /** saved = the running set-aside since the bill was last paid; due = "Dec 2026", or "about Dec 2026" when estimated. */
+  bills: { name: string; saved: number; target: number; monthly: number; due: string | null; paidThisMonth: boolean }[];
+};
 export type MonthReport = {
   lines: ReportLine[];
   kept: { goal: number; actual: number; diff: number };
   /** Kept plus the paycheck's savings, against the whole goal. */
   saved: { paycheckPlanned: number; paycheck: number; goal: number; actual: number; diff: number };
   verdict: string;
+  /** One month's set-asides; absent on a range of months. */
+  setAside?: SetAside;
 };
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -90,7 +99,7 @@ export function buildMonthReport(
       actual: actual.income,
       effect: r2(actual.income - plan.moneyIn),
     },
-    { key: "bills", label: "Bills", note: "fixed + amortized", planned: billsPlanned, actual: r2(actual.bills), effect: r2(billsPlanned - actual.bills) },
+    { key: "bills", label: "Bills", note: "fixed + set aside for later bills", planned: billsPlanned, actual: r2(actual.bills), effect: r2(billsPlanned - actual.bills) },
     {
       key: "disc",
       label: "Discretionary",

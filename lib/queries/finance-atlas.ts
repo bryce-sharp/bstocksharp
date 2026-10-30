@@ -122,9 +122,10 @@ export type AtlasView = {
     savingsFromPaycheck: number;
     /** The deductions behind savingsFromPaycheck, e.g. ["401K", "HSA"]. */
     paycheckSavingsNames: string[];
-    /** Per person: pay cadence and the savings each paycheck carries, so a
-     *  month in progress can count only the paydays that have passed. */
-    paycheckSavingsChecks: { payFrequency: string; perCheck: number }[];
+    /** Per person: pay cadence, the savings each paycheck carries, and the
+     *  take-home a paycheck deposits, so the budget can count only the
+     *  paychecks that have arrived. */
+    paycheckSavingsChecks: { payFrequency: string; perCheck: number; netPerCheck: number }[];
     /** The whole goal: take-home part + paycheck savings. Savings means money
      *  in any account you own, so a 401k contribution counts. */
     savingsGoalTotal: number;
@@ -229,7 +230,7 @@ export async function getAtlasViewForBook(
   const people: AtlasProfileView[] = [];
   let paycheckSavingsC = 0;
   const paycheckSavingsNames = new Set<string>();
-  const paycheckSavingsChecks: { payFrequency: string; perCheck: number }[] = [];
+  const paycheckSavingsChecks: { payFrequency: string; perCheck: number; netPerCheck: number }[] = [];
   for (const p of groupProfiles) {
     // Latest-starting effective plan wins (overlaps happen mid-transition).
     const plan = effectiveAt(
@@ -256,11 +257,6 @@ export async function getAtlasViewForBook(
         paycheckSavingsNames.add(d.name);
       }
     }
-    if (savedPerCheckC > 0) {
-      paycheckSavingsC += (savedPerCheckC * ppy) / 12;
-      paycheckSavingsChecks.push({ payFrequency: plan.payFrequency, perCheck: dollars(savedPerCheckC) });
-    }
-
     const payrollC = deductions
       .filter((d) => d.source === "payroll")
       .reduce((s, d) => s + perCheckC(d), 0);
@@ -268,6 +264,10 @@ export async function getAtlasViewForBook(
       .filter((d) => d.source === "employer")
       .reduce((s, d) => s + perCheckC(d), 0);
     const netC = grossC - payrollC;
+    if (savedPerCheckC > 0) {
+      paycheckSavingsC += (savedPerCheckC * ppy) / 12;
+      paycheckSavingsChecks.push({ payFrequency: plan.payFrequency, perCheck: dollars(savedPerCheckC), netPerCheck: dollars(netC) });
+    }
     const investC =
       deductions
         .filter(
