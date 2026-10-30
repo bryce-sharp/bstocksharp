@@ -8,7 +8,7 @@ import {
   profiles,
   type Transaction,
 } from "@/lib/db/schema";
-import { computeBudgetMonth, type EngineTxn, type BudgetComputation } from "@/lib/finance/budget-engine";
+import { computeBudgetMonth, type AmortizedRow, type EngineTxn, type BudgetComputation } from "@/lib/finance/budget-engine";
 import { getAtlasViewForBook } from "@/lib/queries/finance-atlas";
 import { lastDayOfMonth, todayISO, currentMonthISO } from "@/lib/finance/parse";
 import { requireBook, type BookRef } from "@/lib/books";
@@ -27,6 +27,7 @@ import {
 } from "@/lib/finance/month-report";
 import { formatMonth } from "@/lib/format";
 import { inBook, laneHere } from "@/lib/finance/book-rows";
+import { paycheckSavedSoFarC, type IncomeDeposit } from "@/lib/finance/paycheck-savings";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BUDGET reads. The engine (lib/finance/budget-engine) is pure; this layer
@@ -55,9 +56,11 @@ export type BudgetView = {
     billsC: number;
     savingsGoalC: number;
     paycheckSavingsC: number;
-    /** What paychecks have saved so far: all of it once the month is over. */
+    /** What the paychecks that have arrived saved (see paycheck-savings). */
     paycheckSavedSoFarC: number;
   };
+  /** The named due months (1 to 12) of each bill that has them, by bill id. */
+  billDueMonths: Record<number, number[]>;
 };
 
 /**
@@ -135,8 +138,12 @@ export async function getBudgetMonthForBook(
     .from(transactions)
     .where(and(inBook(book), gte(transactions.postedOn, start), lte(transactions.postedOn, end)))
     .orderBy(asc(transactions.postedOn), asc(transactions.id));
+  const deposits: IncomeDeposit[] = [];
   const engineTxns: EngineTxn[] = monthTxns.map((t) => {
     const here = laneHere(book, t);
+    if (here.category === "income" && !t.needsReview) {
+      deposits.push({ postedOn: t.postedOn, merchant: t.merchant, amountC: cents(t.amount) });
+    }
     return {
       id: t.id,
       postedOn: t.postedOn,
@@ -200,40 +207,25 @@ export async function getBudgetMonthForBook(
     computation,
     month: start,
     hasIncome,
+    billDueMonths: Object.fromEntries(bills.filter((b) => b.dueMonths?.length).map((b) => [b.id, b.dueMonths!])),
     plan: {
       monthlyNetC: cents(atlas.totals.monthlyNet),
       billsC: cents(atlas.totals.fixedMonthly),
       savingsGoalC: cents(atlas.totals.savingsGoal),
       paycheckSavingsC: cents(atlas.totals.savingsFromPaycheck),
       paycheckSavedSoFarC: paycheckSavedSoFarC(
-        atlas.totals.paycheckSavingsChecks,
+        atlas.totals.paycheckSavingsChecks.map((ch) => ({
+          payFrequency: ch.payFrequency,
+          perCheckC: cents(ch.perCheck),
+          netPerCheckC: cents(ch.netPerCheck),
+        })),
+        deposits,
         cents(atlas.totals.savingsFromPaycheck),
         computation.dayOfMonth,
         computation.daysInMonth,
       ),
     },
   };
-}
-
-/**
- * Paycheck savings that have happened by `day` of the month. Semimonthly pay
- * lands on the 15th and the last day, monthly on the last day; other cadences
- * accrue evenly. A finished month (day = last day) always counts the full plan.
- */
-function paycheckSavedSoFarC(
-  checks: { payFrequency: string; perCheck: number }[],
-  planC: number,
-  day: number,
-  daysInMonth: number,
-): number {
-  if (day >= daysInMonth) return planC;
-  let c = 0;
-  for (const ch of checks) {
-    const perC = cents(ch.perCheck);
-    if (ch.payFrequency === "semimonthly") c += day >= 15 ? perC : 0;
-    else if (ch.payFrequency !== "monthly") c += Math.round((perC * (ch.payFrequency === "weekly" ? 52 : 26) * day) / 12 / daysInMonth);
-  }
-  return Math.min(c, planC);
 }
 
 /** A month's report inputs from its computation + cash-flow lanes (null = no plan). */
@@ -243,6 +235,12 @@ function monthReportInput(view: BudgetView, lanes: CategoryFlow[]): MonthReportI
   const out = (c: string) => lanes.find((l) => l.category === c)?.moneyOut ?? 0;
   const inn = (c: string) => lanes.find((l) => l.category === c)?.moneyIn ?? 0;
   const disc = view.computation.discretionary;
+  // A bill that comes a few times a year costs its monthly set-aside every
+  // month; when it posts, only what the set-aside did not cover counts (or what
+  // it over-covered comes back). Bills paid more often than monthly count as paid.
+  const later = laterBills(view);
+  const setAsideC = later.reduce((s, r) => s + r.monthlyC - (paidThisMonth(r) ? r.accruedC : 0), 0);
+  const amortizedBills = dl(setAsideC) + out("amortized");
   return {
     plan: {
       moneyIn: dl(view.plan.monthlyNetC),
@@ -257,7 +255,7 @@ function monthReportInput(view: BudgetView, lanes: CategoryFlow[]): MonthReportI
       // Reimbursements net against money out, so their lane's money out is negative.
       reimbursed: -out("reimbursement"),
       discretionary: out("discretionary"),
-      bills: out("fixed") + out("amortized"),
+      bills: Math.round((out("fixed") + amortizedBills) * 100) / 100,
       offBudget: out("savings"),
       funds: out("fund"),
       paycheckSavings: dl(view.plan.paycheckSavedSoFarC),
@@ -265,14 +263,56 @@ function monthReportInput(view: BudgetView, lanes: CategoryFlow[]): MonthReportI
   };
 }
 
+/** Paid only when money actually went out: a refunded payment left the set-aside alone. */
+const paidThisMonth = (r: AmortizedRow) => (r.paidThisMonthC ?? 0) > 0;
+
+/** Amortized bills that come less often than monthly (twice-a-month ones also sit in the amortized lane). */
+const laterBills = (view: BudgetView) => view.computation.amortized.rows.filter((r) => r.monthlyC < r.targetC);
+
+/**
+ * The next month a bill is due: "Dec 2026" from its named due months, else
+ * "about Mar 2027", when its set-aside fills up (a full interval after the last
+ * payment, or after this month's).
+ */
+function nextDue(month: string, r: AmortizedRow, dueMonths: number[] | undefined): string | null {
+  const y = Number(month.slice(0, 4));
+  const m = Number(month.slice(5, 7));
+  const at = (k: number) => {
+    const n = ((m - 1 + k) % 12) + 1;
+    return formatMonth(`${y + Math.floor((m - 1 + k) / 12)}-${String(n).padStart(2, "0")}-01`);
+  };
+  const paid = paidThisMonth(r);
+  if (dueMonths?.length) {
+    for (let k = paid ? 1 : 0; k <= 12; k++) if (dueMonths.includes(((m - 1 + k) % 12) + 1)) return at(k);
+    return null;
+  }
+  if (r.monthlyC <= 0) return null;
+  return `about ${at(Math.round((paid ? r.targetC : r.targetC - r.accruedC) / r.monthlyC))}`;
+}
+
 /** The month report from a computed month + its cash-flow lanes (null = no plan).
  *  A month is in progress while its pace day is short of its last day. */
 export function monthReportFrom(view: BudgetView, lanes: CategoryFlow[]): MonthReport | null {
   const input = monthReportInput(view, lanes);
   if (!input) return null;
-  return buildMonthReport(input, {
+  const report = buildMonthReport(input, {
     inProgress: view.computation.dayOfMonth < view.computation.daysInMonth,
   });
+  const dl = (c: number) => Math.round(c) / 100;
+  // A bill paid this month used up its set-aside, so it starts over at zero.
+  const bills = laterBills(view).map((r) => {
+    const paid = paidThisMonth(r);
+    return {
+      name: r.name,
+      saved: paid ? 0 : dl(r.accruedC),
+      target: dl(r.targetC),
+      monthly: dl(r.monthlyC),
+      due: nextDue(view.month, r, view.billDueMonths[r.recurringExpenseId]),
+      paidThisMonth: paid,
+    };
+  });
+  if (bills.length === 0) return report;
+  return { ...report, setAside: { total: dl(bills.reduce((s, b) => s + Math.round(b.saved * 100), 0)), bills } };
 }
 
 export type RangeReport = {
