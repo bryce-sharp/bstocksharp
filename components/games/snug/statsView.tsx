@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { formatDuration } from "../daily";
-import { loadSnugDayCrowd, loadSnugMonthCrowd, type DayCrowd, type MonthCrowd } from "@/app/actions/snug";
+import { loadSnugDayCrowd, loadSnugMonthCrowd } from "@/app/actions/snug";
+import { MIN_CROWD, type DayCrowd, type MonthCrowd } from "./crowd";
 import { BINDING } from "./quilt";
 import { INK, SCRIPT, hintsUsed, plural, type RunSummary } from "./parts";
 import { TIMES_OF_DAY, allTimeStats, monthStats, type TimedDay } from "./stats";
@@ -75,7 +76,7 @@ function useCrowd<T>(load: () => Promise<T>, key: string): T | null | "error" {
   return state?.key === key ? state.value : null;
 }
 
-const notEnough = (players: number) => `Not enough players yet: ${plural(players, "player")} so far. Stats show from 3 players.`;
+const notEnough = (players: number) => `Not enough players yet: ${plural(players, "player")} so far. Stats show from ${MIN_CROWD} players.`;
 
 /** How everyone did in a month. */
 export function MonthCrowdView({ monthKey }: { monthKey: string }) {
@@ -91,7 +92,7 @@ export function MonthCrowdView({ monthKey }: { monthKey: string }) {
       ) : (
         <Row>
           <Figure label="Days played" value={crowd.medianDays ?? "–"} sub="typical player" />
-          <Figure label="Typical time" value={time(crowd.medianMs)} sub={`average ${time(crowd.meanMs)}`} />
+          {crowd.medianMs !== null && <Figure label="Typical time" value={time(crowd.medianMs)} sub={`average ${time(crowd.meanMs)}`} />}
           {crowd.completed !== null && <Figure label="Quilts done" value={crowd.completed} />}
           {crowd.perfectMonths !== null && <Figure label="Perfect months" value={crowd.perfectMonths} />}
         </Row>
@@ -114,7 +115,13 @@ export function DayCrowdLine({ dateKey, run, scored }: { dateKey: string; run: R
         </div>
       )}
       <div style={{ opacity: 0.8 }}>
-        {plural(crowd.players, "player")} &middot; {crowd.perfect} perfect &middot; typical {time(crowd.medianMs)} (average {time(crowd.meanMs)})
+        {plural(crowd.players, "player")} &middot; {crowd.perfect} perfect
+        {crowd.medianMs !== null && (
+          <>
+            {" "}
+            &middot; typical {time(crowd.medianMs)} (average {time(crowd.meanMs)})
+          </>
+        )}
       </div>
       {!scored && <div style={{ opacity: 0.65, fontSize: 12 }}>Practice runs do not count toward these.</div>}
     </div>
@@ -145,7 +152,8 @@ function TimeLine({ runs, medianMs }: { runs: TimedDay[]; medianMs: number }) {
   const W = 320;
   const H = 110;
   const pad = { l: 34, r: 8, t: 10, b: 18 };
-  const max = Math.max(...runs.map((r) => r.timeMs)) * 1.1;
+  // The typical time is all time, so it can sit above every recent run; the scale keeps it in view.
+  const max = Math.max(medianMs, ...runs.map((r) => r.timeMs)) * 1.1;
   const x = (i: number) => pad.l + (runs.length === 1 ? (W - pad.l - pad.r) / 2 : (i / (runs.length - 1)) * (W - pad.l - pad.r));
   const y = (ms: number) => pad.t + (1 - ms / max) * (H - pad.t - pad.b);
   const h = hover === null ? null : runs[hover]!;
