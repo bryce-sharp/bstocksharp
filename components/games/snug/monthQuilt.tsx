@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Puzzle } from "./generator";
 import { addDays, loadAttempt, weekday } from "../daily";
 import { cellKey, outlineLoops, outlinePath, type Cell } from "./pieces";
+import { insetCellLoops } from "./stitches";
 import { BINDING, LINEN, YARNS } from "./quilt";
 import { Btn, FONT, RED_THREAD, SCRIPT, StitchedModal, type Attempt, type PieceState } from "./parts";
 import { GAME, loadBest } from "./records";
@@ -28,7 +29,9 @@ export function quiltDays(month: MonthDays): QuiltDay[] {
   return month.days.map((d) => {
     const scored = loadAttempt<Attempt>(GAME, d.dateKey);
     const best = loadBest(d.dateKey);
-    return { ...d, pieces: (scored ?? best)?.pieces, scoredGaps: scored?.gaps, bestGaps: best?.gaps, late: !scored && !!best };
+    // A day bettered after its date shows the better run, stitched as finished later; the scored run keeps the on-the-day count.
+    const improved = !!best && (!scored || best.gaps < scored.gaps);
+    return { ...d, pieces: (improved ? best : scored)?.pieces, scoredGaps: scored?.gaps, bestGaps: best?.gaps, late: improved };
   });
 }
 
@@ -71,23 +74,13 @@ const LATE_INSET = 0.3;
 const QUILT_GOLD = "#c79a2e";
 export const GOLD_TEXT = "#a67a12";
 
-/** A day's outline moved `d` cells inside it, so a stitch along it belongs to that day alone, not the seam it shares. */
-function insetLoops(cells: readonly Cell[], d: number): [number, number][][] {
-  // Loops run clockwise on screen (holes the other way), so the inside is always to the right: normal (-dy, dx).
-  const normal = (a: [number, number], b: [number, number]) => [-Math.sign(b[1] - a[1]), Math.sign(b[0] - a[0])];
-  return outlineLoops(cells).map((loop) =>
-    loop.map((v, i) => {
-      const [ax, ay] = normal(loop[(i - 1 + loop.length) % loop.length]!, v);
-      const [bx, by] = normal(v, loop[(i + 1) % loop.length]!);
-      return [v[0] + d * (ax! + bx!), v[1] + d * (ay! + by!)];
-    }),
-  );
-}
-
 const insetPath = (cells: readonly Cell[], d: number) =>
-  insetLoops(cells, d)
+  insetCellLoops(cells, 1, d)
     .map((loop) => `M${loop.map(([x, y]) => `${x} ${y}`).join("L")}Z`)
     .join("");
+
+/** The first day with squares still to stitch: missed, or tied off with holes. */
+export const firstUnfinished = (days: QuiltDay[]) => days.find((d) => !d.pieces || (d.bestGaps ?? d.scoredGaps ?? 0) > 0);
 
 /** "a pumpkin", "an apple": the month's picture, named. */
 export const pictureName = (outline: string) => `${/^[aeiou]/.test(outline) ? "an" : "a"} ${outline}`;
@@ -364,7 +357,7 @@ export function drawMonthPicture(monthKey: string, days: QuiltDay[], shape: Mont
     ctx.stroke();
     if (d.late && d.pieces) {
       ctx.beginPath();
-      for (const loop of insetLoops(d.puzzle.board, LATE_INSET)) {
+      for (const loop of insetCellLoops(d.puzzle.board, 1, LATE_INSET)) {
         loop.forEach(([x, y], i) => (i ? ctx.lineTo(ox + (x + dx) * cell, oy + (y + dy) * cell) : ctx.moveTo(ox + (x + dx) * cell, oy + (y + dy) * cell)));
         ctx.closePath();
       }
@@ -540,7 +533,7 @@ export function RevealSequence({
 }) {
   const score = useMemo(() => monthScore(days), [days]);
   const perfect = monthEnding(score) === "perfect";
-  const firstMissed = days.find((d) => !d.pieces);
+  const firstMissed = firstUnfinished(days);
   const [play, setPlay] = useState(0);
   const [stage, setStage] = useState(0);
   useEffect(() => {

@@ -6,7 +6,7 @@ import { dayRecord, type DayRecord } from "./records";
 import type { Puzzle } from "./generator";
 import { loadMonth, type MonthDays, type MonthShape } from "./puzzles";
 import { QuiltThumb } from "./collection";
-import { EndingBanner, GOLD_TEXT, MonthQuiltView, MonthScoreView, monthEnding, monthScore, quiltDays, type MonthScore, type QuiltDay } from "./monthQuilt";
+import { EndingBanner, GOLD_TEXT, MonthQuiltView, MonthScoreView, firstUnfinished, monthEnding, monthScore, quiltDays, type MonthScore, type QuiltDay } from "./monthQuilt";
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
 const GOLD_FILL = "#e2b03e";
@@ -73,7 +73,7 @@ function MonthPanel({ quilt, over, onReveal, onStitch }: { quilt: MonthQuilt | n
     return <div style={{ minHeight: 200, display: "grid", placeItems: "center", fontFamily: SCRIPT, fontSize: 24, color: BINDING }}>Laying out the month…</div>;
   }
   const finished = quilt.days.filter((d) => d.pieces).length;
-  const firstMissed = quilt.days.find((d) => !d.pieces);
+  const firstMissed = firstUnfinished(quilt.days);
   const perfect = monthEnding(quilt.score) === "perfect";
   return (
     <div>
