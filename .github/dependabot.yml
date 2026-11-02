@@ -9,6 +9,13 @@ updates:
       minor-and-patch:
         update-types: [minor, patch]
     open-pull-requests-limit: 5
+    ignore:
+      # Node's types follow the Node the app runs (engines 24.x).
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # typescript-eslint supports TypeScript below 6.1 only.
+      - dependency-name: "typescript"
+        versions: [">=6.1.0"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
