@@ -14,10 +14,11 @@ const SAMPLE_MONTH = "2025-03";
 /** The day the "during the month" view is looked at. */
 const PEEK_DAY = 24;
 
-type Scenario = "perfect" | "caught-up" | "most" | "half";
+type Scenario = "perfect" | "caught-up" | "completed" | "most" | "half";
 const SCENARIOS: { id: Scenario; label: string }[] = [
   { id: "perfect", label: "Every day, on the day" },
   { id: "caught-up", label: "All done, some later" },
+  { id: "completed", label: "Last square just stitched" },
   { id: "most", label: "Most of the month" },
   { id: "half", label: "Half the month" },
 ];
@@ -27,7 +28,7 @@ type SampleDay = Omit<QuiltDay, "pieces" | "scoredGaps" | "bestGaps" | "late">;
 function finish(scenario: Scenario, i: number): "on" | "late" | "holes" | "missed" {
   if (scenario === "perfect") return "on";
   if (scenario === "half") return i < 15 ? "on" : "missed";
-  if (scenario === "caught-up") return i % 5 === 3 ? "late" : "on";
+  if (scenario === "caught-up" || scenario === "completed") return i % 5 === 3 ? "late" : "on";
   if ([8, 16, 22, 27].includes(i)) return "missed";
   if ([4, 12].includes(i)) return "holes";
   return i % 7 === 2 ? "late" : "on";
@@ -68,6 +69,8 @@ export function RevealLab() {
   }, [outline]);
 
   const days = useMemo(() => (month ? month.days.map((d, i) => sampleDay(d, finish(scenario, i))) : []), [month, scenario]);
+  // The month's last late day is the one that just finished it.
+  const completedDay = scenario === "completed" ? days.filter((d) => d.late).at(-1)?.dateKey : undefined;
   const peek = useMemo(() => days.slice(0, PEEK_DAY), [days]);
   const shape = month ? { outline, minX: month.minX, minY: month.minY, width: month.width, height: month.height } : undefined;
 
@@ -128,7 +131,7 @@ export function RevealLab() {
           </section>
           <section style={{ ...panelStyle, flex: "1 1 460px" }}>
             <PanelStitches seed="reveal-show" />
-            <RevealSequence key={`${outline}-${scenario}`} monthKey={SAMPLE_MONTH} days={days} shape={shape} onShare={() => void showPicture()} onStitch={() => {}} />
+            <RevealSequence key={`${outline}-${scenario}`} monthKey={SAMPLE_MONTH} days={days} shape={shape} onShare={() => void showPicture()} onStitch={() => {}} completedDay={completedDay} />
           </section>
         </div>
       )}

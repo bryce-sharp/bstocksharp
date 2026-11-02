@@ -151,6 +151,7 @@ export function MonthQuiltView({
   selected,
   onSelect,
   missedHidden,
+  hiddenDay,
   border,
 }: {
   monthKey: string;
@@ -161,6 +162,8 @@ export function MonthQuiltView({
   selected?: string | null;
   onSelect?: (dateKey: string | null) => void;
   missedHidden?: boolean;
+  /** A day kept out of sight, to fade it in. */
+  hiddenDay?: string | null;
   border?: { drawn: boolean; gold?: boolean };
 }) {
   const shown = shape ? days : days.filter((d) => d.pieces);
@@ -218,8 +221,8 @@ export function MonthQuiltView({
               pointerEvents: "none",
               transformOrigin: "0 0",
               transform: `translate(${x}px, ${y}px) scale(${s})`,
-              transition: `transform 1100ms cubic-bezier(.3,.9,.3,1) ${assembled ? index * 40 : 0}ms, opacity ${missedHidden === false && !d.pieces ? "900ms" : "300ms"}`,
-              opacity: !d.pieces && missedHidden ? 0 : selected && selected !== d.dateKey ? 0.35 : 1,
+              transition: `transform 1100ms cubic-bezier(.3,.9,.3,1) ${assembled ? index * 40 : 0}ms, opacity ${(missedHidden === false && !d.pieces) || hiddenDay !== undefined ? "900ms" : "300ms"}`,
+              opacity: (!d.pieces && missedHidden) || d.dateKey === hiddenDay ? 0 : selected && selected !== d.dateKey ? 0.35 : 1,
             }}
           >
             {onSelect ? (
@@ -504,10 +507,19 @@ export function EndingBanner({ score, outline }: { score: MonthScore; outline: s
 
 /** When each step of the reveal starts (ms): stitch the outline, show the missed days, name the picture, the ending. */
 const REVEAL_AT = [600, 2900, 3700, 4300];
+/** A month just completed: the last day fades in, the outline stitches shut, the picture's name, the ending. */
+const COMPLETE_AT = [500, 1500, 3900, 4500];
+
+/** True when every square of a month that has its outline is filled, on the day or later. */
+export async function monthComplete(monthKey: string): Promise<boolean> {
+  const month = await loadMonth(monthKey, lastDayOf(monthKey));
+  return !!month.shape && monthScore(quiltDays(month)).missed === 0;
+}
 
 /**
  * The end-of-month reveal: your quilt as you left it, the month's outline stitched around it (turning gold for a
  * perfect month), the missed days as linen, the picture's name, then the score. `onStitch` opens a missed day.
+ * With `completedDay`, the day that just finished the month fades in first and the outline stitches shut around it.
  */
 export function RevealSequence({
   monthKey,
@@ -516,6 +528,7 @@ export function RevealSequence({
   onShare,
   onStitch,
   note,
+  completedDay,
 }: {
   monthKey: string;
   days: QuiltDay[];
@@ -523,6 +536,7 @@ export function RevealSequence({
   onShare: () => void;
   onStitch?: (dateKey: string) => void;
   note?: string;
+  completedDay?: string;
 }) {
   const score = useMemo(() => monthScore(days), [days]);
   const perfect = monthEnding(score) === "perfect";
@@ -530,16 +544,16 @@ export function RevealSequence({
   const [play, setPlay] = useState(0);
   const [stage, setStage] = useState(0);
   useEffect(() => {
-    const timers = REVEAL_AT.map((ms, i) => window.setTimeout(() => setStage(i + 1), ms));
+    const timers = (completedDay ? COMPLETE_AT : REVEAL_AT).map((ms, i) => window.setTimeout(() => setStage(i + 1), ms));
     return () => timers.forEach((t) => window.clearTimeout(t));
-  }, [play]);
+  }, [play, completedDay]);
   const shown = (from: number) => ({ opacity: stage >= from ? 1 : 0, transition: "opacity 600ms ease", pointerEvents: stage >= from ? ("auto" as const) : ("none" as const) });
 
   return (
     <div>
       <div style={{ fontFamily: SCRIPT, fontSize: 40, lineHeight: 1, color: BINDING, fontWeight: 700, textAlign: "center" }}>{monthName(monthKey)}</div>
       <div style={{ textAlign: "center", fontSize: 13.5, opacity: 0.75, margin: "6px 0 16px" }}>
-        {stage < 2 ? "Your month, as you stitched it" : "Every day in its place"}
+        {completedDay ? (stage < 2 ? "Your last square, stitched in" : "Every square in its place") : stage < 2 ? "Your month, as you stitched it" : "Every day in its place"}
       </div>
       <MonthQuiltView
         key={play}
@@ -549,7 +563,8 @@ export function RevealSequence({
         assembled
         maxWidth={500}
         missedHidden={stage < 2}
-        border={{ drawn: stage >= 1, gold: perfect && stage >= 2 }}
+        hiddenDay={completedDay ? (stage < 1 ? completedDay : null) : undefined}
+        border={{ drawn: stage >= (completedDay ? 2 : 1), gold: perfect && stage >= 2 }}
       />
       <div style={{ ...shown(3), textAlign: "center", fontFamily: SCRIPT, fontSize: 34, color: perfect ? GOLD_TEXT : BINDING, marginTop: 14 }}>
         It was {pictureName(shape.outline)}!
@@ -585,8 +600,21 @@ export function RevealSequence({
   );
 }
 
-/** The end-of-month reveal in its modal, for the month just over; `onStitch` closes it and opens a missed day. */
-export function MonthReveal({ monthKey, onClose, onStitch }: { monthKey: string; onClose: () => void; onStitch?: (dateKey: string) => void }) {
+/**
+ * The end-of-month reveal in its modal, for the month just over; `onStitch` closes it and opens a missed day.
+ * With `completedDay`, it celebrates the past month that day just finished.
+ */
+export function MonthReveal({
+  monthKey,
+  onClose,
+  onStitch,
+  completedDay,
+}: {
+  monthKey: string;
+  onClose: () => void;
+  onStitch?: (dateKey: string) => void;
+  completedDay?: string;
+}) {
   const [month, setMonth] = useState<MonthDays | null>(null);
   useEffect(() => {
     let live = true;
@@ -636,6 +664,7 @@ export function MonthReveal({ monthKey, onClose, onStitch }: { monthKey: string;
               })
             }
             note={note}
+            completedDay={completedDay}
           />
         ) : (
           <div style={{ minHeight: 240, display: "grid", placeItems: "center", fontFamily: SCRIPT, fontSize: 26, color: BINDING }}>Gathering your days…</div>

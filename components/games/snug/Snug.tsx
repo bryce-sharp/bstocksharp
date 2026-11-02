@@ -8,7 +8,7 @@ import { BINDING, LINEN, YARNS } from "./quilt";
 import { StitchBorder } from "./stitches";
 import { useFloatingHeader } from "@/components/shared/SlidingHeader";
 import { QuiltCalendar } from "./calendar";
-import { MonthReveal, revealDue } from "./monthQuilt";
+import { MonthReveal, monthComplete, revealDue } from "./monthQuilt";
 import { GAME, LAUNCH_DATE, clearStaleRecords, loadBest, playerStats, saveBest, type Progress } from "./records";
 import { canvasFile, canvasFonts, drawResultPicture, quiltGrid } from "./share";
 import { SNUG_FONTS } from "./fonts";
@@ -353,7 +353,10 @@ function SnugDay({
   // Last month's quilt plays once per device, the first time Snug opens in the new month.
   const [revealMonth, setRevealMonth] = useState<string | null>(() => (lab ? null : revealDue(today, LAUNCH_DATE)));
   const closeReveal = useCallback(() => setRevealMonth(null), []);
-  const modalOpen = showHowTo || showCalendar || !!revealMonth;
+  // Finishing a past month's last missing day plays its quilt, now complete.
+  const [completed, setCompleted] = useState<string | null>(null);
+  const closeCompleted = useCallback(() => setCompleted(null), []);
+  const modalOpen = showHowTo || showCalendar || !!revealMonth || !!completed;
   const modalRef = useRef(modalOpen);
   modalRef.current = modalOpen;
   // Ticks the visible clock; the value itself is read from `clock`.
@@ -872,6 +875,7 @@ function SnugDay({
     setConfirming(false);
     setSelected(null);
     const run: Attempt = { gaps: holes, timeMs, pieces: settledPieces, hints: hintIds.length, v: PUZZLE_VERSION };
+    const before = lab ? null : loadBest(dateKey);
     // The lab's test quilt keeps nothing.
     const best = lab ? run : saveBest(dateKey, run);
     setBestRun(best);
@@ -882,7 +886,13 @@ function SnugDay({
     }
     if (!lab) saveRunRemote(dateKey, scoredRun, best);
     window.setTimeout(() => setShowCard(true), holes === 0 ? 1500 : 250);
-  }, [isReplay, isArchive, pieces, dateKey, saved, stopClock, hintIds, holesIn, lab]);
+    const month = dateKey.slice(0, 7);
+    if (!lab && holes === 0 && (before?.gaps ?? 1) > 0 && month < today.slice(0, 7)) {
+      void monthComplete(month)
+        .then((done) => done && window.setTimeout(() => setCompleted(dateKey), 1500))
+        .catch(() => {});
+    }
+  }, [isReplay, isArchive, pieces, dateKey, saved, stopClock, hintIds, holesIn, lab, today]);
 
   useEffect(() => {
     // Many moves can fill the board (a drop, a hint, a restored game), so finishing watches for it here.
@@ -1082,6 +1092,7 @@ function SnugDay({
         {said}
       </div>
       {revealMonth && !showHowTo && <MonthReveal monthKey={revealMonth} onClose={closeReveal} onStitch={onPickDate} />}
+      {completed && !revealMonth && <MonthReveal monthKey={completed.slice(0, 7)} completedDay={completed} onClose={closeCompleted} />}
       {showCalendar && (
         <QuiltCalendar
           current={dateKey}
