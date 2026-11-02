@@ -9,6 +9,7 @@ import { generateOutlineMonth, type Outline } from "./outline";
 import { OUTLINES } from "./MonthLab";
 import { LATE_THREAD, MonthQuiltView, RevealSequence, drawMonthPicture, monthScore, type QuiltDay } from "./monthQuilt";
 import { canvasFonts } from "./share";
+import { MonthTimes } from "./statsView";
 
 const SAMPLE_MONTH = "2025-03";
 /** The day the "during the month" view is looked at. */
@@ -22,7 +23,7 @@ const SCENARIOS: { id: Scenario; label: string }[] = [
   { id: "most", label: "Most of the month" },
   { id: "half", label: "Half the month" },
 ];
-type SampleDay = Omit<QuiltDay, "pieces" | "scoredGaps" | "bestGaps" | "late">;
+type SampleDay = Omit<QuiltDay, "pieces" | "scoredGaps" | "bestGaps" | "late" | "run">;
 
 /** How the sample player finished day `i` (0-based) in a scenario. */
 function finish(scenario: Scenario, i: number): "on" | "late" | "holes" | "missed" {
@@ -34,7 +35,7 @@ function finish(scenario: Scenario, i: number): "on" | "late" | "holes" | "misse
   return i % 7 === 2 ? "late" : "on";
 }
 
-function sampleDay(d: SampleDay, how: ReturnType<typeof finish>): QuiltDay {
+function sampleDay(d: SampleDay, how: ReturnType<typeof finish>, i: number): QuiltDay {
   if (how === "missed") return { ...d };
   let pieces = Object.entries(d.puzzle.solution).map(([id, s]) => ({ id, cells: s.cells, color: d.puzzle.pieces.find((p) => p.id === id)!.color, at: { x: s.x, y: s.y } }));
   let gaps = 0;
@@ -42,7 +43,9 @@ function sampleDay(d: SampleDay, how: ReturnType<typeof finish>): QuiltDay {
     gaps = pieces[0]!.cells.length;
     pieces = pieces.slice(1);
   }
-  return how === "late" ? { ...d, pieces, bestGaps: 0, late: true } : { ...d, pieces, scoredGaps: gaps, bestGaps: gaps };
+  // Sample times between about a minute and seven minutes.
+  const run = { dateKey: d.dateKey, timeMs: 50_000 + ((i * 7919) % 23) * 17_000, gaps, hints: i % 6 === 0 ? 1 : 0 };
+  return how === "late" ? { ...d, pieces, bestGaps: 0, late: true } : { ...d, pieces, scoredGaps: gaps, bestGaps: gaps, run };
 }
 
 export function RevealLab() {
@@ -68,7 +71,7 @@ export function RevealLab() {
     return () => window.clearTimeout(t);
   }, [outline]);
 
-  const days = useMemo(() => (month ? month.days.map((d, i) => sampleDay(d, finish(scenario, i))) : []), [month, scenario]);
+  const days = useMemo(() => (month ? month.days.map((d, i) => sampleDay(d, finish(scenario, i), i)) : []), [month, scenario]);
   // The month's last late day is the one that just finished it.
   const completedDay = scenario === "completed" ? days.filter((d) => d.late).at(-1)?.dateKey : undefined;
   const peek = useMemo(() => days.slice(0, PEEK_DAY), [days]);
@@ -131,7 +134,7 @@ export function RevealLab() {
           </section>
           <section style={{ ...panelStyle, flex: "1 1 460px" }}>
             <PanelStitches seed="reveal-show" />
-            <RevealSequence key={`${outline}-${scenario}`} monthKey={SAMPLE_MONTH} days={days} shape={shape} onShare={() => void showPicture()} onStitch={() => {}} completedDay={completedDay} />
+            <RevealSequence key={`${outline}-${scenario}`} monthKey={SAMPLE_MONTH} days={days} shape={shape} onShare={() => void showPicture()} onStitch={() => {}} completedDay={completedDay} extra={<MonthTimes runs={days.flatMap((d) => (d.run ? [d.run] : []))} />} />
           </section>
         </div>
       )}

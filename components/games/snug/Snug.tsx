@@ -9,6 +9,7 @@ import { StitchBorder } from "./stitches";
 import { useFloatingHeader } from "@/components/shared/SlidingHeader";
 import { QuiltCalendar } from "./calendar";
 import { MonthReveal, monthComplete, revealDue } from "./monthQuilt";
+import { DayCrowdLine } from "./statsView";
 import { GAME, LAUNCH_DATE, clearStaleRecords, loadBest, playerStats, saveBest, type Progress } from "./records";
 import { canvasFile, canvasFonts, drawResultPicture, quiltGrid } from "./share";
 import { SNUG_FONTS } from "./fonts";
@@ -874,7 +875,7 @@ function SnugDay({
     setPhase("done");
     setConfirming(false);
     setSelected(null);
-    const run: Attempt = { gaps: holes, timeMs, pieces: settledPieces, hints: hintIds.length, v: PUZZLE_VERSION };
+    const run: Attempt = { gaps: holes, timeMs, pieces: settledPieces, hints: hintIds.length, v: PUZZLE_VERSION, finishedAt: Date.now() };
     const before = lab ? null : loadBest(dateKey);
     // The lab's test quilt keeps nothing.
     const best = lab ? run : saveBest(dateKey, run);
@@ -1348,6 +1349,7 @@ function SnugDay({
                   recorded={recorded}
                   isReplay={isReplay}
                   note={cardNote || undefined}
+                  crowd={lab ? undefined : <DayCrowdLine dateKey={dateKey} run={result} scored={!isReplay && recorded?.timeMs === result.timeMs && recorded.gaps === result.gaps} />}
                   shareLine={shareLine}
                   shareGrid={shareGrid}
                   shareUrl={shareUrl}

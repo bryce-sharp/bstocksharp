@@ -4,8 +4,9 @@ import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { snugDays } from "@/lib/db/schema";
 import { requireEditorFor } from "@/lib/auth";
-import { listSnugDays } from "@/lib/queries/snug";
-import { isCurrent } from "@/components/games/snug/version";
+import { listSnugCrowd, listSnugDays } from "@/lib/queries/snug";
+import { PUZZLE_VERSION, isCurrent } from "@/components/games/snug/version";
+import { mean, median } from "@/components/games/snug/average";
 
 // Snug results belong to one person. The browser names whose board it is, and the server refuses anyone this login may not play for.
 
@@ -87,4 +88,71 @@ export async function saveSnugDays(player: number, days: SnugUpload[]): Promise<
         });
     }
   }
+}
+
+/** Fewer players than this and everyone's numbers stay hidden: they would be one or two people's times. */
+const MIN_CROWD = 3;
+const MONTH_RE = /^\d{4}-\d{2}$/;
+
+/** How everyone did on one day; times only once enough people played. `beat` is the share of other runs `mine` beats. */
+export type DayCrowd = { players: number; perfect: number; enough: boolean; medianMs: number | null; meanMs: number | null; beat: number | null };
+
+/** How everyone did in one month; the quilt counts only once the month is over. */
+export type MonthCrowd = {
+  players: number;
+  enough: boolean;
+  medianDays: number | null;
+  medianMs: number | null;
+  meanMs: number | null;
+  completed: number | null;
+  perfectMonths: number | null;
+};
+
+/** The game's order for runs: fewer holes, then fewer hints, then faster. Negative when `a` is better. */
+const compareRuns = (a: { gaps: number; hints: number; timeMs: number }, b: { gaps: number; hints: number; timeMs: number }) =>
+  a.gaps - b.gaps || a.hints - b.hints || a.timeMs - b.timeMs;
+
+export async function loadSnugDayCrowd(dateKey: string, mine?: { gaps: number; hints: number; timeMs: number }): Promise<DayCrowd> {
+  if (!DATE_RE.test(dateKey)) throw new Error("Bad Snug day.");
+  const runs = (await listSnugCrowd(dateKey, dateKey, PUZZLE_VERSION)).filter((r) => r.gaps !== null && r.timeMs !== null);
+  const perfect = runs.filter((r) => r.gaps === 0).map((r) => r.timeMs!);
+  const enough = runs.length >= MIN_CROWD;
+  let beat: number | null = null;
+  if (enough && mine && [mine.gaps, mine.hints, mine.timeMs].every(Number.isFinite)) {
+    // Ties, your own run among them, count neither way.
+    const order = runs.map((r) => compareRuns({ gaps: r.gaps!, hints: r.hints ?? 0, timeMs: r.timeMs! }, mine));
+    const better = order.filter((o) => o < 0).length;
+    const worse = order.filter((o) => o > 0).length;
+    beat = better + worse ? worse / (better + worse) : null;
+  }
+  return { players: runs.length, perfect: perfect.length, enough, medianMs: enough ? median(perfect) : null, meanMs: enough ? mean(perfect) : null, beat };
+}
+
+export async function loadSnugMonthCrowd(monthKey: string): Promise<MonthCrowd> {
+  if (!MONTH_RE.test(monthKey)) throw new Error("Bad Snug month.");
+  const [y, m] = monthKey.split("-").map(Number);
+  const days = new Date(Date.UTC(y!, m!, 0)).getUTCDate();
+  const rows = await listSnugCrowd(`${monthKey}-01`, `${monthKey}-${String(days).padStart(2, "0")}`, PUZZLE_VERSION);
+  const scored = rows.filter((r) => r.gaps !== null && r.timeMs !== null);
+  const perPlayer = new Map<number, { played: number; perfect: number; filled: number }>();
+  for (const r of rows) {
+    const p = perPlayer.get(r.profileId) ?? { played: 0, perfect: 0, filled: 0 };
+    if (r.gaps !== null) p.played++;
+    if (r.gaps === 0) p.perfect++;
+    if (r.gaps === 0 || r.bestGaps === 0) p.filled++;
+    perPlayer.set(r.profileId, p);
+  }
+  const players = [...perPlayer.values()].filter((p) => p.played > 0);
+  const enough = players.length >= MIN_CROWD;
+  const over = monthKey < new Date().toISOString().slice(0, 7);
+  const perfect = scored.filter((r) => r.gaps === 0).map((r) => r.timeMs!);
+  return {
+    players: players.length,
+    enough,
+    medianDays: enough ? median(players.map((p) => p.played)) : null,
+    medianMs: enough ? median(perfect) : null,
+    meanMs: enough ? mean(perfect) : null,
+    completed: enough && over ? [...perPlayer.values()].filter((p) => p.filled === days).length : null,
+    perfectMonths: enough && over ? players.filter((p) => p.perfect === days).length : null,
+  };
 }

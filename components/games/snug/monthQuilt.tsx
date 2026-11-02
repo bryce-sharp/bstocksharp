@@ -7,7 +7,9 @@ import { addDays, loadAttempt, weekday } from "../daily";
 import { cellKey, outlineLoops, outlinePath, type Cell } from "./pieces";
 import { insetCellLoops } from "./stitches";
 import { BINDING, LINEN, YARNS } from "./quilt";
-import { Btn, FONT, RED_THREAD, SCRIPT, StitchedModal, type Attempt, type PieceState } from "./parts";
+import { Btn, FONT, RED_THREAD, SCRIPT, StitchedModal, hintsUsed, type Attempt, type PieceState } from "./parts";
+import type { TimedDay } from "./stats";
+import { MonthCrowdView, MonthTimes } from "./statsView";
 import { GAME, loadBest } from "./records";
 import { lastDayOf, loadMonth, type MonthDays, type MonthShape } from "./puzzles";
 import { canvasFile, canvasFonts } from "./share";
@@ -22,6 +24,8 @@ export interface QuiltDay {
   bestGaps?: number;
   /** Finished only after its day: drawn with the later thread. */
   late?: boolean;
+  /** The scored first run's time and hints, for the month's stats. */
+  run?: TimedDay;
 }
 
 /** The month's served days with this browser's runs for each. */
@@ -31,7 +35,8 @@ export function quiltDays(month: MonthDays): QuiltDay[] {
     const best = loadBest(d.dateKey);
     // A day bettered after its date shows the better run, stitched as finished later; the scored run keeps the on-the-day count.
     const improved = !!best && (!scored || best.gaps < scored.gaps);
-    return { ...d, pieces: (improved ? best : scored)?.pieces, scoredGaps: scored?.gaps, bestGaps: best?.gaps, late: improved };
+    const run = scored && { dateKey: d.dateKey, timeMs: scored.timeMs, gaps: scored.gaps, hints: hintsUsed(scored), finishedAt: scored.finishedAt };
+    return { ...d, pieces: (improved ? best : scored)?.pieces, scoredGaps: scored?.gaps, bestGaps: best?.gaps, late: improved, run: run || undefined };
   });
 }
 
@@ -522,6 +527,7 @@ export function RevealSequence({
   onStitch,
   note,
   completedDay,
+  extra,
 }: {
   monthKey: string;
   days: QuiltDay[];
@@ -530,6 +536,8 @@ export function RevealSequence({
   onStitch?: (dateKey: string) => void;
   note?: string;
   completedDay?: string;
+  /** Shown under the score: the month's times and everyone's numbers. */
+  extra?: ReactNode;
 }) {
   const score = useMemo(() => monthScore(days), [days]);
   const perfect = monthEnding(score) === "perfect";
@@ -567,6 +575,7 @@ export function RevealSequence({
         <div style={{ marginTop: 12 }}>
           <MonthScoreView score={score} />
         </div>
+        {extra}
         <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 10, marginTop: 16 }}>
           {firstMissed && onStitch && (
             <Btn primary onClick={() => onStitch(firstMissed.dateKey)}>
@@ -658,6 +667,12 @@ export function MonthReveal({
             }
             note={note}
             completedDay={completedDay}
+            extra={
+              <>
+                <MonthTimes runs={days.flatMap((d) => (d.run ? [d.run] : []))} />
+                <MonthCrowdView monthKey={monthKey} />
+              </>
+            }
           />
         ) : (
           <div style={{ minHeight: 240, display: "grid", placeItems: "center", fontFamily: SCRIPT, fontSize: 26, color: BINDING }}>Gathering your days…</div>
