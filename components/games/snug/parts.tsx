@@ -35,6 +35,8 @@ export interface Attempt {
   hinted?: boolean;
   /** The puzzle version it was played on (see version.ts). */
   v?: number;
+  /** When it was finished (ms since 1970), for the time-of-day stats; runs from before stats lack it. */
+  finishedAt?: number;
 }
 
 /** A finished run's score, as the result card and share line describe it. */
@@ -258,6 +260,8 @@ export function ResultCard(props: {
   /** Shows the card as a compact sheet pinned to the bottom of the screen (phones). */
   sheet?: boolean;
   note?: string;
+  /** How everyone did on this day. */
+  crowd?: ReactNode;
   /** The quilt silhouette that goes out with the share line. */
   shareGrid?: string;
   stats: Stats;
@@ -306,6 +310,7 @@ export function ResultCard(props: {
         {hintsUsed(result) > 0 && <> &middot; {plural(hintsUsed(result), "hint")}</>}
       </div>
       {props.note && <div style={{ fontSize: 13, marginTop: 10, opacity: 0.8 }}>{props.note}</div>}
+      {props.crowd}
       {isReplay && recorded && (
         <div style={{ fontSize: 13, marginTop: 10, opacity: 0.8 }}>
           This replay was not scored. Your recorded result: {props.describe(recorded)}.

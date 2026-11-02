@@ -6,6 +6,7 @@ import { dayRecord, type DayRecord } from "./records";
 import type { Puzzle } from "./generator";
 import { loadMonth, type MonthDays, type MonthShape } from "./puzzles";
 import { QuiltThumb } from "./collection";
+import { MonthCrowdView, MonthTimes, StatsPanel } from "./statsView";
 import { EndingBanner, GOLD_TEXT, MonthQuiltView, MonthScoreView, firstUnfinished, monthEnding, monthScore, quiltDays, type MonthScore, type QuiltDay } from "./monthQuilt";
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -74,6 +75,7 @@ function MonthPanel({ quilt, over, onReveal, onStitch }: { quilt: MonthQuilt | n
   }
   const finished = quilt.days.filter((d) => d.pieces).length;
   const firstMissed = firstUnfinished(quilt.days);
+  const runs = quilt.days.flatMap((d) => (d.run ? [d.run] : []));
   const perfect = monthEnding(quilt.score) === "perfect";
   return (
     <div>
@@ -83,7 +85,7 @@ function MonthPanel({ quilt, over, onReveal, onStitch }: { quilt: MonthQuilt | n
           days={quilt.days}
           shape={quilt.shape}
           assembled
-          maxWidth={380}
+          maxWidth={360}
           border={quilt.shape ? { drawn: true, gold: perfect } : undefined}
         />
       ) : (
@@ -117,6 +119,8 @@ function MonthPanel({ quilt, over, onReveal, onStitch }: { quilt: MonthQuilt | n
             {finished} {finished === 1 ? "day" : "days"} stitched so far. The month&apos;s shape shows when it ends.
           </div>
         )}
+        <MonthTimes runs={runs} />
+        <MonthCrowdView monthKey={quilt.monthKey} />
       </div>
     </div>
   );
@@ -142,7 +146,7 @@ export function QuiltCalendar({
   onClose: () => void;
 }) {
   const [month, setMonth] = useState(monthOf(current));
-  const [view, setView] = useState<"days" | "quilt">("days");
+  const [view, setView] = useState<"days" | "quilt" | "stats">("days");
   const y = Number(month.slice(0, 4));
   const m = Number(month.slice(5, 7));
   const first = new Date(y, m - 1, 1).getDay();
@@ -203,7 +207,7 @@ export function QuiltCalendar({
       {glyph}
     </button>
   );
-  const tab = (v: "days" | "quilt", label: string) => (
+  const tab = (v: "days" | "quilt" | "stats", label: string) => (
     <button
       type="button"
       role="tab"
@@ -231,16 +235,23 @@ export function QuiltCalendar({
       <div style={{ textAlign: "center", fontSize: 13.5, opacity: 0.75, marginTop: 6 }}>
         {totals.perfect} perfect &middot; {totals.played} of {totals.days} played
       </div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "14px 4px 8px" }}>
-        {navBtn("Previous month", -1, month <= monthOf(launch), "‹")}
-        <span style={{ fontWeight: 600 }}>{monthName}</span>
-        {navBtn("Next month", 1, month >= monthOf(today), "›")}
-      </div>
+      {view !== "stats" ? (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "14px 4px 8px" }}>
+          {navBtn("Previous month", -1, month <= monthOf(launch), "‹")}
+          <span style={{ fontWeight: 600 }}>{monthName}</span>
+          {navBtn("Next month", 1, month >= monthOf(today), "›")}
+        </div>
+      ) : (
+        <div style={{ height: 14 }} />
+      )}
       <div role="tablist" aria-label="Calendar view" style={{ display: "flex", justifyContent: "center", gap: 6, marginBottom: 12 }}>
         {tab("days", "Days")}
         {tab("quilt", "Quilt")}
+        {tab("stats", "Stats")}
       </div>
-      {view === "quilt" ? (
+      {view === "stats" ? (
+        <StatsPanel launch={launch} today={today} />
+      ) : view === "quilt" ? (
         <MonthPanel quilt={quilt} over={over} onReveal={() => onReveal(month)} onStitch={onPick} />
       ) : (
         <>

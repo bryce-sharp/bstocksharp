@@ -4,8 +4,9 @@ import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { snugDays } from "@/lib/db/schema";
 import { requireEditorFor } from "@/lib/auth";
-import { listSnugDays } from "@/lib/queries/snug";
-import { isCurrent } from "@/components/games/snug/version";
+import { listSnugCrowd, listSnugDays } from "@/lib/queries/snug";
+import { PUZZLE_VERSION, isCurrent } from "@/components/games/snug/version";
+import { dayCrowd, monthCrowd, type DayCrowd, type MonthCrowd } from "@/components/games/snug/crowd";
 
 // Snug results belong to one person. The browser names whose board it is, and the server refuses anyone this login may not play for.
 
@@ -30,7 +31,8 @@ async function playerId(profileId: number): Promise<number> {
 function isRun(v: unknown): v is Json & { gaps: number; timeMs: number; hints?: number; hinted?: boolean; pieces: unknown[] } {
   if (!v || typeof v !== "object") return false;
   const r = v as Json;
-  return Number.isInteger(r.gaps) && (r.gaps as number) >= 0 && Number.isFinite(r.timeMs) && (r.timeMs as number) >= 0 && Array.isArray(r.pieces);
+  const hints = r.hints === undefined || (Number.isInteger(r.hints) && (r.hints as number) >= 0);
+  return Number.isInteger(r.gaps) && (r.gaps as number) >= 0 && Number.isFinite(r.timeMs) && (r.timeMs as number) >= 0 && hints && Array.isArray(r.pieces);
 }
 
 export async function loadSnugDays(profileId: number): Promise<RemoteSnugDay[]> {
@@ -87,4 +89,19 @@ export async function saveSnugDays(player: number, days: SnugUpload[]): Promise<
         });
     }
   }
+}
+
+const MONTH_RE = /^\d{4}-\d{2}$/;
+
+export async function loadSnugDayCrowd(dateKey: string, mine?: { gaps: number; hints: number; timeMs: number }): Promise<DayCrowd> {
+  if (!DATE_RE.test(dateKey)) throw new Error("Bad Snug day.");
+  return dayCrowd(await listSnugCrowd(dateKey, dateKey, PUZZLE_VERSION), mine);
+}
+
+export async function loadSnugMonthCrowd(monthKey: string): Promise<MonthCrowd> {
+  if (!MONTH_RE.test(monthKey)) throw new Error("Bad Snug month.");
+  const [y, m] = monthKey.split("-").map(Number);
+  const days = new Date(Date.UTC(y!, m!, 0)).getUTCDate();
+  const rows = await listSnugCrowd(`${monthKey}-01`, `${monthKey}-${String(days).padStart(2, "0")}`, PUZZLE_VERSION);
+  return monthCrowd(rows, days, monthKey < new Date().toISOString().slice(0, 7));
 }
