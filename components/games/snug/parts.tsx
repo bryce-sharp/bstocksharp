@@ -94,6 +94,7 @@ export function PatchSvg({
   interactive,
   loose = false,
   hinted = false,
+  selected = false,
   onDown,
 }: {
   piece: PieceState;
@@ -102,6 +103,8 @@ export function PatchSvg({
   loose?: boolean;
   /** A hinted patch still in the spot the hint gave it: stitched in gold. */
   hinted?: boolean;
+  /** The patch Turn and the arrow keys act on: it breathes brighter and back. */
+  selected?: boolean;
   onDown: (e: ReactPointerEvent, cellIndex: number) => void;
 }) {
   const { w, h } = bounds(piece.cells);
@@ -113,7 +116,12 @@ export function PatchSvg({
   );
   const clip = `snug-clip-${piece.id}`;
   return (
-    <svg width={w * cell} height={h * cell} viewBox={`0 0 ${w * U} ${h * U}`} style={{
+    <svg
+      width={w * cell}
+      height={h * cell}
+      viewBox={`0 0 ${w * U} ${h * U}`}
+      className={selected && !loose ? "snug-breathe" : undefined}
+      style={{
         display: "block",
         overflow: "visible",
         // Chrome ignores touch-action on inner SVG shapes, so the outer svg stops touch drags from scrolling the page.
@@ -395,6 +403,9 @@ export function QuiltBackdrop({ dateKey }: { dateKey: string }) {
         // Firefox has no scrollbar parts, only colors; Chrome would drop the parts above if it saw these.
         "@supports (-moz-appearance: none)": { ".snug-scroll": { scrollbarWidth: "thin", scrollbarColor: `${BINDING} transparent` } },
         "@keyframes snugHover": { "0%, 100%": { transform: "translateY(-4px)" }, "50%": { transform: "translateY(-8px)" } },
+        // A selected patch breathes brighter and back.
+        "@keyframes snugBreathe": { "0%, 100%": { filter: "brightness(1)" }, "50%": { filter: "brightness(1.22) saturate(1.1)" } },
+        ".snug-breathe": { animation: "snugBreathe 2.4s ease-in-out infinite" },
         "@keyframes snugPopIn": { "0%": { transform: "scale(.92)", opacity: 0 }, "100%": { transform: "scale(1)", opacity: 1 } },
         "@keyframes snugFadeIn": { "0%": { opacity: 0 }, "100%": { opacity: 1 } },
         "@keyframes snugPopTop": {
@@ -434,6 +445,8 @@ export function QuiltBackdrop({ dateKey }: { dateKey: string }) {
         ".snug-tag-swing": { animation: "snugTag 700ms ease-out both" },
         "@media (prefers-reduced-motion: reduce)": {
           ".snug-announce, .snug-spare-lift, .snug-tag-swing": { animation: "none" },
+          // Still, a selected patch just stays a little brighter.
+          ".snug-breathe": { animation: "none", filter: "brightness(1.15) saturate(1.05)" },
         },
       }}
     />
@@ -701,7 +714,10 @@ export function HowToPlay({ onClose, touch, spares }: { onClose: () => void; tou
           </>,
         )}
         {!touch &&
-          section("Keyboard", "Press Tab to pick a patch, move it with the arrow keys, press Enter to stitch it down, and Esc to put it back.")}
+          section(
+            "Keyboard",
+            "Press Tab to pick a patch and the arrow keys to move it. Enter stitches it down and Esc cancels the move. Backspace sends a patch on the quilt back to the basket. Space or R turns it, and Q turns it back.",
+          )}
         {section("Scoring", "Fewer holes is better, and time breaks ties. The clock starts with your first patch. A perfect fill finishes on its own; otherwise press Tie it off.")}
         {section("Stuck?", "After 3 minutes you can mark a spare for free: it gets a spare tag and turns grey, and you can still use it. After 5 minutes you can use a hint, and after 10 minutes a second one. Each stitches a patch into its spot in the intended fill in gold thread; you can still move it, and your result notes how many hints you used.")}
         {section(

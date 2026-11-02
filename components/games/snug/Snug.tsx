@@ -326,6 +326,8 @@ function SnugDay({
   const [finalPieces, setFinalPieces] = useState<PieceState[] | null>(shown?.pieces ?? null);
   const [confirming, setConfirming] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  // The selected patch breathes only when it was reached by keyboard; after a drag or tap you can see which one it is.
+  const [keyFocus, setKeyFocus] = useState(false);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [carry, setCarry] = useState<Carry | null>(null);
   const carryRef = useRef(carry);
@@ -640,6 +642,7 @@ function SnugDay({
     setCarry(null);
     setDrag(d);
     setSelected(p.id);
+    setKeyFocus(false);
     setConfirming(false);
   };
 
@@ -1078,7 +1081,7 @@ function SnugDay({
       <div aria-live="polite" style={visuallyHidden}>
         {said}
       </div>
-      {revealMonth && !showHowTo && <MonthReveal monthKey={revealMonth} onClose={closeReveal} />}
+      {revealMonth && !showHowTo && <MonthReveal monthKey={revealMonth} onClose={closeReveal} onStitch={onPickDate} />}
       {showCalendar && (
         <QuiltCalendar
           current={dateKey}
@@ -1220,7 +1223,12 @@ function SnugDay({
                     tabIndex={movable ? 0 : -1}
                     role={movable ? "button" : undefined}
                     aria-label={`Patch ${index + 1} of ${pieces.length}, ${p.cells.length} squares, ${p.at && !p.loose ? "on the quilt" : "in the basket"}${spare ? ", marked spare" : ""}`}
-                    onFocus={() => movable && setSelected(p.id)}
+                    onFocus={(e) => {
+                      if (!movable) return;
+                      setSelected(p.id);
+                      setKeyFocus(e.currentTarget.matches(":focus-visible"));
+                    }}
+                    onBlur={() => setKeyFocus(false)}
                     style={{
                       outline: "none",
                       position: "absolute",
@@ -1238,7 +1246,6 @@ function SnugDay({
                         [
                           // Always present, so greying fades in rather than snapping.
                           `grayscale(${spare && !lifting ? 0.85 : 0})`,
-                          selected === p.id && phase === "playing" && !dragged ? "drop-shadow(0 0 2px #fff) drop-shadow(0 0 1.5px #fff)" : "",
                           // Stitched-down patches cast no shadow, so neighbors meet at a clean seam.
                           lifted || p.loose ? "drop-shadow(0 12px 10px rgba(40,20,10,.4))" : p.at ? "" : "drop-shadow(0 2px 2px rgba(40,20,10,.35))",
                         ]
@@ -1253,6 +1260,7 @@ function SnugDay({
                         interactive={phase === "playing"}
                         loose={p.loose && !lifted}
                         hinted={hintIds.includes(p.id) && phase === "playing" && onSolutionSpot(p)}
+                        selected={keyFocus && selected === p.id && phase === "playing" && !dragged}
                         onDown={(e, i) => onPieceDown(e, p, index, i)}
                       />
                     </div>

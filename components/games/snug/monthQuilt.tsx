@@ -19,6 +19,8 @@ export interface QuiltDay {
   pieces?: PieceState[];
   scoredGaps?: number;
   bestGaps?: number;
+  /** Finished only after its day: drawn with the later thread. */
+  late?: boolean;
 }
 
 /** The month's served days with this browser's runs for each. */
@@ -26,7 +28,7 @@ export function quiltDays(month: MonthDays): QuiltDay[] {
   return month.days.map((d) => {
     const scored = loadAttempt<Attempt>(GAME, d.dateKey);
     const best = loadBest(d.dateKey);
-    return { ...d, pieces: (scored ?? best)?.pieces, scoredGaps: scored?.gaps, bestGaps: best?.gaps };
+    return { ...d, pieces: (scored ?? best)?.pieces, scoredGaps: scored?.gaps, bestGaps: best?.gaps, late: !scored && !!best };
   });
 }
 
@@ -62,10 +64,43 @@ export function monthScore(days: QuiltDay[]): MonthScore {
 
 const placed = (pieces: PieceState[] | undefined) => (pieces ?? []).filter((p) => p.at && !p.loose);
 const MISSED_FILL = "#efe3cc";
+/** The thread a day finished after its date is stitched with: a pale running stitch just inside its edge. */
+export const LATE_THREAD = "#fbf3df";
+const LATE_INSET = 0.3;
+/** Deeper than the parts' bright GOLD_THREAD, so a perfect month's outline reads on linen. */
+const QUILT_GOLD = "#c79a2e";
+export const GOLD_TEXT = "#a67a12";
+
+/** A day's outline moved `d` cells inside it, so a stitch along it belongs to that day alone, not the seam it shares. */
+function insetLoops(cells: readonly Cell[], d: number): [number, number][][] {
+  // Loops run clockwise on screen (holes the other way), so the inside is always to the right: normal (-dy, dx).
+  const normal = (a: [number, number], b: [number, number]) => [-Math.sign(b[1] - a[1]), Math.sign(b[0] - a[0])];
+  return outlineLoops(cells).map((loop) =>
+    loop.map((v, i) => {
+      const [ax, ay] = normal(loop[(i - 1 + loop.length) % loop.length]!, v);
+      const [bx, by] = normal(v, loop[(i + 1) % loop.length]!);
+      return [v[0] + d * (ax! + bx!), v[1] + d * (ay! + by!)];
+    }),
+  );
+}
+
+const insetPath = (cells: readonly Cell[], d: number) =>
+  insetLoops(cells, d)
+    .map((loop) => `M${loop.map(([x, y]) => `${x} ${y}`).join("L")}Z`)
+    .join("");
+
+/** "a pumpkin", "an apple": the month's picture, named. */
+export const pictureName = (outline: string) => `${/^[aeiou]/.test(outline) ? "an" : "a"} ${outline}`;
+
+/** How a finished month ends: every square on its day, every square by now, or squares still to stitch. */
+export type MonthEnding = "perfect" | "complete" | "unfinished";
+export const monthEnding = (score: MonthScore): MonthEnding =>
+  score.onTheDay === score.squares ? "perfect" : score.missed === 0 ? "complete" : "unfinished";
 
 /** One day drawn on its own board: your patches, small crosses on holes, plain linen when missed. */
 function DayDrawing({ day }: { day: QuiltDay }) {
   const p = day.puzzle;
+  const late = day.late && day.pieces;
   const filled = new Set<string>();
   for (const pc of placed(day.pieces)) for (const [x, y] of pc.cells) filled.add(cellKey(x + pc.at!.x, y + pc.at!.y));
   const holes = day.pieces ? p.board.filter(([x, y]) => !filled.has(cellKey(x, y))) : [];
@@ -93,6 +128,9 @@ function DayDrawing({ day }: { day: QuiltDay }) {
         strokeDasharray={day.pieces ? undefined : "0.35 0.25"}
         strokeLinejoin="round"
       />
+      {late && (
+        <path d={insetPath(p.board, LATE_INSET)} fill="none" stroke={LATE_THREAD} strokeWidth={0.16} strokeDasharray="0.34 0.26" strokeLinecap="round" strokeLinejoin="round" />
+      )}
     </>
   );
 }
@@ -101,6 +139,8 @@ function DayDrawing({ day }: { day: QuiltDay }) {
  * The month quilt. With `shape` (a finished month) every day shows, missed days as linen; without it only finished
  * days show, so the outline stays a surprise. Unassembled, the days sit in their calendar squares; setting
  * `assembled` flies them into the quilt. `onSelect` makes days tappable, dimming all but the `selected` one.
+ * `missedHidden` keeps missed days invisible (they fade in when it turns off), and `border` stitches the month's
+ * outline around the assembled quilt; `gold` then turns it gold, for a perfect month.
  */
 export function MonthQuiltView({
   monthKey,
@@ -110,6 +150,8 @@ export function MonthQuiltView({
   maxWidth,
   selected,
   onSelect,
+  missedHidden,
+  border,
 }: {
   monthKey: string;
   days: QuiltDay[];
@@ -118,6 +160,8 @@ export function MonthQuiltView({
   maxWidth: number;
   selected?: string | null;
   onSelect?: (dateKey: string | null) => void;
+  missedHidden?: boolean;
+  border?: { drawn: boolean; gold?: boolean };
 }) {
   const shown = shape ? days : days.filter((d) => d.pieces);
   // The modal's padding and stitched edge take about 72px of a narrow screen; measured before the first paint so the
@@ -146,6 +190,8 @@ export function MonthQuiltView({
   const slot = Math.floor(Math.max(quiltW, Math.min(width, 7 * 8 * cell)) / 7);
   const weeks = Math.ceil((firstDay + days.length) / 7);
   const outerW = Math.max(quiltW, 7 * slot);
+  const monthOutline =
+    border && shape ? outlinePath(days.flatMap((d) => d.puzzle.board.map(([x, y]) => [x + d.offset.x - box.minX, y + d.offset.y - box.minY] as Cell)), 1) : null;
 
   return (
     <div style={{ position: "relative", width: outerW, height: assembled ? quiltH : weeks * slot, margin: "0 auto", transition: "height 900ms ease" }}>
@@ -172,8 +218,8 @@ export function MonthQuiltView({
               pointerEvents: "none",
               transformOrigin: "0 0",
               transform: `translate(${x}px, ${y}px) scale(${s})`,
-              transition: `transform 1100ms cubic-bezier(.3,.9,.3,1) ${assembled ? index * 40 : 0}ms, opacity 300ms`,
-              opacity: selected && selected !== d.dateKey ? 0.35 : 1,
+              transition: `transform 1100ms cubic-bezier(.3,.9,.3,1) ${assembled ? index * 40 : 0}ms, opacity ${missedHidden === false && !d.pieces ? "900ms" : "300ms"}`,
+              opacity: !d.pieces && missedHidden ? 0 : selected && selected !== d.dateKey ? 0.35 : 1,
             }}
           >
             {onSelect ? (
@@ -203,6 +249,34 @@ export function MonthQuiltView({
           </svg>
         );
       })}
+      {monthOutline && border && (
+        <svg
+          width={quiltW}
+          height={quiltH}
+          viewBox={`0 0 ${box.width} ${box.height}`}
+          aria-hidden
+          style={{ position: "absolute", left: (outerW - quiltW) / 2, top: 0, overflow: "visible", pointerEvents: "none", opacity: assembled ? 1 : 0 }}
+        >
+          <path
+            d={monthOutline}
+            fill="none"
+            stroke={QUILT_GOLD}
+            strokeWidth={0.9}
+            strokeLinejoin="round"
+            style={{ opacity: border.gold ? 0.45 : 0, transition: "opacity 900ms ease" }}
+          />
+          <path
+            d={monthOutline}
+            pathLength={1}
+            fill="none"
+            stroke={border.gold ? QUILT_GOLD : BINDING}
+            strokeWidth={border.gold ? 0.42 : 0.34}
+            strokeLinejoin="round"
+            strokeDasharray="1 1"
+            style={{ strokeDashoffset: border.drawn ? 0 : 1, transition: "stroke-dashoffset 2200ms ease-in-out, stroke 900ms ease, stroke-width 900ms ease" }}
+          />
+        </svg>
+      )}
     </div>
   );
 }
@@ -233,7 +307,8 @@ export function drawMonthPicture(monthKey: string, days: QuiltDay[], shape: Mont
   ctx.font = `700 96px ${fonts.script}`;
   ctx.fillText("Snug", W / 2, 150);
   ctx.font = `500 40px ${fonts.body}`;
-  ctx.fillText(monthName(monthKey), W / 2, 210);
+  ctx.fillText(`${monthName(monthKey)} · my ${shape.outline}`, W / 2, 210);
+  const perfect = monthEnding(score) === "perfect";
 
   const area = { x: 90, y: 260, w: W - 180, h: 860 };
   const cell = Math.floor(Math.min(area.w / shape.width, area.h / shape.height));
@@ -284,12 +359,41 @@ export function drawMonthPicture(monthKey: string, days: QuiltDay[], shape: Mont
     ctx.lineWidth = Math.max(1.5, cell * (d.pieces ? 0.22 : 0.1));
     ctx.setLineDash(d.pieces ? [] : [cell * 0.35, cell * 0.25]);
     ctx.stroke();
+    if (d.late && d.pieces) {
+      ctx.beginPath();
+      for (const loop of insetLoops(d.puzzle.board, LATE_INSET)) {
+        loop.forEach(([x, y], i) => (i ? ctx.lineTo(ox + (x + dx) * cell, oy + (y + dy) * cell) : ctx.moveTo(ox + (x + dx) * cell, oy + (y + dy) * cell)));
+        ctx.closePath();
+      }
+      ctx.strokeStyle = LATE_THREAD;
+      ctx.lineWidth = Math.max(1, cell * 0.16);
+      ctx.lineCap = "round";
+      ctx.setLineDash([cell * 0.34, cell * 0.26]);
+      ctx.stroke();
+      ctx.lineCap = "butt";
+    }
     ctx.setLineDash([]);
   }
+  // The month's outline around it all, gold for a perfect month.
+  trace(days.flatMap((d) => d.puzzle.board.map(([x, y]) => [x + d.offset.x, y + d.offset.y] as Cell)), 0, 0);
+  ctx.lineJoin = "round";
+  if (perfect) {
+    ctx.strokeStyle = "rgba(199,154,46,0.45)";
+    ctx.lineWidth = cell * 0.9;
+    ctx.stroke();
+  }
+  ctx.strokeStyle = perfect ? QUILT_GOLD : BINDING;
+  ctx.lineWidth = Math.max(2, cell * (perfect ? 0.42 : 0.34));
+  ctx.stroke();
 
-  ctx.fillStyle = BINDING;
+  ctx.fillStyle = perfect ? GOLD_TEXT : BINDING;
   ctx.font = `600 44px ${fonts.body}`;
-  ctx.fillText(`${(score.onTheDay + score.later).toLocaleString()} of ${score.squares.toLocaleString()} squares`, W / 2, 1185);
+  ctx.fillText(
+    perfect ? "A perfect month" : `${(score.onTheDay + score.later).toLocaleString()} of ${score.squares.toLocaleString()} squares`,
+    W / 2,
+    1185,
+  );
+  ctx.fillStyle = BINDING;
   ctx.font = `400 30px ${fonts.body}`;
   ctx.fillText(`${score.perfectDays} perfect ${score.perfectDays === 1 ? "day" : "days"} · ${score.daysPlayed} of ${score.days} days played`, W / 2, 1235);
   ctx.globalAlpha = 0.7;
@@ -370,11 +474,119 @@ export function MonthScoreView({ score }: { score: MonthScore }) {
   );
 }
 
-/** How long the days sit in their calendar squares before they fly. */
-const HOLD_MS = 900;
+const dayName = (dateKey: string) => new Date(`${dateKey}T12:00:00`).toLocaleDateString(undefined, { month: "long", day: "numeric" });
 
-/** The end-of-month reveal: the month's days sit in their calendar squares, then fly together into the quilt. */
-export function MonthReveal({ monthKey, onClose }: { monthKey: string; onClose: () => void }) {
+/** The month's closing line: a gold perfect month, a complete quilt, or the squares still to stitch. */
+export function EndingBanner({ score, outline }: { score: MonthScore; outline: string }) {
+  const ending = monthEnding(score);
+  const gold = ending === "perfect";
+  return (
+    <div
+      style={{
+        textAlign: "center",
+        fontSize: 15,
+        fontWeight: 600,
+        padding: "8px 12px",
+        borderRadius: 10,
+        border: `2px dashed ${gold ? QUILT_GOLD : BINDING}`,
+        background: gold ? "rgba(199,154,46,0.12)" : "rgba(122,74,52,0.06)",
+        color: gold ? "#8a6410" : undefined,
+      }}
+    >
+      {ending === "perfect"
+        ? "A perfect month: every square stitched on its day"
+        : ending === "complete"
+          ? `Quilt complete! ${score.later.toLocaleString()} squares caught up later`
+          : `${score.missed.toLocaleString()} squares left. Stitch them any time to finish your ${outline}.`}
+    </div>
+  );
+}
+
+/** When each step of the reveal starts (ms): stitch the outline, show the missed days, name the picture, the ending. */
+const REVEAL_AT = [600, 2900, 3700, 4300];
+
+/**
+ * The end-of-month reveal: your quilt as you left it, the month's outline stitched around it (turning gold for a
+ * perfect month), the missed days as linen, the picture's name, then the score. `onStitch` opens a missed day.
+ */
+export function RevealSequence({
+  monthKey,
+  days,
+  shape,
+  onShare,
+  onStitch,
+  note,
+}: {
+  monthKey: string;
+  days: QuiltDay[];
+  shape: MonthShape;
+  onShare: () => void;
+  onStitch?: (dateKey: string) => void;
+  note?: string;
+}) {
+  const score = useMemo(() => monthScore(days), [days]);
+  const perfect = monthEnding(score) === "perfect";
+  const firstMissed = days.find((d) => !d.pieces);
+  const [play, setPlay] = useState(0);
+  const [stage, setStage] = useState(0);
+  useEffect(() => {
+    const timers = REVEAL_AT.map((ms, i) => window.setTimeout(() => setStage(i + 1), ms));
+    return () => timers.forEach((t) => window.clearTimeout(t));
+  }, [play]);
+  const shown = (from: number) => ({ opacity: stage >= from ? 1 : 0, transition: "opacity 600ms ease", pointerEvents: stage >= from ? ("auto" as const) : ("none" as const) });
+
+  return (
+    <div>
+      <div style={{ fontFamily: SCRIPT, fontSize: 40, lineHeight: 1, color: BINDING, fontWeight: 700, textAlign: "center" }}>{monthName(monthKey)}</div>
+      <div style={{ textAlign: "center", fontSize: 13.5, opacity: 0.75, margin: "6px 0 16px" }}>
+        {stage < 2 ? "Your month, as you stitched it" : "Every day in its place"}
+      </div>
+      <MonthQuiltView
+        key={play}
+        monthKey={monthKey}
+        days={days}
+        shape={shape}
+        assembled
+        maxWidth={500}
+        missedHidden={stage < 2}
+        border={{ drawn: stage >= 1, gold: perfect && stage >= 2 }}
+      />
+      <div style={{ ...shown(3), textAlign: "center", fontFamily: SCRIPT, fontSize: 34, color: perfect ? GOLD_TEXT : BINDING, marginTop: 14 }}>
+        It was {pictureName(shape.outline)}!
+      </div>
+      <div style={{ ...shown(4), marginTop: 10 }}>
+        <EndingBanner score={score} outline={shape.outline} />
+        <div style={{ marginTop: 12 }}>
+          <MonthScoreView score={score} />
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 10, marginTop: 16 }}>
+          {firstMissed && onStitch && (
+            <Btn primary onClick={() => onStitch(firstMissed.dateKey)}>
+              Stitch {dayName(firstMissed.dateKey)}
+            </Btn>
+          )}
+          <Btn primary={!(firstMissed && onStitch)} onClick={onShare}>
+            Share picture
+          </Btn>
+          <Btn
+            onClick={() => {
+              setStage(0);
+              setPlay((n) => n + 1);
+            }}
+          >
+            Play again
+          </Btn>
+        </div>
+        <div aria-live="polite" style={{ textAlign: "center", fontSize: 13, minHeight: 18, marginTop: 8, opacity: 0.75 }}>
+          {note}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The end-of-month reveal in its modal, for the month just over; `onStitch` closes it and opens a missed day. */
+export function MonthReveal({ monthKey, onClose, onStitch }: { monthKey: string; onClose: () => void; onStitch?: (dateKey: string) => void }) {
   const [month, setMonth] = useState<MonthDays | null>(null);
   useEffect(() => {
     let live = true;
@@ -391,25 +603,6 @@ export function MonthReveal({ monthKey, onClose }: { monthKey: string; onClose: 
     };
   }, [monthKey, onClose]);
   const days = useMemo(() => (month ? quiltDays(month) : []), [month]);
-  const score = useMemo(() => monthScore(days), [days]);
-
-  const [play, setPlay] = useState(0);
-  const [assembled, setAssembled] = useState(false);
-  const [settled, setSettled] = useState(false);
-  useEffect(() => {
-    if (!month) return;
-    const fly = window.setTimeout(() => setAssembled(true), HOLD_MS);
-    const done = window.setTimeout(() => setSettled(true), HOLD_MS + 1100 + days.length * 40 + 200);
-    return () => {
-      window.clearTimeout(fly);
-      window.clearTimeout(done);
-    };
-  }, [month, days.length, play]);
-  const replay = () => {
-    setAssembled(false);
-    setSettled(false);
-    setPlay((n) => n + 1);
-  };
 
   const bodyRef = useRef<HTMLDivElement>(null);
   const [note, setNote] = useState("");
@@ -418,7 +611,7 @@ export function MonthReveal({ monthKey, onClose }: { monthKey: string; onClose: 
     setNote("");
     try {
       const fonts = await canvasFonts(bodyRef.current);
-      const picture = drawMonthPicture(monthKey, days, month.shape, score, fonts);
+      const picture = drawMonthPicture(monthKey, days, month.shape, monthScore(days), fonts);
       if ((await shareMonthPicture(picture, monthKey, `My ${monthName(monthKey)} quilt on Snug`)) === "downloaded") setNote("Picture saved");
     } catch (err) {
       // Closing the share sheet is not a failure.
@@ -429,27 +622,24 @@ export function MonthReveal({ monthKey, onClose }: { monthKey: string; onClose: 
   return (
     <StitchedModal label={`${monthName(monthKey)} quilt`} onClose={onClose} width={560}>
       <div ref={bodyRef}>
-        <div style={{ fontFamily: SCRIPT, fontSize: 40, lineHeight: 1, color: BINDING, fontWeight: 700, textAlign: "center" }}>{monthName(monthKey)}</div>
-        <div style={{ textAlign: "center", fontSize: 13.5, opacity: 0.75, margin: "6px 0 16px" }}>
-          {settled ? "Your month, stitched into one quilt" : "Every day of the month, coming together"}
-        </div>
-        {month ? (
-          <MonthQuiltView monthKey={monthKey} days={days} shape={month.shape} assembled={assembled} maxWidth={500} />
+        {month?.shape ? (
+          <RevealSequence
+            monthKey={monthKey}
+            days={days}
+            shape={month.shape}
+            onShare={share}
+            onStitch={
+              onStitch &&
+              ((key) => {
+                onClose();
+                onStitch(key);
+              })
+            }
+            note={note}
+          />
         ) : (
           <div style={{ minHeight: 240, display: "grid", placeItems: "center", fontFamily: SCRIPT, fontSize: 26, color: BINDING }}>Gathering your days…</div>
         )}
-        <div style={{ marginTop: 18, opacity: settled ? 1 : 0, transition: "opacity 500ms ease", pointerEvents: settled ? "auto" : "none" }}>
-          <MonthScoreView score={score} />
-          <div style={{ display: "flex", justifyContent: "center", gap: 10, marginTop: 16 }}>
-            <Btn primary onClick={share}>
-              Share picture
-            </Btn>
-            <Btn onClick={replay}>Play again</Btn>
-          </div>
-          <div aria-live="polite" style={{ textAlign: "center", fontSize: 13, minHeight: 18, marginTop: 8, opacity: 0.75 }}>
-            {note}
-          </div>
-        </div>
       </div>
     </StitchedModal>
   );

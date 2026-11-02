@@ -12,7 +12,7 @@ import { generateOutlineMonth, outlineFor, type Outline } from "./outline";
 import { boardStats, type BoardStats } from "./boardStats";
 import { MonthQuiltView, type QuiltDay } from "./monthQuilt";
 
-const OUTLINES: Outline[] = [
+export const OUTLINES: Outline[] = [
   "pumpkin", "tree", "heart", "ghost", "star", "snowflake", "mitten", "shamrock", "egg", "flower", "sun", "watermelon", "apple", "leaf",
   "quilt", "hexagon", "diamond", "plus", "house", "octagon", "bowtie",
 ];

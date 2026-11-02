@@ -6,7 +6,7 @@ import { dayRecord, type DayRecord } from "./records";
 import type { Puzzle } from "./generator";
 import { loadMonth, type MonthDays, type MonthShape } from "./puzzles";
 import { QuiltThumb } from "./collection";
-import { MonthQuiltView, MonthScoreView, monthScore, quiltDays, type MonthScore, type QuiltDay } from "./monthQuilt";
+import { EndingBanner, GOLD_TEXT, MonthQuiltView, MonthScoreView, monthEnding, monthScore, quiltDays, type MonthScore, type QuiltDay } from "./monthQuilt";
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
 const GOLD_FILL = "#e2b03e";
@@ -67,26 +67,46 @@ function Legend({ swatch, children }: { swatch: DayRecord; children: ReactNode }
 
 type MonthQuilt = { monthKey: string; days: QuiltDay[]; score: MonthScore; shape?: MonthShape };
 
-/** The Quilt tab: the month so far as one quilt, or the finished month with its score and a replay of its reveal. */
-function MonthPanel({ quilt, over, onReveal }: { quilt: MonthQuilt | null; over: boolean; onReveal: () => void }) {
+/** The Quilt tab: the month so far as one quilt, or the finished month with its name, score and a replay of its reveal. */
+function MonthPanel({ quilt, over, onReveal, onStitch }: { quilt: MonthQuilt | null; over: boolean; onReveal: () => void; onStitch: (key: string) => void }) {
   if (!quilt) {
     return <div style={{ minHeight: 200, display: "grid", placeItems: "center", fontFamily: SCRIPT, fontSize: 24, color: BINDING }}>Laying out the month…</div>;
   }
   const finished = quilt.days.filter((d) => d.pieces).length;
+  const firstMissed = quilt.days.find((d) => !d.pieces);
+  const perfect = monthEnding(quilt.score) === "perfect";
   return (
     <div>
       {finished || quilt.shape ? (
-        <MonthQuiltView monthKey={quilt.monthKey} days={quilt.days} shape={quilt.shape} assembled maxWidth={380} />
+        <MonthQuiltView
+          monthKey={quilt.monthKey}
+          days={quilt.days}
+          shape={quilt.shape}
+          assembled
+          maxWidth={380}
+          border={quilt.shape ? { drawn: true, gold: perfect } : undefined}
+        />
       ) : (
         <div style={{ textAlign: "center", fontSize: 14, opacity: 0.75, padding: "30px 0" }}>Finish a day and its quilt takes its place here.</div>
       )}
       <div style={{ marginTop: 16 }}>
-        {over ? (
+        {over && quilt.shape ? (
           <>
-            <MonthScoreView score={quilt.score} />
+            <div style={{ textAlign: "center", fontFamily: SCRIPT, fontSize: 28, color: perfect ? GOLD_TEXT : BINDING, marginBottom: 8 }}>
+              Your {quilt.shape.outline}
+            </div>
+            {finished > 0 && <EndingBanner score={quilt.score} outline={quilt.shape.outline} />}
+            <div style={{ marginTop: 12 }}>
+              <MonthScoreView score={quilt.score} />
+            </div>
             {finished > 0 && (
-              <div style={{ display: "flex", justifyContent: "center", marginTop: 14 }}>
-                <Btn small primary onClick={onReveal}>
+              <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 10, marginTop: 14 }}>
+                {firstMissed && (
+                  <Btn small primary onClick={() => onStitch(firstMissed.dateKey)}>
+                    Stitch {new Date(`${firstMissed.dateKey}T12:00:00`).toLocaleDateString(undefined, { month: "long", day: "numeric" })}
+                  </Btn>
+                )}
+                <Btn small primary={!firstMissed} onClick={onReveal}>
                   Play the reveal
                 </Btn>
               </div>
@@ -221,7 +241,7 @@ export function QuiltCalendar({
         {tab("quilt", "Quilt")}
       </div>
       {view === "quilt" ? (
-        <MonthPanel quilt={quilt} over={over} onReveal={() => onReveal(month)} />
+        <MonthPanel quilt={quilt} over={over} onReveal={() => onReveal(month)} onStitch={onPick} />
       ) : (
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 5 }}>

@@ -11,4 +11,5 @@ export const DEV_PAGES: DevPage[] = [
   { href: "/games/snug/art", name: "Snug art sheet", about: "Every Snug drawing on one page" },
   { href: "/games/snug/lab", name: "Snug month lab", about: "Sew any month outline on a sample month" },
   { href: "/games/snug/lab/sounds", name: "Snug sound lab", about: "Every sound choice, side by side" },
+  { href: "/games/snug/lab/reveal", name: "Snug reveal lab", about: "The month's reveal, finished four ways" },
 ];

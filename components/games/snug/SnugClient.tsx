@@ -17,3 +17,4 @@ export const SnugGame = dynamic(() => import("./Snug").then((m) => m.Snug), { ss
 export const SnugArt = dynamic(() => import("./ArtSheet").then((m) => m.SnugArtSheet), { ssr: false, loading: Loading });
 export const SnugLab = dynamic(() => import("./MonthLab").then((m) => m.MonthLab), { ssr: false, loading: Loading });
 export const SnugSoundLab = dynamic(() => import("./SoundLab").then((m) => m.SoundLab), { ssr: false, loading: Loading });
+export const SnugRevealLab = dynamic(() => import("./RevealLab").then((m) => m.RevealLab), { ssr: false, loading: Loading });
