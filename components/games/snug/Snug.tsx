@@ -8,7 +8,7 @@ import { BINDING, LINEN, YARNS } from "./quilt";
 import { StitchBorder } from "./stitches";
 import { useFloatingHeader } from "@/components/shared/SlidingHeader";
 import { QuiltCalendar } from "./calendar";
-import { MonthReveal, revealDue } from "./monthQuilt";
+import { MonthReveal, monthComplete, revealDue } from "./monthQuilt";
 import { GAME, LAUNCH_DATE, clearStaleRecords, loadBest, playerStats, saveBest, type Progress } from "./records";
 import { canvasFile, canvasFonts, drawResultPicture, quiltGrid } from "./share";
 import { SNUG_FONTS } from "./fonts";
@@ -326,6 +326,8 @@ function SnugDay({
   const [finalPieces, setFinalPieces] = useState<PieceState[] | null>(shown?.pieces ?? null);
   const [confirming, setConfirming] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  // The selected patch breathes only when it was reached by keyboard; after a drag or tap you can see which one it is.
+  const [keyFocus, setKeyFocus] = useState(false);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [carry, setCarry] = useState<Carry | null>(null);
   const carryRef = useRef(carry);
@@ -351,7 +353,10 @@ function SnugDay({
   // Last month's quilt plays once per device, the first time Snug opens in the new month.
   const [revealMonth, setRevealMonth] = useState<string | null>(() => (lab ? null : revealDue(today, LAUNCH_DATE)));
   const closeReveal = useCallback(() => setRevealMonth(null), []);
-  const modalOpen = showHowTo || showCalendar || !!revealMonth;
+  // Finishing a past month's last missing day plays its quilt, now complete.
+  const [completed, setCompleted] = useState<string | null>(null);
+  const closeCompleted = useCallback(() => setCompleted(null), []);
+  const modalOpen = showHowTo || showCalendar || !!revealMonth || !!completed;
   const modalRef = useRef(modalOpen);
   modalRef.current = modalOpen;
   // Ticks the visible clock; the value itself is read from `clock`.
@@ -640,6 +645,7 @@ function SnugDay({
     setCarry(null);
     setDrag(d);
     setSelected(p.id);
+    setKeyFocus(false);
     setConfirming(false);
   };
 
@@ -869,6 +875,7 @@ function SnugDay({
     setConfirming(false);
     setSelected(null);
     const run: Attempt = { gaps: holes, timeMs, pieces: settledPieces, hints: hintIds.length, v: PUZZLE_VERSION };
+    const before = lab ? null : loadBest(dateKey);
     // The lab's test quilt keeps nothing.
     const best = lab ? run : saveBest(dateKey, run);
     setBestRun(best);
@@ -879,7 +886,13 @@ function SnugDay({
     }
     if (!lab) saveRunRemote(dateKey, scoredRun, best);
     window.setTimeout(() => setShowCard(true), holes === 0 ? 1500 : 250);
-  }, [isReplay, isArchive, pieces, dateKey, saved, stopClock, hintIds, holesIn, lab]);
+    const month = dateKey.slice(0, 7);
+    if (!lab && holes === 0 && (before?.gaps ?? 1) > 0 && month < today.slice(0, 7)) {
+      void monthComplete(month)
+        .then((done) => done && window.setTimeout(() => setCompleted(dateKey), 1500))
+        .catch(() => {});
+    }
+  }, [isReplay, isArchive, pieces, dateKey, saved, stopClock, hintIds, holesIn, lab, today]);
 
   useEffect(() => {
     // Many moves can fill the board (a drop, a hint, a restored game), so finishing watches for it here.
@@ -1078,7 +1091,8 @@ function SnugDay({
       <div aria-live="polite" style={visuallyHidden}>
         {said}
       </div>
-      {revealMonth && !showHowTo && <MonthReveal monthKey={revealMonth} onClose={closeReveal} />}
+      {revealMonth && !showHowTo && <MonthReveal monthKey={revealMonth} onClose={closeReveal} onStitch={onPickDate} />}
+      {completed && !revealMonth && <MonthReveal monthKey={completed.slice(0, 7)} completedDay={completed} onClose={closeCompleted} />}
       {showCalendar && (
         <QuiltCalendar
           current={dateKey}
@@ -1220,7 +1234,12 @@ function SnugDay({
                     tabIndex={movable ? 0 : -1}
                     role={movable ? "button" : undefined}
                     aria-label={`Patch ${index + 1} of ${pieces.length}, ${p.cells.length} squares, ${p.at && !p.loose ? "on the quilt" : "in the basket"}${spare ? ", marked spare" : ""}`}
-                    onFocus={() => movable && setSelected(p.id)}
+                    onFocus={(e) => {
+                      if (!movable) return;
+                      setSelected(p.id);
+                      setKeyFocus(e.currentTarget.matches(":focus-visible"));
+                    }}
+                    onBlur={() => setKeyFocus(false)}
                     style={{
                       outline: "none",
                       position: "absolute",
@@ -1238,7 +1257,6 @@ function SnugDay({
                         [
                           // Always present, so greying fades in rather than snapping.
                           `grayscale(${spare && !lifting ? 0.85 : 0})`,
-                          selected === p.id && phase === "playing" && !dragged ? "drop-shadow(0 0 2px #fff) drop-shadow(0 0 1.5px #fff)" : "",
                           // Stitched-down patches cast no shadow, so neighbors meet at a clean seam.
                           lifted || p.loose ? "drop-shadow(0 12px 10px rgba(40,20,10,.4))" : p.at ? "" : "drop-shadow(0 2px 2px rgba(40,20,10,.35))",
                         ]
@@ -1253,6 +1271,7 @@ function SnugDay({
                         interactive={phase === "playing"}
                         loose={p.loose && !lifted}
                         hinted={hintIds.includes(p.id) && phase === "playing" && onSolutionSpot(p)}
+                        selected={keyFocus && selected === p.id && phase === "playing" && !dragged}
                         onDown={(e, i) => onPieceDown(e, p, index, i)}
                       />
                     </div>
