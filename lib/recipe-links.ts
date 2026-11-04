@@ -2,7 +2,7 @@
 // shares read (docs/recipes/plan.md, "Step links, splits and highlighting"). Pure.
 
 import type { RecipeIngredient, RecipeStep, RecipeUse } from "@/lib/recipes";
-import { withoutAmount } from "@/lib/recipe-units";
+import { withAmount, withoutAmount } from "@/lib/recipe-units";
 
 // Words that describe an ingredient without naming it.
 const STOP = new Set(
@@ -37,10 +37,10 @@ function names(line: string): string[][] {
 }
 
 /**
- * For each step, the ingredients its words name that it does not use yet. A step names an ingredient by its last
- * word ("flour"); when two ingredients share that word ("brown sugar", "white sugar"), it takes the word before too.
+ * For each step, the ingredients its words name that it does not use. A step names an ingredient by its last word
+ * ("flour"); when two ingredients share that word ("brown sugar", "white sugar"), it takes the word before too.
  */
-export function suggestUses(ingredients: RecipeIngredient[], steps: RecipeStep[]): Map<string, string[]> {
+export function namedIngredients(ingredients: RecipeIngredient[], steps: RecipeStep[]): Map<string, string[]> {
   const named = ingredients.filter((i) => i.text.trim()).map((i) => ({ id: i.id, names: names(i.text) }));
   const lastWords = new Map<string, number>();
   for (const n of named) for (const w of new Set(n.names.map((x) => x.at(-1)!))) lastWords.set(w, (lastWords.get(w) ?? 0) + 1);
@@ -64,11 +64,33 @@ export function suggestUses(ingredients: RecipeIngredient[], steps: RecipeStep[]
   return out;
 }
 
+/** The links edit mode suggests: each ingredient at the first step that names it, not again at later mentions. */
+export function suggestUses(ingredients: RecipeIngredient[], steps: RecipeStep[]): Map<string, string[]> {
+  const named = namedIngredients(ingredients, steps);
+  const taken = new Set<string>();
+  const out = new Map<string, string[]>();
+  for (const step of steps) {
+    const fresh = (named.get(step.id) ?? []).filter((id) => !taken.has(id));
+    if (fresh.length) out.set(step.id, fresh);
+    for (const id of fresh) taken.add(id);
+    for (const u of step.uses ?? []) if (!u.amount) taken.add(u.ingredientId);
+  }
+  return out;
+}
+
 export type Share = { step: number; amount?: string };
 
 /** Where an ingredient goes: each step that uses it, in order, with that step's amount when only part is used. */
 export function sharesOf(ingredientId: string, steps: RecipeStep[]): Share[] {
   return steps.flatMap((s, i) => (s.uses ?? []).filter((u) => u.ingredientId === ingredientId).map((u) => ({ step: i + 1, ...(u.amount ? { amount: u.amount } : {}) })));
+}
+
+/** The line a step's use reads as: its share, the rest when another step takes a share, or the whole line. */
+export function lineForUse(ingredient: RecipeIngredient, amount: string | undefined, steps: RecipeStep[]): string {
+  if (amount) return withAmount(ingredient.text, amount);
+  if (!sharesOf(ingredient.id, steps).some((s) => s.amount)) return ingredient.text;
+  const name = withoutAmount(ingredient.text);
+  return `Rest of the ${name.charAt(0).toLowerCase()}${name.slice(1)}`;
 }
 
 /** The uses that still point at an ingredient of the recipe. */

@@ -6,6 +6,8 @@ import Button from "@mui/material/Button";
 import ButtonBase from "@mui/material/ButtonBase";
 import Container from "@mui/material/Container";
 import IconButton from "@mui/material/IconButton";
+import ToggleButton from "@mui/material/ToggleButton";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import AddIcon from "@mui/icons-material/Add";
@@ -20,12 +22,14 @@ import type { RatingSummary } from "@/lib/recipe-ratings";
 import { formatMinutes, shortDay, totalMinutes, type RecipeIngredient } from "@/lib/recipes";
 import { batchesOf, formatAmount, showIngredient, showShare, showTemperatures, type UnitSystem } from "@/lib/recipe-units";
 import { sharesOf, type Share } from "@/lib/recipe-links";
+import { layoutTable } from "@/lib/recipe-table";
 import { setRecipeUnits } from "@/app/actions/recipes";
 import CookHistory from "./CookHistory";
 import CookLogDialog, { type Cook } from "./CookLogDialog";
 import BackLink from "./BackLink";
 import CookMode from "./CookMode";
 import FavoriteButton from "./FavoriteButton";
+import GlanceTable from "./GlanceTable";
 import { panelSx } from "./RecipeCard";
 import RatingLine from "./RatingLine";
 import RatingsChart from "./RatingsChart";
@@ -141,6 +145,42 @@ export default function RecipeView({
     total && recipe.prepMin && recipe.cookMin ? `Total ${formatMinutes(total)}` : null,
   ].filter(Boolean);
 
+  const stepper = (
+    <Box sx={{ display: "inline-flex", alignItems: "center", border: `1px solid ${color.rule}`, borderRadius: 999, bgcolor: color.surface }}>
+      <IconButton size="small" aria-label="Fewer" disabled={amount <= stepBy} onClick={() => setAmount((a) => Math.max(stepBy, a - stepBy))}>
+        <RemoveIcon fontSize="small" />
+      </IconButton>
+      <Typography variant="body2" aria-live="polite" sx={{ minWidth: 92, textAlign: "center", fontWeight: 600 }}>
+        {servings ? `${amount} ${amount === 1 ? "serving" : "servings"}` : `${formatAmount(amount)} ${amount === 1 ? "batch" : "batches"}`}
+      </Typography>
+      <IconButton size="small" aria-label="More" disabled={amount >= base * 20} onClick={() => setAmount((a) => a + stepBy)}>
+        <AddIcon fontSize="small" />
+      </IconButton>
+    </Box>
+  );
+  const unitsRow = (
+    <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, mb: 1 }}>
+      <UnitsSwitch value={units} onChange={chooseUnits} />
+      {factor !== 1 && (
+        <Button size="small" onClick={() => setAmount(base)} sx={{ px: 1 }}>
+          Back to {servings ? `${base} servings` : "1 batch"}
+        </Button>
+      )}
+    </Box>
+  );
+  const table = React.useMemo(() => layoutTable(recipe.ingredients, recipe.steps), [recipe.ingredients, recipe.steps]);
+  const [glance, setGlance] = React.useState(false);
+  const viewSwitch = table && (
+    <ToggleButtonGroup size="small" exclusive value={glance ? "glance" : "steps"} onChange={(_, v: string | null) => v && setGlance(v === "glance")} aria-label="How to show the recipe">
+      <ToggleButton value="steps" sx={{ px: 1.25, py: 0.25, fontSize: 13, textTransform: "none", borderColor: color.rule }}>
+        Steps
+      </ToggleButton>
+      <ToggleButton value="glance" sx={{ px: 1.25, py: 0.25, fontSize: 13, textTransform: "none", borderColor: color.rule }}>
+        At a glance
+      </ToggleButton>
+    </ToggleButtonGroup>
+  );
+
   return (
     <Container maxWidth="lg" sx={{ py: { xs: 2, md: 3 } }}>
       <BackLink />
@@ -232,32 +272,30 @@ export default function RecipeView({
           </Box>
         </Box>
 
+        {glance && table ? (
+          <Box component="section" aria-labelledby="glance-title" sx={{ mt: { xs: 3, md: 4 } }}>
+            <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, mb: 1 }}>
+              <Typography id="glance-title" variant="h5" component="h2" sx={{ ...sectionTitle, mb: 0, flex: 1 }}>
+                At a glance
+              </Typography>
+              {viewSwitch}
+            </Box>
+            <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, mb: 1.5 }}>
+              {stepper}
+              {unitsRow}
+            </Box>
+            <GlanceTable table={table} ingredients={recipe.ingredients} steps={recipe.steps} factor={factor} units={units} linked={linked} />
+          </Box>
+        ) : (
         <Box sx={{ display: "grid", gap: { xs: 3, md: 4 }, gridTemplateColumns: { xs: "1fr", md: "minmax(220px, 1fr) 2fr" }, alignItems: "start", mt: { xs: 3, md: 4 } }}>
           <Box component="section" aria-labelledby="ingredients-title">
             <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, mb: 1 }}>
               <Typography id="ingredients-title" variant="h5" component="h2" sx={{ ...sectionTitle, mb: 0, flex: 1 }}>
                 Ingredients
               </Typography>
-              <Box sx={{ display: "inline-flex", alignItems: "center", border: `1px solid ${color.rule}`, borderRadius: 999, bgcolor: color.surface }}>
-                <IconButton size="small" aria-label="Fewer" disabled={amount <= stepBy} onClick={() => setAmount((a) => Math.max(stepBy, a - stepBy))}>
-                  <RemoveIcon fontSize="small" />
-                </IconButton>
-                <Typography variant="body2" aria-live="polite" sx={{ minWidth: 92, textAlign: "center", fontWeight: 600 }}>
-                  {servings ? `${amount} ${amount === 1 ? "serving" : "servings"}` : `${formatAmount(amount)} ${amount === 1 ? "batch" : "batches"}`}
-                </Typography>
-                <IconButton size="small" aria-label="More" disabled={amount >= base * 20} onClick={() => setAmount((a) => a + stepBy)}>
-                  <AddIcon fontSize="small" />
-                </IconButton>
-              </Box>
+              {stepper}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, mb: 1 }}>
-              <UnitsSwitch value={units} onChange={chooseUnits} />
-              {factor !== 1 && (
-                <Button size="small" onClick={() => setAmount(base)} sx={{ px: 1 }}>
-                  Back to {servings ? `${base} servings` : "1 batch"}
-                </Button>
-              )}
-            </Box>
+            {unitsRow}
             {recipe.ingredients.length === 0 ? (
               <Typography sx={{ color: color.muted }}>No ingredients yet.</Typography>
             ) : (
@@ -306,9 +344,12 @@ export default function RecipeView({
           </Box>
 
           <Box component="section" aria-labelledby="steps-title" sx={{ minWidth: 0 }}>
-            <Typography id="steps-title" variant="h5" component="h2" sx={sectionTitle}>
-              Steps
-            </Typography>
+            <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, mb: 1 }}>
+              <Typography id="steps-title" variant="h5" component="h2" sx={{ ...sectionTitle, mb: 0, flex: 1 }}>
+                Steps
+              </Typography>
+              {viewSwitch}
+            </Box>
             {recipe.steps.length === 0 ? (
               <Typography sx={{ color: color.muted }}>No steps yet.</Typography>
             ) : (
@@ -348,6 +389,7 @@ export default function RecipeView({
             )}
           </Box>
         </Box>
+        )}
 
         <Box component="section" aria-labelledby="log-title" sx={{ mt: { xs: 3, md: 4 }, pt: { xs: 2.5, md: 3 }, borderTop: `1px solid ${color.rule}` }}>
           <Typography id="log-title" variant="h5" component="h2" sx={sectionTitle}>

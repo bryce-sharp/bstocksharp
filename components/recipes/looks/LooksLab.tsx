@@ -6,7 +6,7 @@ import { useState, type CSSProperties, type ReactNode } from "react";
 import { LOOK_FONTS } from "./fonts";
 import { LOOKS, type Look } from "./looks";
 import { BANANA_BREAD, CARD_RECIPES, usesOf, type LookRecipe } from "./featured";
-import { layoutTable } from "./table";
+import { layoutTable } from "@/lib/recipe-table";
 
 /** The accent when it is text: light accents like butter yellow use a deeper shade to stay readable. */
 const textAccent = (look: Look) => look.color.accentText ?? look.color.accent;
@@ -303,7 +303,7 @@ function RecipePage({ look, recipe }: { look: Look; recipe: LookRecipe }) {
 
 function Glance({ look, recipe, lit, pick }: { look: Look; recipe: LookRecipe; lit: { use: (id: string, amount?: string) => boolean; step: (id: string) => boolean }; pick: { step: (id: string) => void; ingredient: (id: string) => void } }) {
   const c = look.color;
-  const table = layoutTable(recipe);
+  const table = layoutTable(recipe.ingredients, recipe.steps);
   if (!table) return <div style={{ color: c.muted }}>This recipe&apos;s steps do not form one tree yet, so the table is not available.</div>;
   const top = recipe.before.length;
   const byId = new Map(recipe.ingredients.map((i) => [i.id, i]));

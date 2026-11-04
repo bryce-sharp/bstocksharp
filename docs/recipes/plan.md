@@ -2,7 +2,7 @@
 
 Status: plan agreed 2026-11-03; the look (Sage & Butter) chosen 2026-11-03; PR 1 (the section, recipes,
 favorites) and PR 2 (the cook log and ratings) built 2026-11-03 (#88); PR 3 (cook mode, #89) and PR 4 (import)
-built 2026-11-04; PR 5 (units), PR 6 (step links), PR 8 (recipes inside recipes) and PR 9 (meals) built 2026-11-04. The dev mockup is retired now that every screen of it is real; the looks lab `/recipes/looks`
+built 2026-11-04; PR 5 (units), PR 6 (step links), PR 8 (recipes inside recipes), PR 9 (meals) and PR 10 (At a glance) built 2026-11-04. The dev mockup is retired now that every screen of it is real; the looks lab `/recipes/looks`
 stays as the reference for the table view.
 
 Decided: a Recipes section of this site, shared by the household; anyone in the household edits any recipe, and
@@ -119,6 +119,15 @@ quiet pattern, soft colors, friendly type that stays easy to read.
   right spanning what it combines, labelled with its action word.
 - Each step continues from earlier steps (guessed from order, editable). A split ingredient takes a row per use.
 - A recipe without links shows the normal view instead.
+- As built (`lib/recipe-table.ts`, PR 10): a Steps / At a glance switch on the recipe page. Steps that combine
+  nothing (heating the oven) run across the top; a tap on a cell reads that step. What each step continues from
+  is guessed, not yet editable: a step carries on the main line, takes in the earlier steps whose ingredients it
+  names, and starts its own branch when it opens with another bowl, "meanwhile", or new ingredients and no word
+  like "add" or "into the"; the last step takes in whatever is left. It rebuilds the looks lab's hand-made tree.
+  Link suggestions now offer each ingredient at its first step only, count lines agree with their amount
+  ("1 egg", "2 cloves garlic"), and a temperature given in both scales shows just the one in your units.
+- `scripts/seed-recipes-dev.mjs` fills the dev household with 12 linked recipes, 3 meals and months of cook logs;
+  it refuses the live database.
 
 ### Recipes inside recipes
 - In edit mode, an ingredient line can link to another recipe with a picker ("1 batch Fry sauce").
@@ -208,7 +217,7 @@ reads it merges.
   - [x] PR 8: recipes inside recipes: the edit-mode picker, scaling through.
   - [x] PR 9: meals: log a meal, meal page, meal ratings.
 - **Phase 3: the fancy parts**
-  - [ ] PR 10: At a glance table view.
+  - [x] PR 10: At a glance table view.
   - [ ] PR 11: saved menus.
   - [ ] PR 12: multi-recipe cook mode.
   - [ ] PR 13: photos (Vercel Blob uploads; the `attachments` table exists) on recipes and log entries.
