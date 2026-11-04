@@ -1,8 +1,9 @@
 # Recipes
 
 Status: plan agreed 2026-11-03; the look (Sage & Butter) chosen 2026-11-03; PR 1 (the section, recipes,
-favorites) and PR 2 (the cook log and ratings) built 2026-11-03 (#88); PR 3 (cook mode) built 2026-11-04. The dev
-pages `/recipes/mock` and `/recipes/looks` stay as references until import and the table view are built.
+favorites) and PR 2 (the cook log and ratings) built 2026-11-03 (#88); PR 3 (cook mode, #89) and PR 4 (import)
+built 2026-11-04. The dev mockup is retired now that every screen of it is real; the looks lab `/recipes/looks`
+stays as the reference for the table view.
 
 Decided: a Recipes section of this site, shared by the household; anyone in the household edits any recipe, and
 there are no private recipes; ratings and favorites belong to each person; grocery lists wait until later; the
@@ -130,6 +131,17 @@ quiet pattern, soft colors, friendly type that stays easy to read.
 - A new safe-fetch helper does the fetching: web addresses only, private and local network addresses refused
   (checked again on every redirect), short timeout, size cap. Failures go to `logEvent`.
 - A page without recipe data offers pasting the text instead.
+- The helper is `lib/safe-fetch.ts` (Node's https with a checked DNS lookup, so every connection's address is
+  checked); the parser is `lib/recipe-import.ts`. A link already saved says so before saving a second copy.
+- Reads, in order: the page's JSON-LD; schema.org microdata (older blogs, Jetpack cards); then the page's own text
+  with the paste reader, flagged on the review screen as "read from the page's text". Headings come from the WP
+  Recipe Maker or Tasty Recipes card when its line count matches the data.
+- Pasted text may be a whole copied page: the reader finds the recipe card's name, description, times, servings,
+  ingredient headings (all caps or ending in a colon), steps and notes, or an older post's heading-less block.
+- Sites behind a bot check (Ambitious Kitchen, Damn Delicious, Maangchi) answer 403; pasting is the way in, and we
+  never try to get past the check.
+- Tested 2026-11-04 on about 120 recipes from about 70 sites; `npm run recipes:check` (add `-- --live` for real
+  links) keeps the cases that came up.
 
 ## Data
 
@@ -166,7 +178,7 @@ reads it merges.
     trend on cards, not tried yet, last cooked, filters, the ratings chart.
   - [x] PR 3: cook mode: read-through, Up next, timers, "meanwhile" notes, keep the screen on (one shared hook,
     which the workout runner moves onto), Done cooking asks for a log.
-  - [ ] PR 4: import from a link: safe fetch, recipe data parsing, review, paste fallback.
+  - [x] PR 4: import from a link: safe fetch, recipe data parsing, review, paste fallback.
 - **Phase 2: smarter recipes**
   - [ ] PR 5: units: As written, US or Metric per person; sensible units when scaling; baking weights.
   - [ ] PR 6: step links: uses, splits, highlighting, suggested links in edit mode.

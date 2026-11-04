@@ -9,7 +9,10 @@ import { requireEditor, requireEditorFor } from "@/lib/auth";
 import { getActiveProfile } from "@/lib/profile";
 import { requireGroupId } from "@/lib/session";
 import { requireApp } from "@/lib/hub-apps";
-import { getRecipe, getRecipeLog } from "@/lib/queries/recipes";
+import { findRecipeBySource, getRecipe, getRecipeLog } from "@/lib/queries/recipes";
+import { logEvent } from "@/lib/events";
+import { SafeFetchError, safeFetchText } from "@/lib/safe-fetch";
+import { recipeFromHtml, recipeFromPageText, type RecipeDraft } from "@/lib/recipe-import";
 import { RECIPE_LIMITS, cleanTags, type RecipeIngredient, type RecipeStep, type RecipeUse } from "@/lib/recipes";
 
 // Anyone in the household edits any recipe (docs/recipes/plan.md); favorites are each person's own.
@@ -26,6 +29,8 @@ export type RecipeInput = {
   sourceUrl: string;
   tags: string[];
   ingredients: RecipeIngredient[];
+  /** Set when the recipe came from a link: its picture, kept for when recipes show photos. */
+  imported?: { imageUrl: string | null };
   steps: RecipeStep[];
 };
 
@@ -129,6 +134,7 @@ function parseRecipe(input: unknown) {
     notes: text(input.notes, RECIPE_LIMITS.text),
     sourceName: text(input.sourceName, RECIPE_LIMITS.title),
     sourceUrl: webAddress(input.sourceUrl),
+    ...(isRecord(input.imported) ? { sourceKind: "imported", imageUrl: typeof input.imported.imageUrl === "string" ? webAddress(input.imported.imageUrl) : null } : {}),
     tags: cleanTags(Array.isArray(input.tags) ? input.tags.filter((t): t is string => typeof t === "string") : []),
     ingredients,
     steps: parseSteps(input.steps, ingredients),
@@ -279,4 +285,33 @@ export async function deleteCookLog(logId: number): Promise<RecipeSaveResult> {
     return problem(err);
   }
   refreshRecipe(log.recipeId);
+}
+
+// ── Import from a link ────────────────────────────────────────────────────────
+
+export type ReadLinkResult =
+  | { draft: RecipeDraft; existing: { id: number; title: string } | null }
+  | { error: string; paste: boolean };
+
+/** Reads the recipe on a web page for the form to show; nothing is saved here. Failures go to the event log. */
+export async function readRecipeLink(link: string): Promise<ReadLinkResult> {
+  await requireApp("recipes");
+  await requireEditor();
+  const groupId = await requireGroupId();
+  const host = URL.canParse(link) ? new URL(link).hostname : null;
+  try {
+    const page = await safeFetchText(String(link).trim());
+    const draft = recipeFromHtml(page.body, page.url) ?? recipeFromPageText(page.body, page.url);
+    if (!draft) {
+      await logEvent({ groupId, source: "recipes", kind: "recipe_import_failed", message: "No recipe data on the page", data: { host, reason: "no_recipe" } });
+      return { error: "That page has no recipe data we can read. Paste the recipe instead.", paste: true };
+    }
+    await logEvent({ groupId, source: "recipes", kind: "recipe_import_read", data: { host, ok: true, readFrom: draft.readFrom, ingredients: draft.ingredients.length, steps: draft.steps.length } });
+    return { draft, existing: await findRecipeBySource(draft.sourceUrl) };
+  } catch (err) {
+    const reason = err instanceof SafeFetchError ? err.reason : "unknown";
+    await logEvent({ groupId, source: "recipes", kind: "recipe_import_failed", message: err instanceof Error ? err.message : null, data: { host, reason } });
+    const message = err instanceof SafeFetchError ? err.message : "That page could not be read.";
+    return { error: reason === "address" || reason === "blocked" ? message : `${message} You can paste the recipe instead.`, paste: reason !== "address" && reason !== "blocked" };
+  }
 }

@@ -10,6 +10,7 @@ import MenuItem from "@mui/material/MenuItem";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import AddIcon from "@mui/icons-material/Add";
+import LinkIcon from "@mui/icons-material/Link";
 import FavoriteIcon from "@mui/icons-material/Favorite";
 import SearchIcon from "@mui/icons-material/Search";
 import Link from "@/components/shared/AppLink";
@@ -20,7 +21,7 @@ import TagChip from "./TagChip";
 import { color } from "./tokens";
 
 type Sort = "az" | "cooked" | "rated" | "new";
-type Filters = { q: string; tag: string | null; fav: boolean; untried: boolean; top: boolean; sort: Sort };
+type Filters = { q: string; tag: string | null; fav: boolean; untried: boolean; top: boolean; site: boolean; sort: Sort };
 
 const SORTS: { value: Sort; label: string }[] = [
   { value: "az", label: "A to Z" },
@@ -48,6 +49,7 @@ function writeUrl(f: Filters) {
   if (f.fav) params.set("fav", "1");
   if (f.untried) params.set("untried", "1");
   if (f.top) params.set("top", "1");
+  if (f.site) params.set("site", "1");
   if (f.sort !== "az") params.set("sort", f.sort);
   const query = params.toString();
   window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
@@ -80,6 +82,7 @@ export default function RecipeList({
       fav: params.get("fav") === "1",
       untried: params.get("untried") === "1",
       top: params.get("top") === "1",
+      site: params.get("site") === "1",
       sort: isSort(sort) ? sort : "az",
     };
   });
@@ -96,11 +99,12 @@ export default function RecipeList({
         (!filters.fav || r.favorite) &&
         (!filters.untried || r.ratings.state === "untried") &&
         (!filters.top || starsOf(r) >= 4) &&
+        (!filters.site || r.sourceKind === "imported") &&
         (!filters.tag || r.tags.includes(filters.tag)) &&
         matchesSearch(r, filters.q),
     )
     .sort(SORTERS[filters.sort]);
-  const filtering = filters.q !== "" || filters.tag !== null || filters.fav || filters.untried || filters.top;
+  const filtering = filters.q !== "" || filters.tag !== null || filters.fav || filters.untried || filters.top || filters.site;
 
   return (
     <Container maxWidth="lg" sx={{ py: { xs: 3, md: 5 } }}>
@@ -113,9 +117,14 @@ export default function RecipeList({
             {recipes.length === 1 ? "1 recipe" : `${recipes.length} recipes`} in the household cookbook
           </Typography>
         </Box>
-        <Button component={Link} href="/recipes/new" variant="contained" startIcon={<AddIcon />}>
-          New recipe
-        </Button>
+        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+          <Button component={Link} href="/recipes/import" variant="outlined" startIcon={<LinkIcon />}>
+            Import from a link
+          </Button>
+          <Button component={Link} href="/recipes/new" variant="contained" startIcon={<AddIcon />}>
+            New recipe
+          </Button>
+        </Box>
       </Box>
 
       {recipes.length > 0 && (
@@ -156,6 +165,9 @@ export default function RecipeList({
             />
             <TagChip label="Not tried yet" selected={filters.untried} aria-pressed={filters.untried} onClick={() => update({ untried: !filters.untried })} />
             <TagChip label="4 stars and up" selected={filters.top} aria-pressed={filters.top} onClick={() => update({ top: !filters.top })} />
+            {recipes.some((r) => r.sourceKind === "imported") && (
+              <TagChip label="From a site" selected={filters.site} aria-pressed={filters.site} onClick={() => update({ site: !filters.site })} />
+            )}
             {tags.map((t) => (
               <TagChip key={t} label={t} selected={filters.tag === t} aria-pressed={filters.tag === t} onClick={() => update({ tag: filters.tag === t ? null : t })} />
             ))}
@@ -169,15 +181,20 @@ export default function RecipeList({
             No recipes yet
           </Typography>
           <Typography sx={{ color: color.muted, mt: 1, mb: 2.5 }}>Add the first one: a family favorite, or tonight&apos;s dinner.</Typography>
-          <Button component={Link} href="/recipes/new" variant="contained" startIcon={<AddIcon />}>
-            Add a recipe
-          </Button>
+          <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 1 }}>
+            <Button component={Link} href="/recipes/import" variant="outlined" startIcon={<LinkIcon />}>
+              Import from a link
+            </Button>
+            <Button component={Link} href="/recipes/new" variant="contained" startIcon={<AddIcon />}>
+              Add a recipe
+            </Button>
+          </Box>
         </Box>
       ) : shown.length === 0 ? (
         <Box sx={{ ...panelSx, p: 3, textAlign: "center" }}>
           <Typography sx={{ color: color.muted }}>Nothing matches.</Typography>
           {filtering && (
-            <Button onClick={() => update({ q: "", tag: null, fav: false, untried: false, top: false })} sx={{ mt: 1 }}>
+            <Button onClick={() => update({ q: "", tag: null, fav: false, untried: false, top: false, site: false })} sx={{ mt: 1 }}>
               Clear the search
             </Button>
           )}

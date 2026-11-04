@@ -33,6 +33,7 @@ export async function listRecipes(profileId: number | null) {
         tags: recipes.tags,
         ingredients: recipes.ingredients,
         version: recipes.version,
+        sourceKind: recipes.sourceKind,
         createdAt: recipes.createdAt,
         favorite: favoriteOf(profileId),
       })
@@ -136,4 +137,15 @@ export async function hasRecipeLogs(recipeId: number): Promise<boolean> {
     .where(and(eq(recipeLogs.recipeId, recipeId), eq(recipes.groupId, groupId)))
     .limit(1);
   return row !== undefined;
+}
+
+/** Our recipe saved from this link, if any, so an import can say we already have it. */
+export async function findRecipeBySource(sourceUrl: string): Promise<{ id: number; title: string } | null> {
+  const groupId = await requireGroupId();
+  const [row] = await db
+    .select({ id: recipes.id, title: recipes.title })
+    .from(recipes)
+    .where(and(eq(recipes.groupId, groupId), eq(recipes.sourceUrl, sourceUrl)))
+    .limit(1);
+  return row ?? null;
 }

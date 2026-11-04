@@ -7,6 +7,11 @@ export type Line = { key: string; text: string; heading?: boolean };
 
 export const blankLine = (heading = false): Line => ({ key: newLineId(), text: "", ...(heading ? { heading } : {}) });
 
+/** Plain lines, such as an imported recipe's, each with a new id; one blank line when there are none. */
+export function textLines(texts: string[]): Line[] {
+  return texts.length ? texts.map((text) => ({ ...blankLine(), text })) : [blankLine()];
+}
+
 /** Ingredients as editor lines, with a heading wherever the group changes; an empty heading ends a group. */
 export function ingredientLines(ingredients: RecipeIngredient[]): Line[] {
   const lines: Line[] = [];

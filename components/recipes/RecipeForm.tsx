@@ -15,9 +15,10 @@ import Typography from "@mui/material/Typography";
 import Link from "@/components/shared/AppLink";
 import { addRecipe, deleteRecipe, updateRecipe, type RecipeInput } from "@/app/actions/recipes";
 import type { Recipe } from "@/lib/db/schema";
-import { cleanTags, type RecipeIngredient, type RecipeStep } from "@/lib/recipes";
+import { cleanTags, newLineId, type RecipeIngredient, type RecipeStep } from "@/lib/recipes";
 import LineEditor from "./LineEditor";
-import { blankLine, ingredientLines, toIngredients, toSteps, type Line } from "./lines";
+import { blankLine, ingredientLines, textLines, toIngredients, toSteps, type Line } from "./lines";
+import type { RecipeDraft } from "@/lib/recipe-import";
 import { skinScope, skinSx } from "./RecipesSkin";
 import TagChip from "./TagChip";
 import { color } from "./tokens";
@@ -46,20 +47,32 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
 }
 
 /** New and edit share this form; it holds the whole recipe and sends it in one save. */
-export default function RecipeForm({ recipe, tagOptions, logged = false }: { recipe?: Recipe; tagOptions: string[]; logged?: boolean }) {
-  const [title, setTitle] = React.useState(recipe?.title ?? "");
-  const [description, setDescription] = React.useState(recipe?.description ?? "");
-  const [servings, setServings] = React.useState(recipe?.servings?.toString() ?? "");
-  const [prepMin, setPrepMin] = React.useState(recipe?.prepMin?.toString() ?? "");
-  const [cookMin, setCookMin] = React.useState(recipe?.cookMin?.toString() ?? "");
-  const [tags, setTags] = React.useState<string[]>(recipe?.tags ?? []);
-  const [ingredients, setIngredients] = React.useState<Line[]>(() => ingredientLines(recipe?.ingredients ?? []));
+export default function RecipeForm({
+  recipe,
+  draft,
+  tagOptions,
+  logged = false,
+}: {
+  recipe?: Recipe;
+  /** A recipe read from a link or pasted text, shown for review as a new recipe. */
+  draft?: RecipeDraft;
+  tagOptions: string[];
+  logged?: boolean;
+}) {
+  const start = recipe ?? draft;
+  const [title, setTitle] = React.useState(start?.title ?? "");
+  const [description, setDescription] = React.useState(start?.description ?? "");
+  const [servings, setServings] = React.useState(start?.servings?.toString() ?? "");
+  const [prepMin, setPrepMin] = React.useState(start?.prepMin?.toString() ?? "");
+  const [cookMin, setCookMin] = React.useState(start?.cookMin?.toString() ?? "");
+  const [tags, setTags] = React.useState<string[]>(start?.tags ?? []);
+  const [ingredients, setIngredients] = React.useState<Line[]>(() => (draft ? ingredientLines(draft.ingredients.map((i) => ({ ...i, id: newLineId() }))) : ingredientLines(recipe?.ingredients ?? [])));
   const [steps, setSteps] = React.useState<Line[]>(() =>
-    recipe?.steps.length ? recipe.steps.map((s) => ({ key: s.id, text: s.text })) : [blankLine()],
+    draft ? textLines(draft.steps) : recipe?.steps.length ? recipe.steps.map((s) => ({ key: s.id, text: s.text })) : [blankLine()],
   );
-  const [notes, setNotes] = React.useState(recipe?.notes ?? "");
-  const [sourceName, setSourceName] = React.useState(recipe?.sourceName ?? "");
-  const [sourceUrl, setSourceUrl] = React.useState(recipe?.sourceUrl ?? "");
+  const [notes, setNotes] = React.useState(recipe?.notes ?? draft?.notes ?? "");
+  const [sourceName, setSourceName] = React.useState(start?.sourceName ?? "");
+  const [sourceUrl, setSourceUrl] = React.useState(start?.sourceUrl ?? "");
   const [error, setError] = React.useState<string | null>(null);
   const [dirty, setDirty] = React.useState(false);
   const [saving, startSaving] = React.useTransition();
@@ -96,6 +109,7 @@ export default function RecipeForm({ recipe, tagOptions, logged = false }: { rec
       tags: cleanTags(tags),
       ingredients: toIngredients(ingredients, recipe?.ingredients ?? []),
       steps: toSteps(steps, recipe?.steps ?? []),
+      ...(draft?.sourceUrl && sourceUrl === draft.sourceUrl ? { imported: { imageUrl: draft.imageUrl } } : {}),
     };
     // Once someone has cooked it, a change to what you cook asks whether it is a new version.
     if (recipe && logged && cookable(input.ingredients, input.steps) !== cookable(recipe.ingredients, recipe.steps)) {
