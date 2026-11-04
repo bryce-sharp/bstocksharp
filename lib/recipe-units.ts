@@ -270,6 +270,39 @@ function amountOf(low: string, high: string | undefined): { low: number; high?: 
   return b < a && b < 1 && Number.isInteger(a) ? { low: a + b } : { low: a, high: b };
 }
 
+// Words a count is counted in ("2 cloves garlic"), which agree with the amount before the thing itself does.
+const COUNTED = /^(clove|can|stick|batch|slice|sprig|stem|head|bunch|bulb|package|jar|bag|box|piece|strip|sheet|stalk|ear|fillet|cube|wedge|leaf|loaf|scoop|knob|handful|pinch|dash|drop)(e?s)?$/i;
+const ES_PLURAL = /^(potato|tomato|hero|echo)$/i;
+
+function plural(w: string): string {
+  if (/s$/i.test(w)) return w;
+  if (/[^aeiou]y$/i.test(w)) return `${w.slice(0, -1)}ies`;
+  if (/(x|z|ch|sh)$/i.test(w) || ES_PLURAL.test(w)) return `${w}es`;
+  if (/^(leaf|loaf)$/i.test(w)) return `${w.slice(0, -1)}ves`;
+  return `${w}s`;
+}
+
+function single(w: string): string {
+  if (/^(leaves|loaves)$/i.test(w)) return `${w.slice(0, -3)}f`;
+  if (w.length > 4 && /[^aeiou]ies$/i.test(w)) return `${w.slice(0, -3)}y`;
+  if (/(xes|zes|ches|shes|sses)$/i.test(w) || (/oes$/i.test(w) && ES_PLURAL.test(w.slice(0, -2)))) return w.slice(0, -2);
+  if (w.length > 3 && /[^s]s$/i.test(w)) return w.slice(0, -1);
+  return w;
+}
+
+/** A count line's thing agreeing with `n`: "1 large egg", "2 limes", "2 cloves garlic"; the rest stays as written. */
+function agree(rest: string, n: number): string {
+  // A package size in parentheses ("(14 oz) can") is skipped, keeping every position the same.
+  const plain = rest.replace(/\([^)]*\)/g, (p) => " ".repeat(p.length));
+  const end = plain.search(/[,+]|\s(?:for|to|plus)\s/i);
+  const head = end === -1 ? plain : plain.slice(0, end);
+  const words = [...head.matchAll(/\p{L}[\p{L}'-]*/gu)];
+  const noun = words.find((w) => COUNTED.test(w[0])) ?? words.at(-1);
+  if (!noun) return rest;
+  const fixed = n > 1 ? plural(noun[0]) : single(noun[0]);
+  return rest.slice(0, noun.index) + fixed + rest.slice(noun.index + noun[0].length);
+}
+
 function scaledAmount(low: string, high: string | undefined, factor: number): string {
   const r = amountOf(low, high);
   return r.high === undefined ? formatAmount(r.low * factor) : `${formatAmount(r.low * factor)} to ${formatAmount(r.high * factor)}`;
@@ -301,7 +334,10 @@ export function showIngredient(line: string, factor: number, system: UnitSystem)
   const [, number, low, high, token] = m;
   let rest = line.slice(m[0].length);
   // A stick is butter's; "4 sticks of celery" is a count.
-  if (!token || (unitOf(token) === "stick" && !/butter|margarine/i.test(rest))) return showTemperatures(scaledAmount(low!, high, factor) + line.slice(number!.length), system);
+  if (!token || (unitOf(token) === "stick" && !/butter|margarine/i.test(rest))) {
+    const r = amountOf(low!, high);
+    return showTemperatures(scaledAmount(low!, high, factor) + agree(line.slice(number!.length), (r.high ?? r.low) * factor), system);
+  }
 
   const lead: Lead = { ...amountOf(low!, high), key: unitOf(token), token, raw: "" };
   const plus = PLUS.exec(rest);
@@ -366,7 +402,10 @@ export function withAmount(line: string, amount: string): string {
   const a = LEAD.exec(amount);
   const m = LEAD.exec(line);
   const name = withoutAmount(line);
-  if (!a || !m?.[4]) return `${amount.trim()} ${name}`;
+  if (!a || !m?.[4]) {
+    const n = a ? amountOf(a[2]!, a[3]) : null;
+    return `${amount.trim()} ${n && !a![4] ? agree(name, n.high ?? n.low).trim() : name}`;
+  }
   const split = amountOf(a[2]!, a[3]);
   const lineKey = unitOf(m[4]);
   const splitKey = a[4] ? unitOf(a[4]) : lineKey;
@@ -407,11 +446,27 @@ function convertTemperature(n: number, to: "F" | "C"): number {
 export function showTemperatures(text: string, system: UnitSystem): string {
   if (system === "written") return text;
   const to = system === "metric" ? "C" : "F";
-  return text.replace(TEMPERATURE, (whole, a1?: string, b1?: string, s1?: string, a2?: string, b2?: string, s2?: string, a3?: string, s3?: string) => {
-    const from = s1 ?? (s2 === "℉" ? "F" : s2 === "℃" ? "C" : s3);
-    if (from?.toUpperCase() === to) return whole;
-    const low = signed(a1 ?? a2 ?? a3!);
+  const hits = [...text.matchAll(TEMPERATURE)].map((m) => {
+    const [whole, a1, b1, s1, a2, b2, s2, a3, s3] = m;
+    const from = (s1 ?? (s2 === "℉" ? "F" : s2 === "℃" ? "C" : s3))?.toUpperCase();
     const high = b1 ?? b2;
-    return `${convertTemperature(low, to)}${high ? `–${convertTemperature(signed(high), to)}` : ""}°${to}`;
+    const shown = from === to ? whole : `${convertTemperature(signed(a1 ?? a2 ?? a3!), to)}${high ? `–${convertTemperature(signed(high), to)}` : ""}°${to}`;
+    return { start: m.index, end: m.index + whole.length, whole, from, shown };
   });
+  let out = "";
+  let at = 0;
+  for (let i = 0; i < hits.length; i++) {
+    const h = hits[i]!;
+    const twin = hits[i + 1];
+    // "350°F (175°C)" gives both: the one in this system stays and the other goes.
+    if (twin && twin.from !== h.from && /^\s*\($/.test(text.slice(h.end, twin.start)) && text[twin.end] === ")") {
+      out += text.slice(at, h.start) + (twin.from === to ? twin.whole : h.shown);
+      at = twin.end + 1;
+      i++;
+      continue;
+    }
+    out += text.slice(at, h.start) + h.shown;
+    at = h.end;
+  }
+  return out + text.slice(at);
 }

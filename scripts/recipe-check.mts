@@ -32,7 +32,7 @@ for (const [line, factor, want] of [
   ["2 cups flour", 2, "4 cups flour"],
   ["1/2 cup (115 g) butter", 2, "1 cup (230 g) butter"],
   ["2 (14 oz) cans tomatoes", 2, "4 (14 oz) cans tomatoes"],
-  ["1 can (14 oz) tomatoes", 2, "2 can (14 oz) tomatoes"],
+  ["1 can (14 oz) tomatoes", 2, "2 cans (14 oz) tomatoes"],
   ["1 stick (113 g) butter", 2, "2 sticks (226 g) butter"],
   ["1 teaspoon vanilla", 2, "2 teaspoons vanilla"],
   ["4 tbsp butter", 2, "1/2 cup butter"],
@@ -99,6 +99,7 @@ eq("temperatures metric", showTemperatures("Bake at 350°F, then 425 degrees F. 
 eq("temperatures us", showTemperatures("Preheat to 180°C (160°C fan). Roast at 200C.", "us"), "Preheat to 350°F (325°F fan). Roast at 400°F.");
 eq("temperatures signed", showTemperatures("Freeze at -18°C. Room 1350°F.", "us"), "Freeze at 0°F. Room 1350°F.");
 eq("temperatures cold", showTemperatures("Freeze at 0°F. Chill to 40°F.", "metric"), "Freeze at -18°C. Chill to 4°C.");
+eq("temperatures given in both", ["Heat the oven to 350°F (175°C).", "Heat to 180°C (350°F), then 425°F."].flatMap((t) => [showTemperatures(t, "us"), showTemperatures(t, "metric")]), ["Heat the oven to 350°F.", "Heat the oven to 175°C.", "Heat to 350°F, then 425°F.", "Heat to 180°C, then 220°C."]);
 eq("temperatures as written", showTemperatures("Bake at 350°F.", "written"), "Bake at 350°F.");
 eq("format 26.4", formatAmount(26.4), "26");
 eq("paste bullets", splitPasted("- 2 cups flour\n• 1 tsp salt\n▢ 3 eggs"), ["2 cups flour", "1 tsp salt", "3 eggs"]);
@@ -115,6 +116,11 @@ const linkSteps = [
 ];
 const suggested = suggestUses(linkIngredients, linkSteps);
 eq("suggest links", linkSteps.map((st) => (suggested.get(st.id) ?? []).map((id) => shortName(linkIngredients.find((x) => x.id === id)!.text))), [["all-purpose flour", "baking soda", "baking powder"], ["brown sugar"], ["Salt and pepper", "chicken broth"], []]);
+eq("counts agree", [["1 egg", 2], ["2 eggs", 0.5], ["4 cloves garlic, minced", 0.25], ["10 basil leaves", 0.1], ["1 (14 oz) can tomatoes", 2], ["1 small onion, sliced", 2]].map(([l, f]) => showIngredient(l as string, f as number, "written")), ["2 eggs", "1 egg", "1 clove garlic, minced", "1 basil leaf", "2 (14 oz) cans tomatoes", "2 small onions, sliced"]);
+eq("a share of a count agrees", [withAmount("2 limes", "1"), withAmount("4 large eggs", "1")], ["1 lime", "1 large egg"]);
+const butterSteps = [{ id: "m1", text: "Melt the butter." }, { id: "m2", text: "Whisk the butter into the bananas." }];
+const butterLines = [{ id: "b", text: "1/2 cup butter" }, { id: "n", text: "3 bananas" }];
+eq("a later mention is not suggested again", [...suggestUses(butterLines, butterSteps)], [["m1", ["b"]], ["m2", ["n"]]]);
 eq("short names", ["1 can (14 oz) diced tomatoes", "2 cloves garlic, minced", "1/2 cup (115 g) unsalted butter, melted"].map(shortName), ["tomatoes", "garlic", "butter"]);
 eq("shares", sharesOf("i3", linkSteps), [{ step: 2, amount: "1" }, { step: 4, amount: "1" }]);
 eq("share keeps the line's own equivalent", [withAmount("1 cup (150 g) all-purpose flour", "1/2"), showShare("1 cup (150 g) all-purpose flour", "1/2", 1, "metric"), showShare("4 large eggs", "2", 2, "us")], ["1/2 cup (75 g) all-purpose flour", "75 g", "4"]);

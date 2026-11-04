@@ -37,10 +37,10 @@ function names(line: string): string[][] {
 }
 
 /**
- * For each step, the ingredients its words name that it does not use yet. A step names an ingredient by its last
- * word ("flour"); when two ingredients share that word ("brown sugar", "white sugar"), it takes the word before too.
+ * For each step, the ingredients its words name that it does not use. A step names an ingredient by its last word
+ * ("flour"); when two ingredients share that word ("brown sugar", "white sugar"), it takes the word before too.
  */
-export function suggestUses(ingredients: RecipeIngredient[], steps: RecipeStep[]): Map<string, string[]> {
+export function namedIngredients(ingredients: RecipeIngredient[], steps: RecipeStep[]): Map<string, string[]> {
   const named = ingredients.filter((i) => i.text.trim()).map((i) => ({ id: i.id, names: names(i.text) }));
   const lastWords = new Map<string, number>();
   for (const n of named) for (const w of new Set(n.names.map((x) => x.at(-1)!))) lastWords.set(w, (lastWords.get(w) ?? 0) + 1);
@@ -60,6 +60,20 @@ export function suggestUses(ingredients: RecipeIngredient[], steps: RecipeStep[]
       )
       .map((n) => n.id);
     if (found.length) out.set(step.id, found);
+  }
+  return out;
+}
+
+/** The links edit mode suggests: each ingredient at the first step that names it, not again at later mentions. */
+export function suggestUses(ingredients: RecipeIngredient[], steps: RecipeStep[]): Map<string, string[]> {
+  const named = namedIngredients(ingredients, steps);
+  const taken = new Set<string>();
+  const out = new Map<string, string[]>();
+  for (const step of steps) {
+    const fresh = (named.get(step.id) ?? []).filter((id) => !taken.has(id));
+    if (fresh.length) out.set(step.id, fresh);
+    for (const id of fresh) taken.add(id);
+    for (const u of step.uses ?? []) if (!u.amount) taken.add(u.ingredientId);
   }
   return out;
 }
