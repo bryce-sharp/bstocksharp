@@ -7,7 +7,8 @@
 
 import { recipeFromHtml, recipeFromPageText, recipeFromText, isoMinutes, textMinutes, yieldServings, tidyLine, withoutIngredientEcho } from "../lib/recipe-import.ts";
 import { splitPasted, webUrl } from "../lib/recipes.ts";
-import { formatAmount, showIngredient, showTemperatures, withAmount } from "../lib/recipe-units.ts";
+import { formatAmount, showIngredient, showShare, showTemperatures, withAmount } from "../lib/recipe-units.ts";
+import { toSteps } from "../components/recipes/lines.ts";
 import { shortName, sharesOf, suggestUses } from "../lib/recipe-links.ts";
 import { summarizeRatings, type RatingLog } from "../lib/recipe-ratings.ts";
 import { checkUrl, isPrivateAddress, readBody, safeFetchText, SafeFetchError } from "../lib/safe-fetch.ts";
@@ -85,11 +86,19 @@ for (const [line, system, factor, want] of [
   ["2 tablespoons (25g) granulated sugar", "metric", 1, "25g granulated sugar"],
   ["2 tablespoons (25g) granulated sugar", "us", 1, "2 tablespoons granulated sugar"],
   ["1/2 to 2/3 cup (113g to 152g) hot water", "metric", 1, "113g to 152g hot water"],
+  ["1 g instant yeast", "us", 1, "1 g instant yeast"],
+  ["2 g instant yeast", "us", 2, "4 g instant yeast"],
+  ["1/8 tsp salt", "written", 0.25, "0.03 tsp salt"],
+  ["1 cup water (for the rice)", "metric", 1, "235 ml water (for the rice)"],
+  ["1 cup water for the sugar syrup", "metric", 1, "235 ml water for the sugar syrup"],
+  ["1 cup flour, plus more for dusting", "metric", 1, "about 125 g flour, plus more for dusting"],
 ] as const) {
   eq(`units ${line} ${system} x${factor}`, showIngredient(line, factor, system), want);
 }
 eq("temperatures metric", showTemperatures("Bake at 350°F, then 425 degrees F. Fry at 350-375°F. Add 2 C of water.", "metric"), "Bake at 180°C, then 220°C. Fry at 180–190°C. Add 2 C of water.");
 eq("temperatures us", showTemperatures("Preheat to 180°C (160°C fan). Roast at 200C.", "us"), "Preheat to 350°F (325°F fan). Roast at 400°F.");
+eq("temperatures signed", showTemperatures("Freeze at -18°C. Room 1350°F.", "us"), "Freeze at 0°F. Room 1350°F.");
+eq("temperatures cold", showTemperatures("Freeze at 0°F. Chill to 40°F.", "metric"), "Freeze at -18°C. Chill to 4°C.");
 eq("temperatures as written", showTemperatures("Bake at 350°F.", "written"), "Bake at 350°F.");
 eq("format 26.4", formatAmount(26.4), "26");
 eq("paste bullets", splitPasted("- 2 cups flour\n• 1 tsp salt\n▢ 3 eggs"), ["2 cups flour", "1 tsp salt", "3 eggs"]);
@@ -108,7 +117,9 @@ const suggested = suggestUses(linkIngredients, linkSteps);
 eq("suggest links", linkSteps.map((st) => (suggested.get(st.id) ?? []).map((id) => shortName(linkIngredients.find((x) => x.id === id)!.text))), [["all-purpose flour", "baking soda", "baking powder"], ["brown sugar"], ["Salt and pepper", "chicken broth"], []]);
 eq("short names", ["1 can (14 oz) diced tomatoes", "2 cloves garlic, minced", "1/2 cup (115 g) unsalted butter, melted"].map(shortName), ["tomatoes", "garlic", "butter"]);
 eq("shares", sharesOf("i3", linkSteps), [{ step: 2, amount: "1" }, { step: 4, amount: "1" }]);
-eq("with amount", [withAmount("4 large eggs", "2"), withAmount("2 cups flour", "1"), withAmount("2 cups flour", "2 tbsp"), withAmount("1/2 cup (115 g) butter", "1/4")], ["2 large eggs", "1 cup flour", "2 tbsp flour", "1/4 cup butter"]);
+eq("share keeps the line's own equivalent", [withAmount("1 cup (150 g) all-purpose flour", "1/2"), showShare("1 cup (150 g) all-purpose flour", "1/2", 1, "metric"), showShare("4 large eggs", "2", 2, "us")], ["1/2 cup (75 g) all-purpose flour", "75 g", "4"]);
+eq("links keep their notes", toSteps([{ key: "s1", text: "Mix" }], [], { s1: [{ ingredientId: "i1", note: "the dry part" }, { ingredientId: "i2", amount: " 2 ", note: "n" }] })[0]!.uses, [{ ingredientId: "i1", note: "the dry part" }, { ingredientId: "i2", note: "n", amount: "2" }]);
+eq("with amount", [withAmount("4 large eggs", "2"), withAmount("2 cups flour", "1"), withAmount("2 cups flour", "2 tbsp"), withAmount("1/2 cup (115 g) butter", "1/4")], ["2 large eggs", "1 cup flour", "2 tbsp flour", "1/4 cup (58 g) butter"]);
 
 // ── Ratings ───────────────────────────────────────────────────────────────────
 const L = (profileId: number, cookedOn: string, rating: number | null, counted = true, recipeVersion = 1): RatingLog => ({ profileId, cookedOn, rating, counted, recipeVersion });

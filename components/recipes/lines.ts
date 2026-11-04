@@ -45,7 +45,7 @@ export function toSteps(lines: Line[], before: RecipeStep[], uses: Record<string
   const old = new Map(before.map((s) => [s.id, s]));
   return lines.map((l) => {
     const { uses: _oldUses, ...kept } = old.get(l.key) ?? { id: l.key, text: "" };
-    const linked = uses[l.key]?.map((u) => (u.amount?.trim() ? { ...u, amount: u.amount.trim() } : { ingredientId: u.ingredientId }));
+    const linked = uses[l.key]?.map(({ amount, ...use }) => (amount?.trim() ? { ...use, amount: amount.trim() } : use));
     return { ...kept, id: l.key, text: l.text, ...(linked?.length ? { uses: linked } : {}) };
   });
 }

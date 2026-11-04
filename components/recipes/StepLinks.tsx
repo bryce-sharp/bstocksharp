@@ -105,7 +105,8 @@ export default function StepLinks({ ingredients, steps, uses, onChange }: { ingr
                 value={open.amount ?? ""}
                 onChange={(e) => {
                   const amount = e.target.value.slice(0, 40);
-                  set(step.key, linked.map((x) => (x.ingredientId === open.ingredientId ? { ingredientId: x.ingredientId, ...(amount.trim() ? { amount } : {}) } : x)));
+                  const change = ({ amount: _was, ...use }: RecipeUse): RecipeUse => (amount.trim() ? { ...use, amount } : use);
+                  set(step.key, linked.map((x) => (x.ingredientId === open.ingredientId ? change(x) : x)));
                 }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {

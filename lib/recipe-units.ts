@@ -48,6 +48,8 @@ function cookAmount(n: number): [value: number, text: string] {
   const whole = Math.floor(n);
   const part = n - whole;
   const [value, text] = NICE.reduce((a, b) => (Math.abs(b[0] - part) < Math.abs(a[0] - part) ? b : a));
+  // A pinch scaled down stays on the page: a positive amount never prints as 0.
+  if (n > 0 && whole + value === 0) return [Number(n.toPrecision(1)), String(Number(n.toPrecision(1)))];
   if (Math.abs(value - part) > 0.04) return [Math.round(n * 10) / 10, String(Math.round(n * 10) / 10)];
   if (value === 1) return [whole + 1, String(whole + 1)];
   if (!text) return [whole, String(whole)];
@@ -163,7 +165,9 @@ const DENSITY: [RegExp, number][] = [
   [/\brice\b/i, 185],
 ];
 
-function gramsPerCup(name: string): number {
+/** Grams per cup for the ingredient the line names; its notes ("(for the rice)", ", for dusting") do not count. */
+function gramsPerCup(rest: string): number {
+  const name = rest.replace(/\([^)]*\)/g, " ").split(/,|\s(?:for|to|plus|if|divided)\s/i)[0]!;
   return DENSITY.find(([re]) => re.test(name))?.[1] ?? 0;
 }
 
@@ -252,7 +256,10 @@ function shownHead(lead: Lead, factor: number, system: UnitSystem, name: string)
     const pick = inLadder(high ?? low, u.kind, ladderSystem, false);
     return head(low, high, pick, pick.key === key ? token : undefined);
   }
-  return head(low, high, inLadder(high ?? low, u.kind, target, true));
+  const pick = inLadder(high ?? low, u.kind, target, true);
+  // Too small for the other system's units (4 g of yeast is a crumb of an ounce): it stays in its own.
+  if (UNIT[pick.key].system !== "metric" && (high ?? low) / pick.per < (u.kind === "weight" ? 1 / 4 : 1 / 8)) return factor === 1 ? null : head(low, high, key, token);
+  return head(low, high, pick);
 }
 
 /** A written amount or range; "1-3/4" is one and three quarters, not a range running down. */
@@ -317,9 +324,16 @@ export function showIngredient(line: string, factor: number, system: UnitSystem)
     const total = extra ? { ...lead, low: lead.low + (extra.low * UNIT[extra.key].size) / size, high: undefined } : lead;
     text = headText(total, factor, system, rest);
   }
-  const other =
-    system === "written" && paren && items ? ` (${paren[1]!.replace(new RegExp(PAREN_ITEM.source, "gi"), (_, a: string, b: string | undefined, t: string) => `${scaledAmount(a, b, factor)} ${unitName(unitOf(t), (amountOf(a, b).high ?? amountOf(a, b).low) * factor, t)}`)})` : "";
+  const other = system === "written" && paren && items ? ` (${scaledParen(paren[1]!, factor)})` : "";
   return showTemperatures(text + other + rest, system);
+}
+
+/** A parenthesis of amounts ("115 g", "1 stick, 113 g") with each one multiplied by `factor`. */
+function scaledParen(inner: string, factor: number): string {
+  return inner.replace(new RegExp(PAREN_ITEM.source, "gi"), (_, a: string, b: string | undefined, t: string) => {
+    const n = amountOf(a, b);
+    return `${scaledAmount(a, b, factor)} ${unitName(unitOf(t), (n.high ?? n.low) * factor, t)}`;
+  });
 }
 
 /** The ingredient line without its leading amount, unit and equivalent: "4 large eggs" is "large eggs". */
@@ -344,20 +358,41 @@ export function withAmount(line: string, amount: string): string {
   const a = LEAD.exec(amount);
   const m = LEAD.exec(line);
   const name = withoutAmount(line);
-  if (!a || a[4] || !m?.[4]) return `${amount.trim()} ${name}`;
-  const n = amountOf(a[2]!, a[3]);
-  return `${a[1]!.trim()} ${unitName(unitOf(m[4]), n.high ?? n.low, m[4])} ${name}`;
+  if (!a || !m?.[4]) return `${amount.trim()} ${name}`;
+  const split = amountOf(a[2]!, a[3]);
+  const lineKey = unitOf(m[4]);
+  const splitKey = a[4] ? unitOf(a[4]) : lineKey;
+  const head = a[4] ? amount.trim() : `${a[1]!.trim()} ${unitName(lineKey, split.high ?? split.low, m[4])}`;
+  // The line's own equivalent ("(150 g)") is scaled to the share, so the recipe's conversion still wins.
+  let rest = line.slice(m[0].length);
+  const plus = PLUS.exec(rest);
+  const extra = plus && UNIT[unitOf(plus[2]!)].kind === UNIT[lineKey].kind ? toNumber(plus[1]!) * UNIT[unitOf(plus[2]!)].size : 0;
+  if (plus) rest = rest.slice(plus[0].length);
+  const paren = PAREN.exec(rest);
+  const whole = amountOf(m[2]!, m[3]).low * UNIT[lineKey].size + extra;
+  const share = UNIT[splitKey].kind === UNIT[lineKey].kind && whole > 0 ? (split.low * UNIT[splitKey].size) / whole : 0;
+  const equivalent = paren && parenAmounts(paren[1]!) && share ? ` (${scaledParen(paren[1]!, share)})` : "";
+  return `${head}${equivalent} ${name}`.trim();
 }
 
-const TEMPERATURE = /(\d{2,3})(?:\s*(?:-|–|to)\s*(\d{2,3}))?\s*(?:°\s*|º\s*|degrees?\s+)([FC])\b|(\d{2,3})(?:\s*(?:-|–|to)\s*(\d{2,3}))?\s*(℉|℃)|(\d{3})\s*([FC])\b(?![a-z])/g;
+/** Just the amount of a step's share as it reads in `system`: "75 g" for "1/2" of "1 cup (150 g) flour" in Metric. */
+export function showShare(line: string, amount: string, factor: number, system: UnitSystem): string {
+  const shown = showIngredient(withAmount(line, amount), factor, system);
+  const about = shown.startsWith("about ") ? "about " : "";
+  const body = shown.slice(about.length);
+  const head = body.slice(0, body.length - withoutAmount(body).length).trim();
+  return head ? about + head : amount;
+}
 
+// A temperature with its sign ("-18°C"), never the tail of a longer number.
+const TEMPERATURE = /(?<![\d.])([-−]?\d{1,3})(?:\s*(?:-|–|to)\s*([-−]?\d{1,3}))?\s*(?:°\s*|º\s*|degrees?\s+)([FC])\b|(?<![\d.])([-−]?\d{1,3})(?:\s*(?:-|–|to)\s*([-−]?\d{1,3}))?\s*(℉|℃)|(?<![\d.])(\d{3})\s*([FC])\b(?![a-z])/g;
+const signed = (s: string) => Number(s.replace("−", "-"));
+
+/** Ovens round to the settings dials use; milk, fridges and freezers round to a degree or five. */
 function convertTemperature(n: number, to: "F" | "C"): number {
-  if (to === "C") {
-    const c = ((n - 32) * 5) / 9;
-    return Math.round(c / (c >= 100 ? 10 : 5)) * (c >= 100 ? 10 : 5);
-  }
-  const f = (n * 9) / 5 + 32;
-  return Math.round(f / (f >= 200 ? 25 : 5)) * (f >= 200 ? 25 : 5);
+  const v = to === "C" ? ((n - 32) * 5) / 9 : (n * 9) / 5 + 32;
+  const step = to === "C" ? (v >= 100 ? 10 : v >= 30 ? 5 : 1) : v >= 200 ? 25 : v >= 80 ? 5 : 1;
+  return Math.round(v / step) * step + 0;
 }
 
 /** Text with each temperature in the system's scale: 350°F reads 180°C in Metric, and 200°C reads 400°F in US. */
@@ -367,8 +402,8 @@ export function showTemperatures(text: string, system: UnitSystem): string {
   return text.replace(TEMPERATURE, (whole, a1?: string, b1?: string, s1?: string, a2?: string, b2?: string, s2?: string, a3?: string, s3?: string) => {
     const from = s1 ?? (s2 === "℉" ? "F" : s2 === "℃" ? "C" : s3);
     if (from?.toUpperCase() === to) return whole;
-    const low = Number(a1 ?? a2 ?? a3);
+    const low = signed(a1 ?? a2 ?? a3!);
     const high = b1 ?? b2;
-    return `${convertTemperature(low, to)}${high ? `–${convertTemperature(Number(high), to)}` : ""}°${to}`;
+    return `${convertTemperature(low, to)}${high ? `–${convertTemperature(signed(high), to)}` : ""}°${to}`;
   });
 }

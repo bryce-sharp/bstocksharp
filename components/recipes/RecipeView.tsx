@@ -18,7 +18,7 @@ import type { Recipe } from "@/lib/db/schema";
 import type { RecipeLogEntry } from "@/lib/queries/recipes";
 import type { RatingSummary } from "@/lib/recipe-ratings";
 import { formatMinutes, shortDay, totalMinutes, type RecipeIngredient } from "@/lib/recipes";
-import { formatAmount, showIngredient, showTemperatures, type UnitSystem } from "@/lib/recipe-units";
+import { formatAmount, showIngredient, showShare, showTemperatures, type UnitSystem } from "@/lib/recipe-units";
 import { sharesOf, type Share } from "@/lib/recipe-links";
 import { setRecipeUnits } from "@/app/actions/recipes";
 import CookHistory from "./CookHistory";
@@ -50,10 +50,10 @@ function grouped(ingredients: RecipeIngredient[]): { group: string | null; items
 }
 
 /** "· 2 in step 2, 2 in step 6" under an ingredient split across steps, or "· steps 2, 6" without amounts. */
-function sharesText(shares: Share[], factor: number, units: UnitSystem): string | null {
+function sharesText(line: string, shares: Share[], factor: number, units: UnitSystem): string | null {
   if (!shares.some((s) => s.amount) && shares.length < 2) return null;
   if (!shares.some((s) => s.amount)) return `steps ${shares.map((s) => s.step).join(", ")}`;
-  return shares.map((s) => (s.amount ? `${showIngredient(s.amount, factor, units)} in step ${s.step}` : `rest in step ${s.step}`)).join(", ");
+  return shares.map((s) => (s.amount ? `${showShare(line, s.amount, factor, units)} in step ${s.step}` : `rest in step ${s.step}`)).join(", ");
 }
 
 type Active = { kind: "step" | "ingredient"; id: string } | null;
@@ -263,7 +263,7 @@ export default function RecipeView({
                   )}
                   {items.map((ing) => {
                     const got = gotIngredient.has(ing.id);
-                    const shares = sharesText(sharesOf(ing.id, recipe.steps), factor, units);
+                    const shares = sharesText(ing.text, sharesOf(ing.id, recipe.steps), factor, units);
                     return (
                       <ButtonBase
                         key={ing.id}
