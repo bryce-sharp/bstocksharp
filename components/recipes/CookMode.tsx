@@ -13,7 +13,8 @@ import CloseIcon from "@mui/icons-material/Close";
 import ListAltIcon from "@mui/icons-material/ListAlt";
 import TimerOutlinedIcon from "@mui/icons-material/TimerOutlined";
 import { useWakeLock } from "@/components/shared/useWakeLock";
-import { formatClock, scaleIngredient, stepTimers, type RecipeIngredient, type RecipeStep } from "@/lib/recipes";
+import { formatClock, stepTimers, type RecipeIngredient, type RecipeStep } from "@/lib/recipes";
+import { showIngredient, showTemperatures, type UnitSystem } from "@/lib/recipe-units";
 import { skinScope, skinSx } from "./RecipesSkin";
 import { color, plaidBand, radius } from "./tokens";
 
@@ -49,11 +50,13 @@ function beep(ctx: AudioContext | null) {
 function IngredientChecklist({
   ingredients,
   factor,
+  units,
   got,
   toggle,
 }: {
   ingredients: RecipeIngredient[];
   factor: number;
+  units: UnitSystem;
   got: Set<string>;
   toggle: (id: string) => void;
 }) {
@@ -77,7 +80,7 @@ function IngredientChecklist({
                 {on ? "✓" : ""}
               </Box>
               <Box component="span" sx={{ textDecoration: on ? "line-through" : "none" }}>
-                {scaleIngredient(ing.text, factor)}
+                {showIngredient(ing.text, factor, units)}
               </Box>
             </ButtonBase>
           </React.Fragment>
@@ -96,6 +99,7 @@ export default function CookMode({
   ingredients,
   steps,
   factor,
+  units,
   amountLabel,
   onClose,
   onDone,
@@ -104,6 +108,7 @@ export default function CookMode({
   ingredients: RecipeIngredient[];
   steps: RecipeStep[];
   factor: number;
+  units: UnitSystem;
   amountLabel: string;
   onClose: () => void;
   onDone: () => void;
@@ -210,7 +215,7 @@ export default function CookMode({
               aria-label="Ingredients"
               sx={{ width: { xs: "100%", md: 360 }, flex: "none", position: { xs: "absolute", md: "static" }, inset: 0, zIndex: 2, overflowY: "auto", p: 2.5, bgcolor: color.surface, borderRight: { md: `1px solid ${color.rule}` } }}
             >
-              <IngredientChecklist ingredients={ingredients} factor={factor} got={got} toggle={toggle} />
+              <IngredientChecklist ingredients={ingredients} factor={factor} units={units} got={got} toggle={toggle} />
             </Box>
           )}
 
@@ -226,7 +231,7 @@ export default function CookMode({
                     <Typography variant="h6" component="h4" sx={{ mb: 1 }}>
                       Get these out
                     </Typography>
-                    {ingredients.length ? <IngredientChecklist ingredients={ingredients} factor={factor} got={got} toggle={toggle} /> : <Typography sx={{ color: color.muted }}>No ingredients listed.</Typography>}
+                    {ingredients.length ? <IngredientChecklist ingredients={ingredients} factor={factor} units={units} got={got} toggle={toggle} /> : <Typography sx={{ color: color.muted }}>No ingredients listed.</Typography>}
                   </Box>
                   <Box>
                     <Typography variant="h6" component="h4" sx={{ mb: 1 }}>
@@ -238,7 +243,7 @@ export default function CookMode({
                           <Box aria-hidden sx={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontWeight: 600, color: color.accent, fontSize: 19, minWidth: 24 }}>
                             {i + 1}
                           </Box>
-                          <span>{s.text}</span>
+                          <span>{showTemperatures(s.text, units)}</span>
                         </Box>
                       ))}
                     </Box>
@@ -252,7 +257,7 @@ export default function CookMode({
                     Step {at + 1} of {steps.length}
                   </Typography>
                   <Typography aria-live="polite" sx={{ fontSize: { xs: 26, md: 38 }, lineHeight: 1.35, fontWeight: 600, whiteSpace: "pre-line" }}>
-                    {step.text}
+                    {showTemperatures(step.text, units)}
                   </Typography>
                   {found.length > 0 && (
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
@@ -268,7 +273,7 @@ export default function CookMode({
                       <Typography sx={{ fontSize: 12, letterSpacing: 1.2, textTransform: "uppercase", fontWeight: 700, color: waits ? color.second : color.muted }}>
                         {waits ? "Up next, while this one waits" : "Up next"}
                       </Typography>
-                      <Typography sx={{ color: color.muted, fontSize: 16, mt: 0.5 }}>{next.text}</Typography>
+                      <Typography sx={{ color: color.muted, fontSize: 16, mt: 0.5 }}>{showTemperatures(next.text, units)}</Typography>
                     </Box>
                   )}
                 </Box>

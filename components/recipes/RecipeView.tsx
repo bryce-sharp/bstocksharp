@@ -17,7 +17,9 @@ import Link from "@/components/shared/AppLink";
 import type { Recipe } from "@/lib/db/schema";
 import type { RecipeLogEntry } from "@/lib/queries/recipes";
 import type { RatingSummary } from "@/lib/recipe-ratings";
-import { formatAmount, formatMinutes, scaleIngredient, shortDay, totalMinutes, type RecipeIngredient } from "@/lib/recipes";
+import { formatMinutes, shortDay, totalMinutes, type RecipeIngredient } from "@/lib/recipes";
+import { formatAmount, showIngredient, showTemperatures, type UnitSystem } from "@/lib/recipe-units";
+import { setRecipeUnits } from "@/app/actions/recipes";
 import CookHistory from "./CookHistory";
 import CookLogDialog, { type Cook } from "./CookLogDialog";
 import BackLink from "./BackLink";
@@ -27,6 +29,7 @@ import { panelSx } from "./RecipeCard";
 import RatingLine from "./RatingLine";
 import RatingsChart from "./RatingsChart";
 import TagChip from "./TagChip";
+import UnitsSwitch from "./UnitsSwitch";
 import { skinScope } from "./RecipesSkin";
 import Stars from "./Stars";
 import { color, font, gingham, radius, shadow } from "./tokens";
@@ -72,10 +75,13 @@ export default function RecipeView({
   cooks,
   defaultCook,
   today,
+  units: savedUnits,
 }: {
   recipe: RecipeViewData;
   person: string | null;
   canFavorite: boolean;
+  /** The active person's units; changing them here saves them when this login may edit that person. */
+  units: UnitSystem;
   logs: RecipeLogEntry[];
   ratings: RatingSummary;
   cooks: Cook[];
@@ -92,6 +98,11 @@ export default function RecipeView({
   const stepBy = servings ? 1 : 0.5;
   const [amount, setAmount] = React.useState(base);
   const factor = amount / base;
+  const [units, setUnits] = React.useState(savedUnits);
+  const chooseUnits = (next: UnitSystem) => {
+    setUnits(next);
+    if (canFavorite) setRecipeUnits(next).catch(() => {});
+  };
   const [gotIngredient, toggleIngredient] = useChecklist();
   const [doneStep, toggleStep] = useChecklist();
 
@@ -211,11 +222,14 @@ export default function RecipeView({
                 </IconButton>
               </Box>
             </Box>
-            {factor !== 1 && (
-              <Button size="small" onClick={() => setAmount(base)} sx={{ mb: 1, px: 1 }}>
-                Back to {servings ? `${base} servings` : "1 batch"}
-              </Button>
-            )}
+            <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, mb: 1 }}>
+              <UnitsSwitch value={units} onChange={chooseUnits} />
+              {factor !== 1 && (
+                <Button size="small" onClick={() => setAmount(base)} sx={{ px: 1 }}>
+                  Back to {servings ? `${base} servings` : "1 batch"}
+                </Button>
+              )}
+            </Box>
             {recipe.ingredients.length === 0 ? (
               <Typography sx={{ color: color.muted }}>No ingredients yet.</Typography>
             ) : (
@@ -240,7 +254,7 @@ export default function RecipeView({
                           {got ? "✓" : ""}
                         </Box>
                         <Box component="span" sx={{ textDecoration: got ? "line-through" : "none" }}>
-                          {scaleIngredient(ing.text, factor)}
+                          {showIngredient(ing.text, factor, units)}
                         </Box>
                       </ButtonBase>
                     );
@@ -274,7 +288,7 @@ export default function RecipeView({
                           <Box component="span" sx={visuallyHidden}>
                             Step {i + 1}{done ? ", done" : ""}:{" "}
                           </Box>
-                          {s.text}
+                          {showTemperatures(s.text, units)}
                         </Box>
                       </ButtonBase>
                     </li>
@@ -327,6 +341,7 @@ export default function RecipeView({
           ingredients={recipe.ingredients}
           steps={recipe.steps}
           factor={factor}
+          units={units}
           amountLabel={servings ? `${amount} ${amount === 1 ? "serving" : "servings"}` : `${formatAmount(amount)} ${amount === 1 ? "batch" : "batches"}`}
           onClose={() => setCooking(false)}
           onDone={() => {

@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { recipeFavorites, recipeLogs, recipes } from "@/lib/db/schema";
+import { profiles, recipeFavorites, recipeLogs, recipes } from "@/lib/db/schema";
 import { requireEditor, requireEditorFor } from "@/lib/auth";
 import { getActiveProfile } from "@/lib/profile";
 import { requireGroupId } from "@/lib/session";
@@ -13,6 +13,7 @@ import { findRecipeBySource, getRecipe, getRecipeLog } from "@/lib/queries/recip
 import { logEvent } from "@/lib/events";
 import { SafeFetchError, safeFetchText } from "@/lib/safe-fetch";
 import { recipeFromHtml, recipeFromPageText, type RecipeDraft } from "@/lib/recipe-import";
+import { isUnitSystem, type UnitSystem } from "@/lib/recipe-units";
 import { RECIPE_LIMITS, cleanTags, type RecipeIngredient, type RecipeStep, type RecipeUse, webUrl } from "@/lib/recipes";
 
 // Anyone in the household edits any recipe (docs/recipes/plan.md); favorites are each person's own.
@@ -204,6 +205,17 @@ export async function setRecipeFavorite(recipeId: number, favorite: boolean): Pr
   }
   revalidatePath("/recipes");
   revalidatePath(`/recipes/${recipeId}`);
+}
+
+/** How Recipes shows amounts for the person picked in the Viewing menu: As written, US or Metric. */
+export async function setRecipeUnits(units: UnitSystem): Promise<void> {
+  await requireApp("recipes");
+  if (!isUnitSystem(units)) throw new Error("Pick As written, US or Metric.");
+  const person = await getActiveProfile();
+  if (!person) throw new Error("Pick a person first.");
+  await requireEditorFor(person.id);
+  await db.update(profiles).set({ recipeUnits: units }).where(eq(profiles.id, person.id));
+  revalidatePath("/recipes", "layout");
 }
 
 // ── Cook log ──────────────────────────────────────────────────────────────────

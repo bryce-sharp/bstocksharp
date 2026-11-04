@@ -2,7 +2,7 @@
 
 Status: plan agreed 2026-11-03; the look (Sage & Butter) chosen 2026-11-03; PR 1 (the section, recipes,
 favorites) and PR 2 (the cook log and ratings) built 2026-11-03 (#88); PR 3 (cook mode, #89) and PR 4 (import)
-built 2026-11-04. The dev mockup is retired now that every screen of it is real; the looks lab `/recipes/looks`
+built 2026-11-04; PR 5 (units) built 2026-11-04. The dev mockup is retired now that every screen of it is real; the looks lab `/recipes/looks`
 stays as the reference for the table view.
 
 Decided: a Recipes section of this site, shared by the household; anyone in the household edits any recipe, and
@@ -85,8 +85,14 @@ quiet pattern, soft colors, friendly type that stays easy to read.
 - Conversions stay within a kind: volume to volume, weight to weight, °F to °C. Scaling picks a sensible unit
   ("4 tbsp" becomes "1/4 cup").
 - Weights for baking: a small table of common ingredients (flour, sugars, butter, cocoa, salt, oats, rice)
-  turns cups into grams and back, marked "about". When a line already gives both ("1 cup (200 g) sugar"),
-  that wins. A pizza dough written in grams stays in grams.
+  turns cups into grams, marked "about". When a line already gives both ("1 cup (200 g) sugar"),
+  that wins. A pizza dough written in grams stays in grams, so US leaves grams of those staples alone.
+- As built (`lib/recipe-units.ts`, PR 5): the choice is saved on the person (`profiles.recipe_units`), set from
+  a switch above the ingredients and carried into cook mode. Spoons stay spoons in Metric below a quarter cup;
+  a quarter cup or more of a staple is weighed. Scaling steps along tsp, tbsp, cup (an awkward amount reads
+  "3/4 cup plus 1 tbsp"), oz and lb, g and kg, ml and l; sticks and quarts just scale. Oven temperatures in steps
+  and lines convert (350°F reads 180°C). A package size after a count ("1 can (14 oz)") stays as written, and so
+  do amounts inside a step's text until step links (PR 6) know which ingredient a step uses.
 
 ### Cook mode
 - Starts with a **read-through**: every step on one screen and a prep checklist of the ingredients.
@@ -183,7 +189,7 @@ reads it merges.
     which the workout runner moves onto), Done cooking asks for a log.
   - [x] PR 4: import from a link: safe fetch, recipe data parsing, review, paste fallback.
 - **Phase 2: smarter recipes**
-  - [ ] PR 5: units: As written, US or Metric per person; sensible units when scaling; baking weights.
+  - [x] PR 5: units: As written, US or Metric per person; sensible units when scaling; baking weights.
   - [ ] PR 6: step links: uses, splits, highlighting, suggested links in edit mode.
   - [ ] PR 7: My version.
   - [ ] PR 8: recipes inside recipes: the edit-mode picker, scaling through.

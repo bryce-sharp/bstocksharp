@@ -28,6 +28,7 @@ export default async function RecipePage({ params }: Props) {
   const cooks = await Promise.all(profiles.map(async (p) => ({ id: p.id, name: p.name, canLog: await canEditProfile(p.id) })));
   return (
     <RecipeView
+      key={person?.id ?? 0}
       recipe={recipe}
       person={person?.name ?? null}
       canFavorite={canFavorite}
@@ -36,6 +37,7 @@ export default async function RecipePage({ params }: Props) {
       cooks={cooks}
       defaultCook={person?.id ?? null}
       today={today}
+      units={person?.recipeUnits ?? "written"}
     />
   );
 }

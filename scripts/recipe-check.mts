@@ -6,7 +6,8 @@
 //   npm run recipes:check -- --live
 
 import { recipeFromHtml, recipeFromPageText, recipeFromText, isoMinutes, textMinutes, yieldServings, tidyLine, withoutIngredientEcho } from "../lib/recipe-import.ts";
-import { scaleIngredient, splitPasted, formatAmount, webUrl } from "../lib/recipes.ts";
+import { splitPasted, webUrl } from "../lib/recipes.ts";
+import { formatAmount, showIngredient, showTemperatures } from "../lib/recipe-units.ts";
 import { summarizeRatings, type RatingLog } from "../lib/recipe-ratings.ts";
 import { checkUrl, isPrivateAddress, readBody, safeFetchText, SafeFetchError } from "../lib/safe-fetch.ts";
 import http from "node:http";
@@ -30,15 +31,65 @@ for (const [line, factor, want] of [
   ["1/2 cup (115 g) butter", 2, "1 cup (230 g) butter"],
   ["2 (14 oz) cans tomatoes", 2, "4 (14 oz) cans tomatoes"],
   ["1 can (14 oz) tomatoes", 2, "2 can (14 oz) tomatoes"],
-  ["1 stick (113 g) butter", 2, "2 stick (226 g) butter"],
+  ["1 stick (113 g) butter", 2, "2 sticks (226 g) butter"],
+  ["1 teaspoon vanilla", 2, "2 teaspoons vanilla"],
+  ["4 tbsp butter", 2, "1/2 cup butter"],
+  ["6 tbsp butter", 1, "6 tbsp butter"],
+  ["3 tbsp oil", 2, "6 tbsp oil"],
+  ["1 1/2 tsp salt", 2, "1 tbsp salt"],
+  ["8 oz pasta", 2, "1 lb pasta"],
+  ["2 (14 oz) cans tomatoes", 1.5, "3 (14 oz) cans tomatoes"],
+  ["200 g (1 cup) sugar", 2, "400 g (2 cups) sugar"],
+  ["2/3 cup butter", 1.2, "3/4 cup plus 1 tbsp butter"],
+  ["1/2 cup sugar", 1.25, "1/2 cup plus 2 tbsp sugar"],
+  ["1 1/2 tsp cinnamon", 1.2, "1 3/4 tsp cinnamon"],
+  ["10 oz beef", 1.2, "12 oz beef"],
   ["½ tsp salt", 2, "1 tsp salt"],
   ["2-3 cloves garlic", 2, "4 to 6 cloves garlic"],
   ["Salt to taste", 3, "Salt to taste"],
   ["7 oz chocolate", 1 / 3, "2 1/3 oz chocolate"],
   ["500 g flour", 1.5, "750 g flour"],
 ] as const) {
-  eq(`scale ${line} x${factor}`, scaleIngredient(line, factor), want);
+  eq(`scale ${line} x${factor}`, showIngredient(line, factor, "written"), want);
 }
+
+// ── Units ─────────────────────────────────────────────────────────────────────
+for (const [line, system, factor, want] of [
+  ["2 cups flour", "metric", 1, "about 250 g flour"],
+  ["1 cup almond flour", "metric", 1, "235 ml almond flour"],
+  ["1 cup peanut butter", "metric", 1, "235 ml peanut butter"],
+  ["1 cup (200 g) sugar", "metric", 1, "200 g sugar"],
+  ["1 cup (200 g) sugar", "us", 1, "1 cup sugar"],
+  ["1/2 cup (1 stick, 113 g) butter", "metric", 2, "225 g butter"],
+  ["½ tsp salt", "metric", 2, "1 tsp salt"],
+  ["4 tbsp butter", "metric", 1, "about 55 g butter"],
+  ["3 tbsp olive oil", "metric", 2, "90 ml olive oil"],
+  ["1 lb ground beef", "metric", 1, "450 g ground beef"],
+  ["2-3 cups water", "metric", 2, "0.95 to 1.4 l water"],
+  ["250 ml milk", "us", 1, "1 cup milk"],
+  ["750 g beef chuck", "us", 1, "1 2/3 lb beef chuck"],
+  ["500 g bread flour", "us", 1, "500 g bread flour"],
+  ["500 g bread flour", "us", 2, "1 kg bread flour"],
+  ["2 (14 oz) cans tomatoes", "metric", 1, "2 (14 oz) cans tomatoes"],
+  ["2 T sugar", "metric", 1, "2 T sugar"],
+  ["1 cup warm milk (110°F)", "metric", 1, "235 ml warm milk (45°C)"],
+  ["2 large eggs", "metric", 2, "4 large eggs"],
+  ["1-3/4 cups all-purpose flour", "metric", 1, "about 220 g all-purpose flour"],
+  ["1-3/4 cups all-purpose flour", "written", 2, "3 1/2 cups all-purpose flour"],
+  ["4 sticks of celery", "metric", 2, "8 sticks of celery"],
+  ["1½ cups plus 1 Tbsp. (200 g) all-purpose flour", "metric", 1, "200 g all-purpose flour"],
+  ["1½ cups plus 1 Tbsp. all-purpose flour", "metric", 1, "about 195 g all-purpose flour"],
+  ["1½ cups plus 1 Tbsp. flour", "written", 2, "3 cups plus 2 Tbsp flour"],
+  ["1½ cups plus 1 Tbsp. flour", "us", 1, "1½ cups plus 1 Tbsp. flour"],
+  ["2 tablespoons (25g) granulated sugar", "metric", 1, "25g granulated sugar"],
+  ["2 tablespoons (25g) granulated sugar", "us", 1, "2 tablespoons granulated sugar"],
+  ["1/2 to 2/3 cup (113g to 152g) hot water", "metric", 1, "113g to 152g hot water"],
+] as const) {
+  eq(`units ${line} ${system} x${factor}`, showIngredient(line, factor, system), want);
+}
+eq("temperatures metric", showTemperatures("Bake at 350°F, then 425 degrees F. Fry at 350-375°F. Add 2 C of water.", "metric"), "Bake at 180°C, then 220°C. Fry at 180–190°C. Add 2 C of water.");
+eq("temperatures us", showTemperatures("Preheat to 180°C (160°C fan). Roast at 200C.", "us"), "Preheat to 350°F (325°F fan). Roast at 400°F.");
+eq("temperatures as written", showTemperatures("Bake at 350°F.", "written"), "Bake at 350°F.");
 eq("format 26.4", formatAmount(26.4), "26");
 eq("paste bullets", splitPasted("- 2 cups flour\n• 1 tsp salt\n▢ 3 eggs"), ["2 cups flour", "1 tsp salt", "3 eggs"]);
 eq("paste numbers", splitPasted("1. Mix.\n2) Add eggs.\nStep 3: Bake."), ["Mix.", "Add eggs.", "Bake."]);
