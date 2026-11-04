@@ -1,7 +1,7 @@
 // Reading a recipe out of a web page or pasted text. Pages carry a schema.org Recipe in JSON-LD (the data search
 // engines read for recipe cards); pasted text is split on its Ingredients and Steps headings. Pure.
 
-import { RECIPE_LIMITS, cleanTags, splitPasted } from "@/lib/recipes";
+import { RECIPE_LIMITS, cleanTags, splitPasted, webUrl } from "@/lib/recipes";
 
 /** A recipe read from somewhere, for the form to show before anything is saved. */
 export type RecipeDraft = {
@@ -35,7 +35,7 @@ export function plainText(v: unknown): string {
   if (typeof v !== "string") return "";
   return v
     .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<[^>]*>/g, " ")
+    .replace(/<[^<>]*>/g, " ")
     .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+\d*);/gi, (m, code: string) => {
       if (code[0] === "#") {
         const n = code[1]?.toLowerCase() === "x" ? parseInt(code.slice(2), 16) : parseInt(code.slice(1), 10);
@@ -86,8 +86,9 @@ function jsonLdObjects(html: string): Json[] {
       if (item["@graph"]) visit(item["@graph"]);
     }
   };
-  for (const m of html.matchAll(/<script\b[^>]*type\s*=\s*["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script>/gi)) {
-    const raw = m[1]!.trim().replace(/^<!--|-->$/g, "");
+  for (const block of scriptBlocks(html)) {
+    if (!/\btype\s*=\s*["']?application\/ld\+json\b/i.test(block.tag)) continue;
+    const raw = block.body.trim().replace(/^<!--|-->$/g, "");
     // Some sites leave raw line breaks inside strings, which JSON forbids; spaces read the same.
     for (const attempt of [raw, raw.replace(/[\u0000-\u001f]+/g, " ")]) {
       try {
@@ -101,21 +102,40 @@ function jsonLdObjects(html: string): Json[] {
   return out;
 }
 
-const VOID_TAGS = /^(meta|img|link|br|hr|input|source)$/i;
+/** Each script element's opening tag and body; a body runs to the first closing tag, as a browser reads it. */
+function scriptBlocks(html: string): { tag: string; body: string }[] {
+  const out: { tag: string; body: string }[] = [];
+  const open = /<script\b[^<>]*>/gi;
+  const close = /<\/script\s*>/gi;
+  for (let m = open.exec(html); m; m = open.exec(html)) {
+    close.lastIndex = open.lastIndex;
+    const end = close.exec(html);
+    if (!end) break;
+    out.push({ tag: m[0], body: html.slice(open.lastIndex, end.index) });
+    open.lastIndex = close.lastIndex;
+  }
+  return out;
+}
 
-/** The whole element starting at `start` (a "<"), matching nested tags of the same name. */
-function elementAt(html: string, start: number): string {
-  const name = /^<([a-z0-9]+)/i.exec(html.slice(start, start + 20))?.[1];
-  const open = html.indexOf(">", start);
-  if (!name || open < 0 || VOID_TAGS.test(name) || html[open - 1] === "/") return html.slice(start, open + 1);
-  const tags = new RegExp(`<(/?)${name}\\b[^>]*>`, "gi");
+const VOID_TAGS = /^(meta|img|link|br|hr|input|source)$/i;
+// Property values and nested items are short; capping them keeps a page full of unclosed tags from costing a scan each.
+const ELEMENT_MAX = 50_000;
+const ELEMENTS_MAX = 500;
+
+/** The whole element starting at `start` (a "<"), matching nested tags of the same name, up to `max` characters. */
+function elementAt(page: string, start: number, max = ELEMENT_MAX): string {
+  const html = page.slice(start, start + max);
+  const name = /^<([a-z0-9]+)/i.exec(html.slice(0, 20))?.[1];
+  const open = html.indexOf(">");
+  if (!name || open < 0 || VOID_TAGS.test(name) || html[open - 1] === "/") return html.slice(0, open + 1);
+  const tags = new RegExp(`<(/?)${name}\\b[^<>]*>`, "gi");
   tags.lastIndex = open + 1;
   let depth = 1;
   for (let m = tags.exec(html); m; m = tags.exec(html)) {
     depth += m[1] ? -1 : 1;
-    if (depth === 0) return html.slice(start, m.index + m[0].length);
+    if (depth === 0) return html.slice(0, m.index + m[0].length);
   }
-  return html.slice(start);
+  return html;
 }
 
 const attr = (tag: string, name: string) => new RegExp(`\\b${name}\\s*=\\s*["']([^"']*)["']`, "i").exec(tag)?.[1];
@@ -125,29 +145,32 @@ const attr = (tag: string, name: string) => new RegExp(`\\b${name}\\s*=\\s*["'](
  * read into the same shape as JSON-LD. Properties of nested items (the author's name) are left out.
  */
 function microdataRecipe(html: string): Json | null {
-  const at = html.search(/itemtype\s*=\s*["'][^"']*schema\.org\/Recipe["']/i);
+  const at = html.search(/itemtype\s*=\s*["'][^"'<>]*schema\.org\/Recipe["']/i);
   if (at < 0) return null;
-  const scope = elementAt(html, html.lastIndexOf("<", at));
+  const scope = elementAt(html, html.lastIndexOf("<", at), html.length);
   const nested: [number, number][] = [];
-  for (const m of scope.matchAll(/<[a-z0-9]+\b[^>]*\bitemscope\b[^>]*>/gi)) {
+  for (const m of scope.matchAll(/<[a-z0-9]+\b[^<>]*\bitemscope\b[^<>]*>/gi)) {
+    if (nested.length >= ELEMENTS_MAX) break;
     if (m.index! > 0) nested.push([m.index!, m.index! + elementAt(scope, m.index!).length]);
   }
   const props: Record<string, string[]> = {};
-  for (const m of scope.matchAll(/<([a-z0-9]+)\b[^>]*\bitemprop\s*=\s*["']([^"']+)["'][^>]*>/gi)) {
+  let seen = 0;
+  for (const m of scope.matchAll(/<([a-z0-9]+)\b[^<>]*\bitemprop\s*=\s*["']([^"'<>]+)["'][^<>]*>/gi)) {
     const i = m.index!;
     if (nested.some(([a, b]) => i > a && i < b)) continue;
+    if (++seen > ELEMENTS_MAX) break;
     const tag = m[0];
     const value =
       attr(tag, "content") ??
       attr(tag, "datetime") ??
       (/^img$/i.test(m[1]!) ? attr(tag, "src") : undefined) ??
-      elementAt(scope, i).replace(/^<[^>]*>/, "").replace(/<\/(p|li|div|h\d)>/gi, "\n");
+      elementAt(scope, i).replace(/^<[^<>]*>/, "").replace(/<\/(p|li|div|h\d)>/gi, "\n");
     for (const name of m[2]!.split(/\s+/)) (props[name] ??= []).push(value);
   }
   const one = (k: string) => props[k]?.[0];
   // Jetpack's recipe card (and the h-recipe microformat) marks its steps by class instead of itemprop.
-  const block = /<[a-z0-9]+\b[^>]*class\s*=\s*["'][^"']*\b(jetpack-recipe-directions|e-instructions)\b[^>]*>/i.exec(scope);
-  const directions = block ? elementAt(scope, block.index).replace(/^<[^>]*>/, "").replace(/<\/(p|li|div|h\d)>/gi, "\n") : "";
+  const block = /<[a-z0-9]+\b[^<>]*class\s*=\s*["'][^"'<>]*\b(jetpack-recipe-directions|e-instructions)\b[^<>]*>/i.exec(scope);
+  const directions = block ? elementAt(scope, block.index, scope.length).replace(/^<[^<>]*>/, "").replace(/<\/(p|li|div|h\d)>/gi, "\n") : "";
   return {
     "@type": "Recipe",
     name: one("name"),
@@ -186,8 +209,8 @@ function instructions(v: unknown): string[] {
 
 function imageOf(v: unknown): string | null {
   for (const item of asArray(v)) {
-    const url = typeof item === "string" ? item : isObject(item) ? item.url : null;
-    if (typeof url === "string" && /^https?:\/\//i.test(url)) return url;
+    const url = webUrl(typeof item === "string" ? item : isObject(item) ? item.url : null);
+    if (url) return url;
   }
   return null;
 }
@@ -202,7 +225,7 @@ function nameOf(v: unknown): string {
 
 /** The site's own name: the recipe's publisher, the page's og:site_name, or the host without www. */
 function siteName(recipe: Json, html: string, pageUrl: string): string {
-  const og = /<meta[^>]+property=["']og:site_name["'][^>]*content=["']([^"']+)["']/i.exec(html)?.[1];
+  const og = /<meta[^<>]+property=["']og:site_name["'][^<>]*content=["']([^"']+)["']/i.exec(html)?.[1];
   const name = nameOf(recipe.publisher) || plainText(og) || new URL(pageUrl).hostname.replace(/^www\./, "");
   return name.split(/\s+[-|–:]\s+/)[0]!;
 }
@@ -230,24 +253,28 @@ export function withoutIngredientEcho(step: string, ingredients: string[]): stri
   return parts.length && parts.every((p) => known.has(p)) ? step.slice(0, end + 1).trim() : step;
 }
 
-/** A heading among ingredient lines: no amounts, and either all capitals ("DOUGH") or ending in a colon ("For the glaze:"). */
-function headingOf(line: string): string | null {
+/** A heading among ingredient lines: no amounts, and ending in a colon ("For the glaze:") or, when `caps`, all capitals ("DOUGH"). */
+function headingOf(line: string, caps: boolean): string | null {
   const t = line.trim();
   if (!t || t.length > 60 || /\d|[¼½¾⅓⅔⅛]/.test(t)) return null;
   const letters = t.replace(/[^a-z]/gi, "");
-  if (t.endsWith(":") || (letters.length >= 3 && letters === letters.toUpperCase())) {
+  if (t.endsWith(":") || (caps && letters.length >= 3 && letters === letters.toUpperCase())) {
     const name = t.replace(/:$/, "").trim().toLowerCase();
     return name.charAt(0).toUpperCase() + name.slice(1);
   }
   return null;
 }
 
-/** Ingredient lines with their headings taken out and given to the lines below them. */
+/**
+ * Ingredient lines with their headings taken out and given to the lines below them. Sites put capitalized headings
+ * in recipe data too ("WHITE SAUCE"); capitals mark a heading only when the other lines are not all capitals.
+ */
 function grouped(texts: string[]): DraftIngredient[] {
   const out: DraftIngredient[] = [];
+  const caps = texts.some((t) => /[a-z]/.test(t));
   let group: string | undefined;
   for (const text of texts) {
-    const heading = headingOf(text);
+    const heading = headingOf(text, caps);
     if (heading) group = heading;
     else if (text.trim()) out.push({ text: text.slice(0, RECIPE_LIMITS.line), ...(group ? { group } : {}) });
   }
@@ -269,20 +296,20 @@ function between(html: string, start: RegExp, end: RegExp): string | null {
  * headings, but the two plugins most food blogs use (WP Recipe Maker, Tasty Recipes) mark them in the card.
  */
 function cardGroups(html: string): CardGroup[] | null {
-  const wprm = between(html, /<div[^>]*class="[^"]*wprm-recipe-ingredients-container/, /<div[^>]*class="[^"]*wprm-recipe-instructions-container/);
+  const wprm = between(html, /<div[^<>]*class="[^"<>]*wprm-recipe-ingredients-container/, /<div[^<>]*class="[^"<>]*wprm-recipe-instructions-container/);
   if (wprm) {
     return wprm
-      .split(/<div[^>]*class="[^"]*wprm-recipe-ingredient-group[\s"]/)
+      .split(/<div[^<>]*class="[^"<>]*wprm-recipe-ingredient-group[\s"]/)
       .slice(1)
       .map((chunk) => ({
-        name: plainText(/class="[^"]*wprm-recipe-group-name[^"]*"[^>]*>([\s\S]*?)<\/(?:h\d|div|span)>/.exec(chunk)?.[1] ?? "") || null,
-        count: (chunk.match(/<li[^>]*class="[^"]*wprm-recipe-ingredient[\s"]/g) ?? []).length,
+        name: plainText(/class="[^"<>]*wprm-recipe-group-name[^"<>]*"[^<>]*>([\s\S]{0,400}?)<\/(?:h\d|div|span)>/.exec(chunk)?.[1] ?? "") || null,
+        count: (chunk.match(/<li[^<>]*class="[^"<>]*wprm-recipe-ingredient[\s"]/g) ?? []).length,
       }));
   }
-  const tasty = between(html, /<div[^>]*class="[^"]*tasty-recipes-ingredients(?:-body)?[\s"]/, /<div[^>]*class="[^"]*tasty-recipes-instructions[\s"]/);
+  const tasty = between(html, /<div[^<>]*class="[^"<>]*tasty-recipes-ingredients(?:-body)?[\s"]/, /<div[^<>]*class="[^"<>]*tasty-recipes-instructions[\s"]/);
   if (tasty) {
     const groups: CardGroup[] = [{ name: null, count: 0 }];
-    for (const m of tasty.matchAll(/<(h[2-6])[^>]*>([\s\S]*?)<\/\1>|<p[^>]*>\s*<(?:strong|b)>([\s\S]*?)<\/(?:strong|b)>\s*<\/p>|<li\b/gi)) {
+    for (const m of tasty.matchAll(/<(h[2-6])[^<>]*>([\s\S]{0,400}?)<\/\1>|<p[^<>]*>\s*<(?:strong|b)>([\s\S]{0,400}?)<\/(?:strong|b)>\s*<\/p>|<li\b/gi)) {
       if (m[0].toLowerCase().startsWith("<li")) groups[groups.length - 1]!.count++;
       else {
         const name = plainText(m[2] ?? m[3]);
@@ -323,7 +350,7 @@ export function recipeFromHtml(html: string, pageUrl: string): RecipeDraft | nul
   const keywords = typeof recipe.keywords === "string" ? [] : asArray(recipe.keywords);
   const named = [...asArray(recipe.recipeCategory), ...asArray(recipe.recipeCuisine), ...keywords].flatMap((t) => plainText(t).split(","));
   const tags = cleanTags(named.filter((t) => t.trim().length <= 24)).slice(0, 4);
-  const canonical = typeof recipe.url === "string" && /^https?:\/\//i.test(recipe.url) ? recipe.url : pageUrl;
+  const canonical = webUrl(recipe.url) ?? pageUrl;
 
   return {
     title: title.slice(0, RECIPE_LIMITS.title),
@@ -432,13 +459,14 @@ function headinglessRecipe(all: string[]): { title: string; ingredients: string[
  */
 export function recipeFromText(text: string): RecipeDraft {
   const all = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => !JUNK.test(l));
-  const amountsAfter = (i: number) => {
-    let n = 0;
-    for (let j = i + 1; j < all.length && !STEPS_HEADING.test(all[j]!); j++) if (QUANTITY.test(all[j]!)) n++;
-    return n;
-  };
+  // Amount lines below each line, up to the next steps heading, counted in one pass from the bottom.
+  const amountsAfter: number[] = new Array(all.length);
+  for (let j = all.length - 1, run = 0; j >= 0; j--) {
+    amountsAfter[j] = run;
+    run = STEPS_HEADING.test(all[j]!) ? 0 : run + (QUANTITY.test(all[j]!) ? 1 : 0);
+  }
   const candidates = all.flatMap((l, i) => (INGREDIENTS_HEADING.test(l) ? [i] : []));
-  const ingAt = candidates.reduce((best, i) => (best === -1 || amountsAfter(i) > amountsAfter(best) ? i : best), -1);
+  const ingAt = candidates.reduce((best, i) => (best === -1 || amountsAfter[i]! > amountsAfter[best]! ? i : best), -1);
   const plainDraft = (plain: NonNullable<ReturnType<typeof headinglessRecipe>>): RecipeDraft => ({
     title: plain.title.slice(0, RECIPE_LIMITS.title),
     description: "",
@@ -536,18 +564,47 @@ export function recipeFromText(text: string): RecipeDraft {
 export function pageText(html: string): string {
   const body = /<body\b[\s\S]*$/i.exec(html)?.[0] ?? html;
   return plainText(
-    body
-      .replace(/<(script|style|noscript|svg|template|iframe|nav|footer|form)\b[\s\S]*?<\/\1>/gi, " ")
-      .replace(/<!--[\s\S]*?-->/g, " ")
-      .replace(/<\/?(p|div|li|ul|ol|h[1-6]|br|tr|section|article|header|aside|blockquote|figure|figcaption|table|dd|dt)\b[^>]*>/gi, "\n"),
+    withoutHidden(body).replace(/<\/?(p|div|li|ul|ol|h[1-6]|br|tr|section|article|header|aside|blockquote|figure|figcaption|table|dd|dt)\b[^<>]*>/gi, "\n"),
   ).replace(/\n{3,}/g, "\n\n");
+}
+
+const HIDDEN = /<!--|<(script|style|noscript|svg|template|iframe|nav|footer|form)\b/gi;
+
+/** The page without comments, scripts and the site's own furniture, read in one pass; an unclosed comment runs to the end. */
+function withoutHidden(html: string): string {
+  const parts: string[] = [];
+  const unclosed = new Set<string>();
+  let kept = 0;
+  HIDDEN.lastIndex = 0;
+  for (let m = HIDDEN.exec(html); m; m = HIDDEN.exec(html)) {
+    const name = m[1]?.toLowerCase();
+    let end: number;
+    if (!name) {
+      const close = html.indexOf("-->", m.index + 4);
+      end = close < 0 ? html.length : close + 3;
+    } else {
+      if (unclosed.has(name)) continue;
+      const close = new RegExp(`</${name}\\s*>`, "gi");
+      close.lastIndex = HIDDEN.lastIndex;
+      const found = close.exec(html);
+      if (!found) {
+        unclosed.add(name);
+        continue;
+      }
+      end = close.lastIndex;
+    }
+    parts.push(html.slice(kept, m.index), " ");
+    kept = HIDDEN.lastIndex = end;
+  }
+  parts.push(html.slice(kept));
+  return parts.join("");
 }
 
 /** A recipe guessed from a page without recipe data, the way a pasted copy is read; null unless it looks real. */
 export function recipeFromPageText(html: string, pageUrl: string): RecipeDraft | null {
   const d = recipeFromText(pageText(html));
   if (d.ingredients.length < 3 || d.steps.length < 1) return null;
-  const og = /<meta[^>]+property=["']og:title["'][^>]*content=["']([^"']+)["']/i.exec(html)?.[1];
+  const og = /<meta[^<>]+property=["']og:title["'][^<>]*content=["']([^"']+)["']/i.exec(html)?.[1];
   const title = d.title || plainText(og) || plainText(/<title>([^<]*)<\/title>/i.exec(html)?.[1]);
   return { ...d, title: title.split(/\s+[-|–]\s+/)[0]!.slice(0, RECIPE_LIMITS.title), sourceName: siteName({}, html, pageUrl), sourceUrl: pageUrl };
 }

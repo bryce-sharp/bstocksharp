@@ -13,7 +13,7 @@ import { findRecipeBySource, getRecipe, getRecipeLog } from "@/lib/queries/recip
 import { logEvent } from "@/lib/events";
 import { SafeFetchError, safeFetchText } from "@/lib/safe-fetch";
 import { recipeFromHtml, recipeFromPageText, type RecipeDraft } from "@/lib/recipe-import";
-import { RECIPE_LIMITS, cleanTags, type RecipeIngredient, type RecipeStep, type RecipeUse } from "@/lib/recipes";
+import { RECIPE_LIMITS, cleanTags, type RecipeIngredient, type RecipeStep, type RecipeUse, webUrl } from "@/lib/recipes";
 
 // Anyone in the household edits any recipe (docs/recipes/plan.md); favorites are each person's own.
 
@@ -56,8 +56,8 @@ function count(v: unknown, label: string, max: number, min = 0): number | null {
 function webAddress(v: unknown): string | null {
   const t = text(v, 2000);
   if (!t) return null;
-  const u = URL.canParse(t) ? new URL(t) : null;
-  if (u && (u.protocol === "https:" || u.protocol === "http:")) return u.toString();
+  const u = webUrl(t);
+  if (u) return u;
   throw new Error("The source link must be a web address starting with https://.");
 }
 
@@ -134,7 +134,7 @@ function parseRecipe(input: unknown) {
     notes: text(input.notes, RECIPE_LIMITS.text),
     sourceName: text(input.sourceName, RECIPE_LIMITS.title),
     sourceUrl: webAddress(input.sourceUrl),
-    ...(isRecord(input.imported) ? { sourceKind: "imported", imageUrl: typeof input.imported.imageUrl === "string" ? webAddress(input.imported.imageUrl) : null } : {}),
+    ...(isRecord(input.imported) ? { sourceKind: "imported", imageUrl: webUrl(input.imported.imageUrl) } : {}),
     tags: cleanTags(Array.isArray(input.tags) ? input.tags.filter((t): t is string => typeof t === "string") : []),
     ingredients,
     steps: parseSteps(input.steps, ingredients),

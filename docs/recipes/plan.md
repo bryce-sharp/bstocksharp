@@ -138,6 +138,9 @@ quiet pattern, soft colors, friendly type that stays easy to read.
   Recipe Maker or Tasty Recipes card when its line count matches the data.
 - Pasted text may be a whole copied page: the reader finds the recipe card's name, description, times, servings,
   ingredient headings (all caps or ending in a colon), steps and notes, or an older post's heading-less block.
+- The parser reads untrusted pages, so every pattern runs in linear time: tags never match past a `<`, captured
+  text is bounded, and scripts and comments are skipped in one forward pass. `recipes:check` times hostile 3 MB
+  pages. The fetch reads the body through one stream pipeline, so a cut-off or stalled response ends in an error.
 - Sites behind a bot check (Ambitious Kitchen, Damn Delicious, Maangchi) answer 403; pasting is the way in, and we
   never try to get past the check.
 - Tested 2026-11-04 on about 120 recipes from about 70 sites; `npm run recipes:check` (add `-- --live` for real

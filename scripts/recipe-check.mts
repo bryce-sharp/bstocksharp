@@ -6,9 +6,11 @@
 //   npm run recipes:check -- --live
 
 import { recipeFromHtml, recipeFromPageText, recipeFromText, isoMinutes, textMinutes, yieldServings, tidyLine, withoutIngredientEcho } from "../lib/recipe-import.ts";
-import { scaleIngredient, splitPasted, formatAmount } from "../lib/recipes.ts";
+import { scaleIngredient, splitPasted, formatAmount, webUrl } from "../lib/recipes.ts";
 import { summarizeRatings, type RatingLog } from "../lib/recipe-ratings.ts";
-import { checkUrl, isPrivateAddress, safeFetchText, SafeFetchError } from "../lib/safe-fetch.ts";
+import { checkUrl, isPrivateAddress, readBody, safeFetchText, SafeFetchError } from "../lib/safe-fetch.ts";
+import http from "node:http";
+import zlib from "node:zlib";
 
 let failed = 0;
 let passed = 0;
@@ -59,6 +61,53 @@ for (const [address, blocked] of [["127.0.0.1", true], ["10.1.2.3", true], ["169
 const refused = (u: string) => { try { checkUrl(u); return false; } catch (e) { return e instanceof SafeFetchError; } };
 for (const [u, r] of [["ftp://x.com", true], ["http://localhost/", true], ["http://user:pw@example.com", true], ["http://example.com:8080", true], ["http://[::1]/", true], ["https://example.com/a", false]] as const) {
   eq(`url ${u}`, refused(u), r);
+}
+
+// ── Safe fetch bodies, from a real local server ───────────────────────────────
+const gzipped = zlib.gzipSync("<html>" + "a".repeat(5000) + "</html>");
+const server = http.createServer((req, res) => {
+  res.setHeader("content-encoding", "gzip");
+  if (req.url === "/whole") return res.end(gzipped);
+  if (req.url === "/big") return res.end(zlib.gzipSync("a".repeat(200_000)));
+  res.setHeader("content-length", gzipped.length);
+  res.write(gzipped.subarray(0, 15));
+  if (req.url === "/cut") setTimeout(() => res.socket?.destroy(), 20);
+});
+await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
+const port = (server.address() as { port: number }).port;
+// A reader that never settles reports "hung" instead of stalling the checks.
+const body = (path: string, maxBytes = 100_000, ms = 2000) =>
+  new Promise<string>((resolve) => {
+    const hung = setTimeout(() => resolve("hung"), ms + 1000);
+    const done = (v: string) => (clearTimeout(hung), resolve(v));
+    const signal = AbortSignal.timeout(ms);
+    const req = http.get({ host: "127.0.0.1", port, path, signal }, (res) =>
+      readBody(res, maxBytes, signal).then((b) => done(`${b.length} bytes`), (e) => done(e instanceof SafeFetchError ? e.reason : "other")),
+    );
+    req.on("error", () => {});
+  });
+eq("body whole", await body("/whole"), "5013 bytes");
+eq("body cut short", await body("/cut"), "network");
+eq("body stalled", await body("/stall", 100_000, 300), "timeout");
+eq("body too big", await body("/big"), "size");
+server.closeAllConnections();
+server.close();
+
+// ── Hostile pages read in linear time ─────────────────────────────────────────
+const MB3 = 3_000_000;
+const fill = (s: string) => s.repeat(Math.floor(MB3 / s.length));
+for (const [name, read] of [
+  ["unclosed tags in data", () => recipeFromHtml(ld({ "@type": "Recipe", name: "X", description: "<".repeat(MB3), recipeIngredient: ["1 a"] }), "https://x.com")],
+  ["unclosed data scripts", () => recipeFromHtml(fill('<script type="application/ld+json">'), "https://x.com")],
+  ["unclosed comments", () => recipeFromPageText("<body>" + fill("<!--"), "https://x.com")],
+  ["unclosed paragraphs", () => recipeFromPageText("<body>" + fill("<p"), "https://x.com")],
+  ["unclosed microdata", () => recipeFromHtml('<div itemscope itemtype="https://schema.org/Recipe">' + fill('<span itemprop="recipeIngredient"><i itemscope>'), "https://x.com")],
+  ["unclosed card headings", () => recipeFromHtml(ld({ "@type": "Recipe", name: "X", recipeIngredient: ["1 a"] }, '<div class="tasty-recipes-ingredients-body">' + fill("<p><strong><h3>")), "https://x.com")],
+  ["many ingredient headings", () => recipeFromText(fill("Ingredients\n"))],
+] as const) {
+  const t = performance.now();
+  read();
+  eq(`linear: ${name}`, performance.now() - t < 2000, true);
 }
 
 // ── Small readers ─────────────────────────────────────────────────────────────
@@ -118,7 +167,18 @@ const micro = `<html><body><div itemscope itemtype="https://schema.org/Recipe"><
 const chicken = recipeFromHtml(micro, "https://x.com");
 eq("microdata", chicken && { t: chicken.title, s: chicken.servings, c: chicken.cookMin, i: chicken.ingredients.length, steps: chicken.steps }, { t: "Roast Chicken", s: 4, c: 80, i: 3, steps: ["Heat the oven to 425°F.", "Roast 75 minutes."] });
 
+// Capitals in recipe data mark a heading, as on Jamie Oliver's lasagne, unless the whole list is in capitals.
+const dataLines = (recipeIngredient: string[]) => recipeFromHtml(ld({ "@type": "Recipe", name: "X", recipeIngredient }), "https://x.com")?.ingredients;
+eq("data capitals heading", dataLines(["1 kg beef", "WHITE SAUCE", "2 leeks", "For the top:", "1 cup cheese"]), [{ text: "1 kg beef" }, { text: "2 leeks", group: "White sauce" }, { text: "1 cup cheese", group: "For the top" }]);
+eq("data all capitals", dataLines(["1 CUP FLOUR", "SALT TO TASTE", "1 TSP YEAST"]), [{ text: "1 CUP FLOUR" }, { text: "SALT TO TASTE" }, { text: "1 TSP YEAST" }]);
+// A broken optional image is dropped, so it cannot block the save; the recipe's own bad link falls back to the page.
+const pictured = (image: unknown, url?: string) => recipeFromHtml(ld({ "@type": "Recipe", name: "X", recipeIngredient: ["1 a"], image, url }), "https://x.com/page");
+eq("image links", [pictured("https://")?.imageUrl, pictured(["https://", { url: "https://x.com/a b.jpg" }])?.imageUrl, pictured("/a.jpg")?.imageUrl], [null, "https://x.com/a%20b.jpg", null]);
+eq("bad recipe link", pictured(null, "https://")?.sourceUrl, "https://x.com/page");
+eq("web urls", [webUrl("https://"), webUrl(" http://a.com "), webUrl("javascript:alert(1)"), webUrl(`https://a.com/${"a".repeat(2000)}`)], [null, "http://a.com/", null, null]);
+
 // ── Pasted text ───────────────────────────────────────────────────────────────
+eq("pasted capitals", recipeFromText("Buns\nIngredients\nDOUGH\n2 cups flour\nGLAZE\n1 cup sugar\nInstructions\n1. Mix.").ingredients, [{ text: "2 cups flour", group: "Dough" }, { text: "1 cup sugar", group: "Glaze" }]);
 const simple = recipeFromText("Weeknight Chili\nHearty.\nServes 6\n\nIngredients\n- 1 lb ground beef\n- 1 can beans\n\nInstructions\n1. Brown the beef.\n2. Simmer 30 minutes.");
 eq("paste simple", [simple.title, simple.description, simple.servings, simple.ingredients.map((i) => i.text), simple.steps], ["Weeknight Chili", "Hearty.", 6, ["1 lb ground beef", "1 can beans"], ["Brown the beef.", "Simmer 30 minutes."]]);
 

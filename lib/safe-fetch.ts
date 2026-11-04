@@ -3,6 +3,7 @@ import http from "node:http";
 import https from "node:https";
 import dns from "node:dns";
 import net from "node:net";
+import { PassThrough, pipeline } from "node:stream";
 import zlib from "node:zlib";
 import type { LookupFunction } from "node:net";
 
@@ -129,23 +130,7 @@ function getOnce(url: URL, o: Required<SafeFetchOptions>, signal: AbortSignal): 
           res.destroy();
           return reject(new SafeFetchError("That page is too big to read.", "size"));
         }
-        const encoding = String(res.headers["content-encoding"] ?? "").toLowerCase();
-        const stream =
-          encoding === "gzip" ? res.pipe(zlib.createGunzip()) : encoding === "br" ? res.pipe(zlib.createBrotliDecompress()) : encoding === "deflate" ? res.pipe(zlib.createInflate()) : res;
-        const chunks: Buffer[] = [];
-        let size = 0;
-        stream.on("data", (chunk: Buffer) => {
-          size += chunk.length;
-          if (size > o.maxBytes) {
-            res.destroy();
-            stream.destroy();
-            reject(new SafeFetchError("That page is too big to read.", "size"));
-            return;
-          }
-          chunks.push(chunk);
-        });
-        stream.on("end", () => resolve({ status, contentType, body: Buffer.concat(chunks) }));
-        stream.on("error", (err) => reject(err instanceof SafeFetchError ? err : new SafeFetchError("The page could not be read.", "network")));
+        readBody(res, o.maxBytes, signal).then((body) => resolve({ status, contentType, body }), reject);
       },
     );
     req.on("error", (err) => {
@@ -154,6 +139,33 @@ function getOnce(url: URL, o: Required<SafeFetchOptions>, signal: AbortSignal): 
       reject(new SafeFetchError("The site could not be reached.", "network"));
     });
     req.end();
+  });
+}
+
+/**
+ * The response body, decompressed and capped at `maxBytes`. The raw response and its decompressor are one pipeline,
+ * so a connection that closes early or stalls past the timeout ends in an error instead of waiting forever.
+ */
+export function readBody(res: http.IncomingMessage, maxBytes: number, signal: AbortSignal): Promise<Buffer> {
+  const encoding = String(res.headers["content-encoding"] ?? "").toLowerCase();
+  const decoder = encoding === "gzip" ? zlib.createGunzip() : encoding === "br" ? zlib.createBrotliDecompress() : encoding === "deflate" ? zlib.createInflate() : new PassThrough();
+  const chunks: Buffer[] = [];
+  let size = 0;
+  decoder.on("data", (chunk: Buffer) => {
+    size += chunk.length;
+    if (size > maxBytes) decoder.destroy(new SafeFetchError("That page is too big to read.", "size"));
+    else chunks.push(chunk);
+  });
+  const stop = () => res.destroy();
+  signal.addEventListener("abort", stop, { once: true });
+  return new Promise((resolve, reject) => {
+    pipeline(res, decoder, (err) => {
+      signal.removeEventListener("abort", stop);
+      if (!err) resolve(Buffer.concat(chunks));
+      else if (err instanceof SafeFetchError) reject(err);
+      else if (signal.aborted) reject(new SafeFetchError("The site took too long to answer.", "timeout"));
+      else reject(new SafeFetchError("The page could not be read.", "network"));
+    });
   });
 }
 

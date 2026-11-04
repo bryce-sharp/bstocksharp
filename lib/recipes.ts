@@ -8,6 +8,15 @@ export type RecipeStep = { id: string; text: string; label?: string; after?: str
 
 export const RECIPE_LIMITS = { title: 160, line: 600, step: 3000, lines: 200, tags: 20, tag: 40, text: 20000 } as const;
 
+/** A complete http or https address, normalized, or null. */
+export function webUrl(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const t = v.trim();
+  if (!t || t.length > 2000 || !URL.canParse(t)) return null;
+  const u = new URL(t);
+  return u.protocol === "https:" || u.protocol === "http:" ? u.toString() : null;
+}
+
 /** A short random id for a new ingredient or step; it never changes after. */
 export function newLineId(): string {
   return Math.random().toString(36).slice(2, 10);
