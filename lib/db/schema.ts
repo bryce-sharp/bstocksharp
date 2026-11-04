@@ -25,6 +25,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type { RecipeIngredient, RecipeStep } from "@/lib/recipes";
+import type { UnitSystem } from "@/lib/recipe-units";
 
 const createdAt = () =>
   timestamp("created_at", { withTimezone: true }).defaultNow().notNull();
@@ -427,6 +428,8 @@ export const profiles = pgTable("profiles", {
   // [] = "not set up yet" → nothing is filtered (show everything). Editor-gated to
   // change, so the read-only showcase stays read-only — see auth notes.
   equipment: jsonb("equipment").$type<string[]>().notNull().default([]),
+  // How Recipes shows amounts for this person (lib/recipe-units); "written" leaves every line as typed.
+  recipeUnits: varchar("recipe_units", { length: 10 }).$type<UnitSystem>().notNull().default("written"),
   // Who can see this person's data, per personal app (lib/sharing). A missing app = everyone.
   sharing: jsonb("sharing").$type<Sharing>().notNull().default({}),
   // (Phase D removed the per-profile edit passwords — a profile is protected by
@@ -1324,11 +1327,10 @@ export const recipes = pgTable(
     cookMin: integer("cook_min"),
     notes: text("notes"),
     tags: jsonb("tags").$type<string[]>().notNull().default([]),
-    sourceKind: varchar("source_kind", { length: 20 }).notNull().default("mine"), // mine | imported | version
+    sourceKind: varchar("source_kind", { length: 20 }).notNull().default("mine"), // mine | imported
     sourceUrl: text("source_url"),
     sourceName: varchar("source_name", { length: 160 }),
     imageUrl: text("image_url"),
-    basedOnRecipeId: integer("based_on_recipe_id").references((): AnyPgColumn => recipes.id, { onDelete: "set null" }),
     ingredients: jsonb("ingredients").$type<RecipeIngredient[]>().notNull().default([]),
     steps: jsonb("steps").$type<RecipeStep[]>().notNull().default([]),
     createdAt: createdAt(),

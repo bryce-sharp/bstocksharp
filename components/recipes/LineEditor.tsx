@@ -21,10 +21,16 @@ export default function LineEditor({
   lines,
   onChange,
   kind,
+  lineAction,
+  lineFooter,
 }: {
   lines: Line[];
   onChange: (lines: Line[]) => void;
   kind: "ingredient" | "step";
+  /** A button for one line, before its move and remove buttons. */
+  lineAction?: (line: Line, name: string) => React.ReactNode;
+  /** Anything shown under one line, like the recipe it links to. */
+  lineFooter?: (line: Line) => React.ReactNode;
 }) {
   const inputs = React.useRef(new Map<string, HTMLInputElement | HTMLTextAreaElement>());
   // The line to focus once the list has re-rendered with it.
@@ -77,6 +83,7 @@ export default function LineEditor({
                 {number}
               </Box>
             )}
+            <Box sx={{ flex: 1, minWidth: 0 }}>
             <TextField
               fullWidth
               size="small"
@@ -116,7 +123,10 @@ export default function LineEditor({
                 ...(line.heading ? { "& .MuiInputBase-input": { fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, fontSize: 13 } } : {}),
               }}
             />
+            {lineFooter?.(line)}
+            </Box>
             <Box sx={{ display: "flex", flex: "none" }}>
+              {lineAction?.(line, name)}
               <IconButton size="small" aria-label={`Move ${name.toLowerCase()} up`} disabled={i === 0} onClick={() => move(i, -1)} sx={{ display: { xs: "none", sm: "inline-flex" } }}>
                 <ArrowUpwardIcon fontSize="small" />
               </IconButton>

@@ -17,7 +17,10 @@ import Link from "@/components/shared/AppLink";
 import type { Recipe } from "@/lib/db/schema";
 import type { RecipeLogEntry } from "@/lib/queries/recipes";
 import type { RatingSummary } from "@/lib/recipe-ratings";
-import { formatAmount, formatMinutes, scaleIngredient, shortDay, totalMinutes, type RecipeIngredient } from "@/lib/recipes";
+import { formatMinutes, shortDay, totalMinutes, type RecipeIngredient } from "@/lib/recipes";
+import { batchesOf, formatAmount, showIngredient, showShare, showTemperatures, type UnitSystem } from "@/lib/recipe-units";
+import { sharesOf, type Share } from "@/lib/recipe-links";
+import { setRecipeUnits } from "@/app/actions/recipes";
 import CookHistory from "./CookHistory";
 import CookLogDialog, { type Cook } from "./CookLogDialog";
 import BackLink from "./BackLink";
@@ -26,7 +29,9 @@ import FavoriteButton from "./FavoriteButton";
 import { panelSx } from "./RecipeCard";
 import RatingLine from "./RatingLine";
 import RatingsChart from "./RatingsChart";
+import RecipeLink from "./RecipeLink";
 import TagChip from "./TagChip";
+import UnitsSwitch from "./UnitsSwitch";
 import { skinScope } from "./RecipesSkin";
 import Stars from "./Stars";
 import { color, font, gingham, radius, shadow } from "./tokens";
@@ -44,6 +49,15 @@ function grouped(ingredients: RecipeIngredient[]): { group: string | null; items
   }
   return out;
 }
+
+/** "· 2 in step 2, 2 in step 6" under an ingredient split across steps, or "· steps 2, 6" without amounts. */
+function sharesText(line: string, shares: Share[], factor: number, units: UnitSystem): string | null {
+  if (!shares.some((s) => s.amount) && shares.length < 2) return null;
+  if (!shares.some((s) => s.amount)) return `steps ${shares.map((s) => s.step).join(", ")}`;
+  return shares.map((s) => (s.amount ? `${showShare(line, s.amount, factor, units)} in step ${s.step}` : `rest in step ${s.step}`)).join(", ");
+}
+
+type Active = { kind: "step" | "ingredient"; id: string } | null;
 
 const visuallyHidden = { position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" } as const;
 const sectionTitle = { fontSize: 22, mb: 1 } as const;
@@ -72,15 +86,24 @@ export default function RecipeView({
   cooks,
   defaultCook,
   today,
+  units: savedUnits,
+  linked,
+  scale,
 }: {
   recipe: RecipeViewData;
   person: string | null;
   canFavorite: boolean;
+  /** The active person's units; changing them here saves them when this login may edit that person. */
+  units: UnitSystem;
   logs: RecipeLogEntry[];
   ratings: RatingSummary;
   cooks: Cook[];
   defaultCook: number | null;
   today: string;
+  /** Titles of the recipes its ingredient lines link to; a deleted one is missing, so its line stays text. */
+  linked: Record<number, string>;
+  /** The size to open at, as a multiple of the recipe's own, when another recipe links here. */
+  scale: number;
 }) {
   const [dialog, setDialog] = React.useState<LogDialog>(null);
   const [cooking, setCooking] = React.useState(false);
@@ -90,9 +113,25 @@ export default function RecipeView({
   const servings = recipe.servings && recipe.servings > 0 ? recipe.servings : null;
   const base = servings ?? 1;
   const stepBy = servings ? 1 : 0.5;
-  const [amount, setAmount] = React.useState(base);
+  const [amount, setAmount] = React.useState(() => Math.min(base * 20, Math.max(stepBy, Math.round((base * scale) / stepBy) * stepBy)));
   const factor = amount / base;
+  const [units, setUnits] = React.useState(savedUnits);
+  const chooseUnits = (next: UnitSystem) => {
+    setUnits(next);
+    if (canFavorite) setRecipeUnits(next).catch(() => {});
+  };
   const [gotIngredient, toggleIngredient] = useChecklist();
+  // Pointing at a step lights up the ingredients it uses, and pointing at an ingredient lights up its steps.
+  const [active, setActive] = React.useState<Active>(null);
+  const point = (next: Active) => ({
+    onMouseEnter: () => setActive(next),
+    onFocus: () => setActive(next),
+    onMouseLeave: () => setActive((a) => (a?.id === next?.id ? null : a)),
+    onBlur: () => setActive((a) => (a?.id === next?.id ? null : a)),
+  });
+  const litIngredients = new Set(active?.kind === "step" ? (recipe.steps.find((s) => s.id === active.id)?.uses ?? []).map((u) => u.ingredientId) : []);
+  const litSteps = new Set(active?.kind === "ingredient" ? recipe.steps.filter((s) => s.uses?.some((u) => u.ingredientId === active.id)).map((s) => s.id) : []);
+  const lit = { bgcolor: color.highlight, boxShadow: `inset 3px 0 0 ${color.accent}` } as const;
   const [doneStep, toggleStep] = useChecklist();
 
   const total = totalMinutes(recipe);
@@ -211,11 +250,14 @@ export default function RecipeView({
                 </IconButton>
               </Box>
             </Box>
-            {factor !== 1 && (
-              <Button size="small" onClick={() => setAmount(base)} sx={{ mb: 1, px: 1 }}>
-                Back to {servings ? `${base} servings` : "1 batch"}
-              </Button>
-            )}
+            <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, mb: 1 }}>
+              <UnitsSwitch value={units} onChange={chooseUnits} />
+              {factor !== 1 && (
+                <Button size="small" onClick={() => setAmount(base)} sx={{ px: 1 }}>
+                  Back to {servings ? `${base} servings` : "1 batch"}
+                </Button>
+              )}
+            </Box>
             {recipe.ingredients.length === 0 ? (
               <Typography sx={{ color: color.muted }}>No ingredients yet.</Typography>
             ) : (
@@ -228,21 +270,34 @@ export default function RecipeView({
                   )}
                   {items.map((ing) => {
                     const got = gotIngredient.has(ing.id);
+                    const shares = sharesText(ing.text, sharesOf(ing.id, recipe.steps), factor, units);
+                    const inner = ing.recipeId !== undefined ? linked[ing.recipeId] : undefined;
                     return (
+                      <React.Fragment key={ing.id}>
                       <ButtonBase
-                        key={ing.id}
                         role="checkbox"
                         aria-checked={got}
                         onClick={() => toggleIngredient(ing.id)}
-                        sx={{ display: "flex", justifyContent: "flex-start", gap: 1.25, width: "100%", textAlign: "left", font: "inherit", fontSize: 15.5, lineHeight: 1.45, py: 0.75, px: 1, mx: -1, borderRadius: 2, color: got ? color.muted : color.ink, "&:hover": { bgcolor: color.highlight } }}
+                        {...point({ kind: "ingredient", id: ing.id })}
+                        sx={{ display: "flex", justifyContent: "flex-start", gap: 1.25, width: "100%", textAlign: "left", font: "inherit", fontSize: 15.5, lineHeight: 1.45, py: 0.75, px: 1, mx: -1, borderRadius: 2, color: got ? color.muted : color.ink, "&:hover": { bgcolor: color.highlight }, ...(litIngredients.has(ing.id) ? lit : {}) }}
                       >
                         <Box aria-hidden sx={{ flex: "none", width: 18, height: 18, mt: "2px", borderRadius: "5px", border: `1.5px solid ${got ? color.accent : color.muted}`, bgcolor: got ? color.accent : "transparent", color: color.onAccent, fontSize: 13, lineHeight: "15px", textAlign: "center" }}>
                           {got ? "✓" : ""}
                         </Box>
-                        <Box component="span" sx={{ textDecoration: got ? "line-through" : "none" }}>
-                          {scaleIngredient(ing.text, factor)}
+                        <Box component="span">
+                          <Box component="span" sx={{ textDecoration: got ? "line-through" : "none" }}>
+                            {showIngredient(ing.text, factor, units)}
+                          </Box>
+                          {shares && (
+                            <Box component="span" sx={{ color: color.muted, fontSize: 13.5 }}>
+                              {" "}
+                              · {shares}
+                            </Box>
+                          )}
                         </Box>
                       </ButtonBase>
+                      {inner && <RecipeLink id={ing.recipeId!} title={inner} scale={batchesOf(ing.text) * factor} />}
+                      </React.Fragment>
                     );
                   })}
                 </Box>
@@ -265,7 +320,8 @@ export default function RecipeView({
                       <ButtonBase
                         aria-pressed={done}
                         onClick={() => toggleStep(s.id)}
-                        sx={{ display: "flex", justifyContent: "flex-start", alignItems: "flex-start", gap: 1.5, width: "100%", textAlign: "left", font: "inherit", fontSize: 16, lineHeight: 1.55, py: 1, px: 1.25, mx: -1.25, mb: 0.25, borderRadius: 2, opacity: done ? 0.5 : 1, "&:hover": { bgcolor: color.highlight } }}
+                        {...point({ kind: "step", id: s.id })}
+                        sx={{ display: "flex", justifyContent: "flex-start", alignItems: "flex-start", gap: 1.5, width: "100%", textAlign: "left", font: "inherit", fontSize: 16, lineHeight: 1.55, py: 1, px: 1.25, mx: -1.25, mb: 0.25, borderRadius: 2, opacity: done ? 0.5 : 1, "&:hover": { bgcolor: color.highlight }, ...(litSteps.has(s.id) ? lit : {}) }}
                       >
                         <Box component="span" aria-hidden sx={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontWeight: 600, color: color.accent, fontSize: 20, minWidth: 24, lineHeight: 1.25 }}>
                           {i + 1}
@@ -274,7 +330,7 @@ export default function RecipeView({
                           <Box component="span" sx={visuallyHidden}>
                             Step {i + 1}{done ? ", done" : ""}:{" "}
                           </Box>
-                          {s.text}
+                          {showTemperatures(s.text, units)}
                         </Box>
                       </ButtonBase>
                     </li>
@@ -327,6 +383,8 @@ export default function RecipeView({
           ingredients={recipe.ingredients}
           steps={recipe.steps}
           factor={factor}
+          units={units}
+          linked={linked}
           amountLabel={servings ? `${amount} ${amount === 1 ? "serving" : "servings"}` : `${formatAmount(amount)} ${amount === 1 ? "batch" : "batches"}`}
           onClose={() => setCooking(false)}
           onDone={() => {

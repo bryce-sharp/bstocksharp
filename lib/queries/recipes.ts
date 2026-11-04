@@ -89,6 +89,14 @@ export async function listRecipeTags(): Promise<string[]> {
   return [...new Set(rows.map((r) => r.tag))].sort((a, b) => a.localeCompare(b));
 }
 
+export type RecipeChoice = { id: number; title: string };
+
+/** The household's recipes by title, for linking one inside another. */
+export async function listRecipeChoices(): Promise<RecipeChoice[]> {
+  const groupId = await requireGroupId();
+  return db.select({ id: recipes.id, title: recipes.title }).from(recipes).where(eq(recipes.groupId, groupId)).orderBy(asc(recipes.title));
+}
+
 /** A recipe's cook log, newest first, with each cook's name and color. */
 export async function listRecipeLogs(recipeId: number) {
   const groupId = await requireGroupId();

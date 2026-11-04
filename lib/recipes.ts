@@ -58,67 +58,7 @@ export function matchesSearch(
   return words.every((w) => hay.includes(w));
 }
 
-// Scaling and timers.
-
-/** Unicode vulgar fractions as their values. */
-const VULGAR: Record<string, number> = { "¼": 0.25, "½": 0.5, "¾": 0.75, "⅓": 1 / 3, "⅔": 2 / 3, "⅛": 0.125, "⅜": 0.375, "⅝": 0.625, "⅞": 0.875 };
-const NUMBER = String.raw`(?:\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?\s*[¼½¾⅓⅔⅛⅜⅝⅞]|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞])`;
-const AMOUNT = new RegExp(String.raw`^\s*(${NUMBER})(?:\s*(?:-|–|to)\s*(${NUMBER}))?`);
-
-function toNumber(s: string): number {
-  const t = s.trim();
-  const mixed = /^(\d+)\s+(\d+)\/(\d+)$/.exec(t);
-  if (mixed) return Number(mixed[1]) + Number(mixed[2]) / Number(mixed[3]);
-  const frac = /^(\d+)\/(\d+)$/.exec(t);
-  if (frac) return Number(frac[1]) / Number(frac[2]);
-  const vulgar = /^(\d+(?:\.\d+)?)?\s*([¼½¾⅓⅔⅛⅜⅝⅞])$/.exec(t);
-  if (vulgar) return Number(vulgar[1] ?? 0) + VULGAR[vulgar[2]!]!;
-  return Number(t);
-}
-
-const NICE: [number, string][] = [
-  [0, ""],
-  [1 / 8, "1/8"],
-  [1 / 4, "1/4"],
-  [1 / 3, "1/3"],
-  [1 / 2, "1/2"],
-  [2 / 3, "2/3"],
-  [3 / 4, "3/4"],
-  [1, ""],
-];
-
-/** A cook's way to write an amount: whole numbers with common fractions, else one decimal place. */
-export function formatAmount(n: number): string {
-  if (n >= 20) return String(Math.round(n));
-  const whole = Math.floor(n);
-  const part = n - whole;
-  const [value, text] = NICE.reduce((a, b) => (Math.abs(b[0] - part) < Math.abs(a[0] - part) ? b : a));
-  if (Math.abs(value - part) > 0.04) return String(Math.round(n * 10) / 10);
-  if (value === 1) return String(whole + 1);
-  if (!text) return String(whole);
-  return whole ? `${whole} ${text}` : text;
-}
-
-// The same amount in another unit, right after a measuring unit: the "(115 g)" in "1/2 cup (115 g) butter". After
-// a count word or none ("1 can (14 oz)", "2 (14 oz) cans") the parenthesis is a package size and stays as it is.
-const UNITS = String.raw`cups?|c|tablespoons?|tbsps?|tbs|tb|teaspoons?|tsps?|t|ounces?|oz|fl\.?\s*oz|pounds?|lbs?|grams?|g|kilograms?|kgs?|kg|milliliters?|millilitres?|ml|liters?|litres?|l|pints?|pt|quarts?|qt|gallons?|gal|sticks?`;
-const EQUIVALENT = new RegExp(String.raw`^(\s*(?:${UNITS})\.?\s*\(\s*)(${NUMBER})(?:\s*(?:-|–|to)\s*(${NUMBER}))?`, "i");
-
-function scaled(low: string, high: string | undefined, factor: number): string {
-  const a = formatAmount(toNumber(low) * factor);
-  return high ? `${a} to ${formatAmount(toNumber(high) * factor)}` : a;
-}
-
-/** The ingredient line with its leading amount (or range), and the same amount in another unit, multiplied by `factor`. */
-export function scaleIngredient(line: string, factor: number): string {
-  if (factor === 1) return line;
-  const m = AMOUNT.exec(line);
-  if (!m) return line;
-  const rest = line.slice(m[0].length);
-  const e = EQUIVALENT.exec(rest);
-  const tail = e ? e[1]! + scaled(e[2]!, e[3], factor) + rest.slice(e[0].length) : rest;
-  return scaled(m[1]!, m[2], factor) + tail;
-}
+// Timers.
 
 export type StepTimer = { label: string; seconds: number };
 

@@ -222,7 +222,7 @@ function RecipePage({ look, recipe }: { look: Look; recipe: LookRecipe }) {
       <div style={{ display: "grid", gap: 20, gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", alignItems: "start" }}>
         <div aria-hidden style={{ minHeight: 180, height: "100%", borderRadius: Math.max(0, look.radius - 4), background: look.picture(HUES[recipe.id]!) }} />
         <div style={{ gridColumn: "span 2", minWidth: 0 }}>
-          <div style={{ fontFamily: look.fonts.detail, fontSize: 12.5, color: c.muted }}>My version · based on {recipe.basedOn}</div>
+          <div style={{ fontFamily: look.fonts.detail, fontSize: 12.5, color: c.muted }}>From {recipe.source}</div>
           <h1 style={{ fontFamily: look.fonts.display, ...look.heading, fontSize: "clamp(28px, 4vw, 42px)", lineHeight: 1.08, margin: "4px 0 6px" }}>{recipe.title}</h1>
           <div style={{ color: c.muted, fontSize: 15 }}>{recipe.blurb}</div>
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px 18px", marginTop: 12 }}>
@@ -240,7 +240,7 @@ function RecipePage({ look, recipe }: { look: Look; recipe: LookRecipe }) {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 16 }}>
             <button type="button" style={button(true)}>Start cooking</button>
             <button type="button" style={button(false)}>Log a cook</button>
-            <button type="button" style={button(false)}>Make my version</button>
+            <button type="button" style={button(false)}>Edit</button>
           </div>
         </div>
       </div>

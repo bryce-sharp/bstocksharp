@@ -2,9 +2,9 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { recipeFavorites, recipeLogs, recipes } from "@/lib/db/schema";
+import { profiles, recipeFavorites, recipeLogs, recipes } from "@/lib/db/schema";
 import { requireEditor, requireEditorFor } from "@/lib/auth";
 import { getActiveProfile } from "@/lib/profile";
 import { requireGroupId } from "@/lib/session";
@@ -13,6 +13,7 @@ import { findRecipeBySource, getRecipe, getRecipeLog } from "@/lib/queries/recip
 import { logEvent } from "@/lib/events";
 import { SafeFetchError, safeFetchText } from "@/lib/safe-fetch";
 import { recipeFromHtml, recipeFromPageText, type RecipeDraft } from "@/lib/recipe-import";
+import { isUnitSystem, type UnitSystem } from "@/lib/recipe-units";
 import { RECIPE_LIMITS, cleanTags, type RecipeIngredient, type RecipeStep, type RecipeUse, webUrl } from "@/lib/recipes";
 
 // Anyone in the household edits any recipe (docs/recipes/plan.md); favorites are each person's own.
@@ -145,12 +146,21 @@ function problem(err: unknown): RecipeSaveResult {
   return { error: err instanceof Error ? err.message : "Could not save the recipe." };
 }
 
+/** Recipe links kept only to the household's other recipes; a deleted or foreign one leaves the line as text. */
+async function linkable(ingredients: RecipeIngredient[], self: number | null): Promise<RecipeIngredient[]> {
+  const ids = [...new Set(ingredients.flatMap((i) => (i.recipeId !== undefined && i.recipeId !== self ? [i.recipeId] : [])))];
+  const rows = ids.length ? await db.select({ id: recipes.id }).from(recipes).where(and(eq(recipes.groupId, await requireGroupId()), inArray(recipes.id, ids))) : [];
+  const known = new Set(rows.map((r) => r.id));
+  return ingredients.map(({ recipeId, ...line }) => (recipeId !== undefined && known.has(recipeId) ? { ...line, recipeId } : line));
+}
+
 export async function addRecipe(input: RecipeInput): Promise<RecipeSaveResult> {
   await requireApp("recipes");
   await requireEditor();
   let id: number;
   try {
-    const data = parseRecipe(input);
+    const parsed = parseRecipe(input);
+    const data = { ...parsed, ingredients: await linkable(parsed.ingredients, null) };
     const [row] = await db
       .insert(recipes)
       .values({ ...data, groupId: await requireGroupId(), createdByProfileId: (await getActiveProfile())?.id ?? null })
@@ -169,7 +179,8 @@ export async function updateRecipe(id: number, input: RecipeInput, changed = fal
   await requireEditor();
   if (!(await getRecipe(id))) return { error: "That recipe is gone." };
   try {
-    const data = parseRecipe(input);
+    const parsed = parseRecipe(input);
+    const data = { ...parsed, ingredients: await linkable(parsed.ingredients, id) };
     await db
       .update(recipes)
       .set({ ...data, updatedAt: new Date(), ...(changed === true ? { version: sql`${recipes.version} + 1` } : {}) })
@@ -204,6 +215,17 @@ export async function setRecipeFavorite(recipeId: number, favorite: boolean): Pr
   }
   revalidatePath("/recipes");
   revalidatePath(`/recipes/${recipeId}`);
+}
+
+/** How Recipes shows amounts for the person picked in the Viewing menu: As written, US or Metric. */
+export async function setRecipeUnits(units: UnitSystem): Promise<void> {
+  await requireApp("recipes");
+  if (!isUnitSystem(units)) throw new Error("Pick As written, US or Metric.");
+  const person = await getActiveProfile();
+  if (!person) throw new Error("Pick a person first.");
+  await requireEditorFor(person.id);
+  await db.update(profiles).set({ recipeUnits: units }).where(eq(profiles.id, person.id));
+  revalidatePath("/recipes", "layout");
 }
 
 // ── Cook log ──────────────────────────────────────────────────────────────────

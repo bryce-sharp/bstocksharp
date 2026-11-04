@@ -6,7 +6,10 @@
 //   npm run recipes:check -- --live
 
 import { recipeFromHtml, recipeFromPageText, recipeFromText, isoMinutes, textMinutes, yieldServings, tidyLine, withoutIngredientEcho } from "../lib/recipe-import.ts";
-import { scaleIngredient, splitPasted, formatAmount, webUrl } from "../lib/recipes.ts";
+import { splitPasted, webUrl } from "../lib/recipes.ts";
+import { batchesOf, formatAmount, showIngredient, showShare, showTemperatures, withAmount } from "../lib/recipe-units.ts";
+import { ingredientLines, toIngredients, toSteps } from "../components/recipes/lines.ts";
+import { shortName, sharesOf, suggestUses } from "../lib/recipe-links.ts";
 import { summarizeRatings, type RatingLog } from "../lib/recipe-ratings.ts";
 import { checkUrl, isPrivateAddress, readBody, safeFetchText, SafeFetchError } from "../lib/safe-fetch.ts";
 import http from "node:http";
@@ -30,19 +33,99 @@ for (const [line, factor, want] of [
   ["1/2 cup (115 g) butter", 2, "1 cup (230 g) butter"],
   ["2 (14 oz) cans tomatoes", 2, "4 (14 oz) cans tomatoes"],
   ["1 can (14 oz) tomatoes", 2, "2 can (14 oz) tomatoes"],
-  ["1 stick (113 g) butter", 2, "2 stick (226 g) butter"],
+  ["1 stick (113 g) butter", 2, "2 sticks (226 g) butter"],
+  ["1 teaspoon vanilla", 2, "2 teaspoons vanilla"],
+  ["4 tbsp butter", 2, "1/2 cup butter"],
+  ["6 tbsp butter", 1, "6 tbsp butter"],
+  ["3 tbsp oil", 2, "6 tbsp oil"],
+  ["1 1/2 tsp salt", 2, "1 tbsp salt"],
+  ["8 oz pasta", 2, "1 lb pasta"],
+  ["2 (14 oz) cans tomatoes", 1.5, "3 (14 oz) cans tomatoes"],
+  ["200 g (1 cup) sugar", 2, "400 g (2 cups) sugar"],
+  ["2/3 cup butter", 1.2, "3/4 cup plus 1 tbsp butter"],
+  ["1/2 cup sugar", 1.25, "1/2 cup plus 2 tbsp sugar"],
+  ["1 1/2 tsp cinnamon", 1.2, "1 3/4 tsp cinnamon"],
+  ["10 oz beef", 1.2, "12 oz beef"],
   ["½ tsp salt", 2, "1 tsp salt"],
   ["2-3 cloves garlic", 2, "4 to 6 cloves garlic"],
   ["Salt to taste", 3, "Salt to taste"],
   ["7 oz chocolate", 1 / 3, "2 1/3 oz chocolate"],
   ["500 g flour", 1.5, "750 g flour"],
 ] as const) {
-  eq(`scale ${line} x${factor}`, scaleIngredient(line, factor), want);
+  eq(`scale ${line} x${factor}`, showIngredient(line, factor, "written"), want);
 }
+
+// ── Units ─────────────────────────────────────────────────────────────────────
+for (const [line, system, factor, want] of [
+  ["2 cups flour", "metric", 1, "about 250 g flour"],
+  ["1 cup almond flour", "metric", 1, "235 ml almond flour"],
+  ["1 cup peanut butter", "metric", 1, "235 ml peanut butter"],
+  ["1 cup (200 g) sugar", "metric", 1, "200 g sugar"],
+  ["1 cup (200 g) sugar", "us", 1, "1 cup sugar"],
+  ["1/2 cup (1 stick, 113 g) butter", "metric", 2, "225 g butter"],
+  ["½ tsp salt", "metric", 2, "1 tsp salt"],
+  ["4 tbsp butter", "metric", 1, "about 55 g butter"],
+  ["3 tbsp olive oil", "metric", 2, "90 ml olive oil"],
+  ["1 lb ground beef", "metric", 1, "450 g ground beef"],
+  ["2-3 cups water", "metric", 2, "0.95 to 1.4 l water"],
+  ["250 ml milk", "us", 1, "1 cup milk"],
+  ["750 g beef chuck", "us", 1, "1 2/3 lb beef chuck"],
+  ["500 g bread flour", "us", 1, "500 g bread flour"],
+  ["500 g bread flour", "us", 2, "1 kg bread flour"],
+  ["2 (14 oz) cans tomatoes", "metric", 1, "2 (14 oz) cans tomatoes"],
+  ["2 T sugar", "metric", 1, "2 T sugar"],
+  ["1 cup warm milk (110°F)", "metric", 1, "235 ml warm milk (45°C)"],
+  ["2 large eggs", "metric", 2, "4 large eggs"],
+  ["1-3/4 cups all-purpose flour", "metric", 1, "about 220 g all-purpose flour"],
+  ["1-3/4 cups all-purpose flour", "written", 2, "3 1/2 cups all-purpose flour"],
+  ["4 sticks of celery", "metric", 2, "8 sticks of celery"],
+  ["1½ cups plus 1 Tbsp. (200 g) all-purpose flour", "metric", 1, "200 g all-purpose flour"],
+  ["1½ cups plus 1 Tbsp. all-purpose flour", "metric", 1, "about 195 g all-purpose flour"],
+  ["1½ cups plus 1 Tbsp. flour", "written", 2, "3 cups plus 2 Tbsp flour"],
+  ["1½ cups plus 1 Tbsp. flour", "us", 1, "1½ cups plus 1 Tbsp. flour"],
+  ["2 tablespoons (25g) granulated sugar", "metric", 1, "25g granulated sugar"],
+  ["2 tablespoons (25g) granulated sugar", "us", 1, "2 tablespoons granulated sugar"],
+  ["1/2 to 2/3 cup (113g to 152g) hot water", "metric", 1, "113g to 152g hot water"],
+  ["1 g instant yeast", "us", 1, "1 g instant yeast"],
+  ["2 g instant yeast", "us", 2, "4 g instant yeast"],
+  ["1/8 tsp salt", "written", 0.25, "0.03 tsp salt"],
+  ["1 cup water (for the rice)", "metric", 1, "235 ml water (for the rice)"],
+  ["1 cup water for the sugar syrup", "metric", 1, "235 ml water for the sugar syrup"],
+  ["1 cup flour, plus more for dusting", "metric", 1, "about 125 g flour, plus more for dusting"],
+] as const) {
+  eq(`units ${line} ${system} x${factor}`, showIngredient(line, factor, system), want);
+}
+eq("temperatures metric", showTemperatures("Bake at 350°F, then 425 degrees F. Fry at 350-375°F. Add 2 C of water.", "metric"), "Bake at 180°C, then 220°C. Fry at 180–190°C. Add 2 C of water.");
+eq("temperatures us", showTemperatures("Preheat to 180°C (160°C fan). Roast at 200C.", "us"), "Preheat to 350°F (325°F fan). Roast at 400°F.");
+eq("temperatures signed", showTemperatures("Freeze at -18°C. Room 1350°F.", "us"), "Freeze at 0°F. Room 1350°F.");
+eq("temperatures cold", showTemperatures("Freeze at 0°F. Chill to 40°F.", "metric"), "Freeze at -18°C. Chill to 4°C.");
+eq("temperatures as written", showTemperatures("Bake at 350°F.", "written"), "Bake at 350°F.");
 eq("format 26.4", formatAmount(26.4), "26");
 eq("paste bullets", splitPasted("- 2 cups flour\n• 1 tsp salt\n▢ 3 eggs"), ["2 cups flour", "1 tsp salt", "3 eggs"]);
 eq("paste numbers", splitPasted("1. Mix.\n2) Add eggs.\nStep 3: Bake."), ["Mix.", "Add eggs.", "Bake."]);
 eq("paste keeps ranges", splitPasted("10 - 12 cherry tomatoes\n1.5 cups milk"), ["10 - 12 cherry tomatoes", "1.5 cups milk"]);
+
+// ── Step links ────────────────────────────────────────────────────────────────
+const linkIngredients = ["2 cups all-purpose flour", "1 cup packed brown sugar", "1/2 cup granulated sugar", "2 large eggs", "1 tsp baking soda", "1 tsp baking powder", "Salt and pepper", "1 lb boneless chicken breast", "2 cups chicken broth"].map((text, i) => ({ id: `i${i}`, text }));
+const linkSteps = [
+  { id: "s0", text: "Whisk the flour, baking soda and baking powder." },
+  { id: "s1", text: "Beat in the brown sugar, then the eggs.", uses: [{ ingredientId: "i3", amount: "1" }] },
+  { id: "s2", text: "Season with salt. Add the broth." },
+  { id: "s3", text: "Sprinkle with sugar, then brush with the last egg.", uses: [{ ingredientId: "i3", amount: "1" }] },
+];
+const suggested = suggestUses(linkIngredients, linkSteps);
+eq("suggest links", linkSteps.map((st) => (suggested.get(st.id) ?? []).map((id) => shortName(linkIngredients.find((x) => x.id === id)!.text))), [["all-purpose flour", "baking soda", "baking powder"], ["brown sugar"], ["Salt and pepper", "chicken broth"], []]);
+eq("short names", ["1 can (14 oz) diced tomatoes", "2 cloves garlic, minced", "1/2 cup (115 g) unsalted butter, melted"].map(shortName), ["tomatoes", "garlic", "butter"]);
+eq("shares", sharesOf("i3", linkSteps), [{ step: 2, amount: "1" }, { step: 4, amount: "1" }]);
+eq("share keeps the line's own equivalent", [withAmount("1 cup (150 g) all-purpose flour", "1/2"), showShare("1 cup (150 g) all-purpose flour", "1/2", 1, "metric"), showShare("4 large eggs", "2", 2, "us")], ["1/2 cup (75 g) all-purpose flour", "75 g", "4"]);
+eq("links keep their notes", toSteps([{ key: "s1", text: "Mix" }], [], { s1: [{ ingredientId: "i1", note: "the dry part" }, { ingredientId: "i2", amount: " 2 ", note: "n" }] })[0]!.uses, [{ ingredientId: "i1", note: "the dry part" }, { ingredientId: "i2", note: "n", amount: "2" }]);
+eq("with amount", [withAmount("4 large eggs", "2"), withAmount("2 cups flour", "1"), withAmount("2 cups flour", "2 tbsp"), withAmount("1/2 cup (115 g) butter", "1/4")], ["2 large eggs", "1 cup flour", "2 tbsp flour", "1/4 cup (58 g) butter"]);
+
+// ── Recipes inside recipes ────────────────────────────────────────────────────
+eq("batches", ["2 batches Fry sauce", "1 recipe pie crust", "1/2 batch dough", "1 cup fry sauce", "Fry sauce"].map(batchesOf), [2, 1, 0.5, 1, 1]);
+const withLink = [{ id: "a1", text: "1 batch Fry sauce", recipeId: 7 }, { id: "a2", text: "1 bun" }];
+eq("links survive the form", toIngredients(ingredientLines(withLink), withLink), withLink);
+eq("an unlinked line drops its link", toIngredients(ingredientLines(withLink).map(({ recipeId: _r, ...l }) => l), withLink), [{ id: "a1", text: "1 batch Fry sauce" }, { id: "a2", text: "1 bun" }]);
 
 // ── Ratings ───────────────────────────────────────────────────────────────────
 const L = (profileId: number, cookedOn: string, rating: number | null, counted = true, recipeVersion = 1): RatingLog => ({ profileId, cookedOn, rating, counted, recipeVersion });

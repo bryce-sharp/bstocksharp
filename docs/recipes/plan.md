@@ -2,18 +2,18 @@
 
 Status: plan agreed 2026-11-03; the look (Sage & Butter) chosen 2026-11-03; PR 1 (the section, recipes,
 favorites) and PR 2 (the cook log and ratings) built 2026-11-03 (#88); PR 3 (cook mode, #89) and PR 4 (import)
-built 2026-11-04. The dev mockup is retired now that every screen of it is real; the looks lab `/recipes/looks`
+built 2026-11-04; PR 5 (units), PR 6 (step links) and PR 8 (recipes inside recipes) built 2026-11-04. The dev mockup is retired now that every screen of it is real; the looks lab `/recipes/looks`
 stays as the reference for the table view.
 
 Decided: a Recipes section of this site, shared by the household; anyone in the household edits any recipe, and
-there are no private recipes; ratings and favorites belong to each person; grocery lists wait until later; the
+there are no private recipes or personal copies of one; ratings and favorites belong to each person; grocery lists wait until later; the
 look is **Sage & Butter** (below); the section is called **Recipes** for now.
 
 ## The idea
 
 A household cookbook that remembers how each recipe went. You save your own recipes or import them from a link,
 cook them step by step with timers, and log each time you make one, with your own stars and notes. Recipes can
-use other recipes, belong to meals, and grow into your own versions.
+use other recipes and belong to meals.
 
 ## The look: Sage & Butter
 
@@ -50,7 +50,6 @@ quiet pattern, soft colors, friendly type that stays easy to read.
 | Cook log entry | One person cooking a recipe once: date, stars (optional), notes, servings made. |
 | Meal | One dinner or occasion ("Thanksgiving 2026") that groups several cook log entries, with its own notes. |
 | Saved menu | A reusable set of recipes ("Burger night"), started again as a meal. |
-| My version | A copy of a recipe you change freely, linked to the one it came from. |
 
 ## How it behaves
 
@@ -76,7 +75,7 @@ quiet pattern, soft colors, friendly type that stays easy to read.
 
 ### Search and filters
 - Search covers titles, tags, ingredients and log notes.
-- Filters: favorites, tags, not tried yet, 4 stars and up, mine (written here) or from a site, my versions,
+- Filters: favorites, tags, not tried yet, 4 stars and up, mine (written here) or from a site,
   recently cooked.
 
 ### Scaling and units
@@ -85,8 +84,14 @@ quiet pattern, soft colors, friendly type that stays easy to read.
 - Conversions stay within a kind: volume to volume, weight to weight, °F to °C. Scaling picks a sensible unit
   ("4 tbsp" becomes "1/4 cup").
 - Weights for baking: a small table of common ingredients (flour, sugars, butter, cocoa, salt, oats, rice)
-  turns cups into grams and back, marked "about". When a line already gives both ("1 cup (200 g) sugar"),
-  that wins. A pizza dough written in grams stays in grams.
+  turns cups into grams, marked "about". When a line already gives both ("1 cup (200 g) sugar"),
+  that wins. A pizza dough written in grams stays in grams, so US leaves grams of those staples alone.
+- As built (`lib/recipe-units.ts`, PR 5): the choice is saved on the person (`profiles.recipe_units`), set from
+  a switch above the ingredients and carried into cook mode. Spoons stay spoons in Metric below a quarter cup;
+  a quarter cup or more of a staple is weighed. Scaling steps along tsp, tbsp, cup (an awkward amount reads
+  "3/4 cup plus 1 tbsp"), oz and lb, g and kg, ml and l; sticks and quarts just scale. Oven temperatures in steps
+  and lines convert (350°F reads 180°C). A package size after a count ("1 can (14 oz)") stays as written, and so
+  do amounts inside a step's text until step links (PR 6) know which ingredient a step uses.
 
 ### Cook mode
 - Starts with a **read-through**: every step on one screen and a prep checklist of the ingredients.
@@ -103,6 +108,11 @@ quiet pattern, soft colors, friendly type that stays easy to read.
 - An ingredient used in several steps shows its parts: "4 eggs · 2 in step 2, 2 in step 6".
 - Editing suggests links by matching ingredient words in each step; you confirm them and type split amounts.
   Imported recipes start with suggestions only.
+- As built (`lib/recipe-links.ts`, PR 6): a Step links section in the form shows each step with its linked
+  ingredients, dashed suggestions to tap, "Link all", and an amount for a part. A step names an ingredient by its
+  last word ("flour"), or its last two when two ingredients share the last word ("brown sugar"). Pointing at a
+  step or an ingredient (hover, focus or tap) lights up the other side; cook mode lists the step's uses
+  ("1/3 cup butter") and lights them in the ingredients panel. Links never count as a change to the recipe.
 
 ### At a glance (the table view)
 - Drawn from the step links, like cookingforengineers.com: ingredients down the left, each step a cell to the
@@ -114,6 +124,10 @@ quiet pattern, soft colors, friendly type that stays easy to read.
 - In edit mode, an ingredient line can link to another recipe with a picker ("1 batch Fry sauce").
 - The link opens that recipe; scaling the outer recipe scales the inner one; a meal can pull it in.
 - Deleting a linked recipe leaves the line as text.
+- As built (PR 8): each ingredient line has a book button that opens a picker of the household's other recipes,
+  and a line that names one ("1 batch Fry sauce") offers "Link the Fry sauce recipe". Saving keeps a link only to
+  another recipe of the same household. The recipe page and cook mode show "Open the Fry sauce recipe", opened at
+  the size the outer recipe needs (`?scale=`): the line's batches ("2 batches", "1/2 recipe") times its scaling.
 
 ### Meals and saved menus
 - Log a meal: name, date, notes, the recipes in it. It creates one cook log entry per recipe (each person still
@@ -121,10 +135,6 @@ quiet pattern, soft colors, friendly type that stays easy to read.
 - Each recipe's history shows "Part of Thanksgiving 2026"; the meal page shows the whole dinner.
 - A saved menu is a meal you can start again. Starting it begins a **multi-recipe cook mode**: every recipe's
   steps in tabs, one shared timer tray, and one read-through for the whole meal.
-
-### My version
-- "Make my version" copies a recipe into an editable one, linked to its original ("Based on Lemon garlic
-  chicken"). Logs stay with the version you cooked.
 
 ### Import from a link
 - Reads the page's standard recipe data (schema.org Recipe, JSON-LD), then shows it for review before saving.
@@ -153,7 +163,7 @@ whole. Ingredient and step ids are stable from the first PR, so uses, links and 
 
 | Table | Columns |
 | --- | --- |
-| `recipes` | id, groupId, createdByProfileId, version, title, description, servings, prepMin, cookMin, notes, tags (jsonb), sourceKind (`mine` · `imported` · `version`), sourceUrl, sourceName, imageUrl, basedOnRecipeId, ingredients (jsonb), steps (jsonb), createdAt, updatedAt |
+| `recipes` | id, groupId, createdByProfileId, version, title, description, servings, prepMin, cookMin, notes, tags (jsonb), sourceKind (`mine` · `imported`), sourceUrl, sourceName, imageUrl, ingredients (jsonb), steps (jsonb), createdAt, updatedAt |
 | `recipe_favorites` | profileId, recipeId (unique together) |
 | `recipe_logs` | id, recipeId, recipeVersion, profileId, cookedOn, rating (1 to 5, optional), counted (false when something went wrong), notes, servings, mealId, createdAt |
 | `meals` | id, groupId, name, cookedOn, notes, menuId, createdByProfileId, createdAt |
@@ -183,10 +193,10 @@ reads it merges.
     which the workout runner moves onto), Done cooking asks for a log.
   - [x] PR 4: import from a link: safe fetch, recipe data parsing, review, paste fallback.
 - **Phase 2: smarter recipes**
-  - [ ] PR 5: units: As written, US or Metric per person; sensible units when scaling; baking weights.
-  - [ ] PR 6: step links: uses, splits, highlighting, suggested links in edit mode.
-  - [ ] PR 7: My version.
-  - [ ] PR 8: recipes inside recipes: the edit-mode picker, scaling through.
+  - [x] PR 5: units: As written, US or Metric per person; sensible units when scaling; baking weights.
+  - [x] PR 6: step links: uses, splits, highlighting, suggested links in edit mode.
+  - PR 7 (My version) dropped 2026-11-04: no personal copies of recipes.
+  - [x] PR 8: recipes inside recipes: the edit-mode picker, scaling through.
   - [ ] PR 9: meals: log a meal, meal page, meal ratings.
 - **Phase 3: the fancy parts**
   - [ ] PR 10: At a glance table view.

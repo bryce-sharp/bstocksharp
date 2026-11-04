@@ -1,9 +1,9 @@
 // The recipe form's editor lines and how they map to a recipe's ingredients and steps. Pure.
 
-import { newLineId, type RecipeIngredient, type RecipeStep } from "@/lib/recipes";
+import { newLineId, type RecipeIngredient, type RecipeStep, type RecipeUse } from "@/lib/recipes";
 
 /** One editable line: an ingredient, a step, or a heading over the ingredients below it. */
-export type Line = { key: string; text: string; heading?: boolean };
+export type Line = { key: string; text: string; heading?: boolean; recipeId?: number };
 
 export const blankLine = (heading = false): Line => ({ key: newLineId(), text: "", ...(heading ? { heading } : {}) });
 
@@ -19,7 +19,7 @@ export function ingredientLines(ingredients: RecipeIngredient[]): Line[] {
   for (const ing of ingredients) {
     if (ing.group !== group) lines.push({ ...blankLine(true), text: ing.group ?? "" });
     group = ing.group;
-    lines.push({ key: ing.id, text: ing.text });
+    lines.push({ key: ing.id, text: ing.text, ...(ing.recipeId !== undefined ? { recipeId: ing.recipeId } : {}) });
   }
   return lines.length ? lines : [blankLine()];
 }
@@ -34,13 +34,18 @@ export function toIngredients(lines: Line[], before: RecipeIngredient[]): Recipe
       group = l.text.trim() || undefined;
       continue;
     }
-    const { group: _oldGroup, ...kept } = old.get(l.key) ?? { id: l.key, text: "" };
-    out.push({ ...kept, id: l.key, text: l.text, ...(group ? { group } : {}) });
+    const { group: _oldGroup, recipeId: _oldLink, ...kept } = old.get(l.key) ?? { id: l.key, text: "" };
+    out.push({ ...kept, id: l.key, text: l.text, ...(group ? { group } : {}), ...(l.recipeId !== undefined ? { recipeId: l.recipeId } : {}) });
   }
   return out;
 }
 
-export function toSteps(lines: Line[], before: RecipeStep[]): RecipeStep[] {
+/** Editor lines back into steps, with the step links the form holds, keeping fields the form does not edit. */
+export function toSteps(lines: Line[], before: RecipeStep[], uses: Record<string, RecipeUse[]>): RecipeStep[] {
   const old = new Map(before.map((s) => [s.id, s]));
-  return lines.map((l) => ({ ...(old.get(l.key) ?? { id: l.key, text: "" }), id: l.key, text: l.text }));
+  return lines.map((l) => {
+    const { uses: _oldUses, ...kept } = old.get(l.key) ?? { id: l.key, text: "" };
+    const linked = uses[l.key]?.map(({ amount, ...use }) => (amount?.trim() ? { ...use, amount: amount.trim() } : use));
+    return { ...kept, id: l.key, text: l.text, ...(linked?.length ? { uses: linked } : {}) };
+  });
 }

@@ -23,7 +23,7 @@ export type LookRecipe = {
   trend?: "up" | "down";
   lastCooked?: string;
   cooked: number;
-  basedOn?: string;
+  source?: string;
   favorite: boolean;
 };
 
@@ -82,7 +82,7 @@ export const BANANA_BREAD: LookRecipe = {
   trend: "up",
   lastCooked: "Oct 28",
   cooked: 6,
-  basedOn: "Grandma's card",
+  source: "Grandma's card",
   favorite: true,
 };
 
@@ -102,7 +102,7 @@ export const CARD_RECIPES: LookRecipe[] = [
     trend: undefined,
     lastCooked: "Nov 1",
     cooked: 3,
-    basedOn: undefined,
+    source: undefined,
     favorite: true,
   },
   {
@@ -119,7 +119,7 @@ export const CARD_RECIPES: LookRecipe[] = [
     trend: undefined,
     lastCooked: undefined,
     cooked: 0,
-    basedOn: undefined,
+    source: undefined,
     favorite: false,
   },
 ];
