@@ -24,7 +24,16 @@ export default function RatingsChart({ logs }: { logs: RecipeLogEntry[] }) {
       p.data.push({ x: at(l.cookedOn), y: l.rating!, id: l.id });
       people.set(l.profileId, p);
     }
-    return [...people].map(([id, p]) => ({ id: String(id), label: p.name, color: p.color, data: p.data, markerSize: 6 }));
+    return [...people].map(([id, p]) => ({
+      id: String(id),
+      label: p.name,
+      color: p.color,
+      data: p.data,
+      markerSize: 6,
+      // The hover label reads "Mar 14, 2026 · 2 stars" instead of the raw point.
+      valueFormatter: (v: { x: number; y: number } | null) =>
+        v ? `${new Date(v.x).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} · ${v.y === 1 ? "1 star" : `${v.y} stars`}` : "",
+    }));
   }, [rated]);
 
   // A version's line sits on the first day it was cooked.
