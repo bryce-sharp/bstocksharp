@@ -322,6 +322,33 @@ export function showIngredient(line: string, factor: number, system: UnitSystem)
   return showTemperatures(text + other + rest, system);
 }
 
+/** The ingredient line without its leading amount, unit and equivalent: "4 large eggs" is "large eggs". */
+export function withoutAmount(line: string): string {
+  const m = LEAD.exec(line);
+  if (!m) return line.trim();
+  let rest = line.slice(m[0].length);
+  if (m[4]) {
+    const plus = PLUS.exec(rest);
+    if (plus) rest = rest.slice(plus[0].length);
+    const paren = PAREN.exec(rest);
+    if (paren && parenAmounts(paren[1]!)) rest = rest.slice(paren[0].length);
+  }
+  return rest.trim();
+}
+
+/**
+ * The ingredient line with a step's share in place of its own amount. A bare number keeps the line's unit
+ * ("1" of "2 cups flour" is "1 cup flour"); an amount with its own unit replaces it ("2 tbsp" is "2 tbsp flour").
+ */
+export function withAmount(line: string, amount: string): string {
+  const a = LEAD.exec(amount);
+  const m = LEAD.exec(line);
+  const name = withoutAmount(line);
+  if (!a || a[4] || !m?.[4]) return `${amount.trim()} ${name}`;
+  const n = amountOf(a[2]!, a[3]);
+  return `${a[1]!.trim()} ${unitName(unitOf(m[4]), n.high ?? n.low, m[4])} ${name}`;
+}
+
 const TEMPERATURE = /(\d{2,3})(?:\s*(?:-|–|to)\s*(\d{2,3}))?\s*(?:°\s*|º\s*|degrees?\s+)([FC])\b|(\d{2,3})(?:\s*(?:-|–|to)\s*(\d{2,3}))?\s*(℉|℃)|(\d{3})\s*([FC])\b(?![a-z])/g;
 
 function convertTemperature(n: number, to: "F" | "C"): number {

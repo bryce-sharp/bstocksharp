@@ -19,6 +19,7 @@ import type { RecipeLogEntry } from "@/lib/queries/recipes";
 import type { RatingSummary } from "@/lib/recipe-ratings";
 import { formatMinutes, shortDay, totalMinutes, type RecipeIngredient } from "@/lib/recipes";
 import { formatAmount, showIngredient, showTemperatures, type UnitSystem } from "@/lib/recipe-units";
+import { sharesOf, type Share } from "@/lib/recipe-links";
 import { setRecipeUnits } from "@/app/actions/recipes";
 import CookHistory from "./CookHistory";
 import CookLogDialog, { type Cook } from "./CookLogDialog";
@@ -47,6 +48,15 @@ function grouped(ingredients: RecipeIngredient[]): { group: string | null; items
   }
   return out;
 }
+
+/** "· 2 in step 2, 2 in step 6" under an ingredient split across steps, or "· steps 2, 6" without amounts. */
+function sharesText(shares: Share[], factor: number, units: UnitSystem): string | null {
+  if (!shares.some((s) => s.amount) && shares.length < 2) return null;
+  if (!shares.some((s) => s.amount)) return `steps ${shares.map((s) => s.step).join(", ")}`;
+  return shares.map((s) => (s.amount ? `${showIngredient(s.amount, factor, units)} in step ${s.step}` : `rest in step ${s.step}`)).join(", ");
+}
+
+type Active = { kind: "step" | "ingredient"; id: string } | null;
 
 const visuallyHidden = { position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" } as const;
 const sectionTitle = { fontSize: 22, mb: 1 } as const;
@@ -104,6 +114,17 @@ export default function RecipeView({
     if (canFavorite) setRecipeUnits(next).catch(() => {});
   };
   const [gotIngredient, toggleIngredient] = useChecklist();
+  // Pointing at a step lights up the ingredients it uses, and pointing at an ingredient lights up its steps.
+  const [active, setActive] = React.useState<Active>(null);
+  const point = (next: Active) => ({
+    onMouseEnter: () => setActive(next),
+    onFocus: () => setActive(next),
+    onMouseLeave: () => setActive((a) => (a?.id === next?.id ? null : a)),
+    onBlur: () => setActive((a) => (a?.id === next?.id ? null : a)),
+  });
+  const litIngredients = new Set(active?.kind === "step" ? (recipe.steps.find((s) => s.id === active.id)?.uses ?? []).map((u) => u.ingredientId) : []);
+  const litSteps = new Set(active?.kind === "ingredient" ? recipe.steps.filter((s) => s.uses?.some((u) => u.ingredientId === active.id)).map((s) => s.id) : []);
+  const lit = { bgcolor: color.highlight, boxShadow: `inset 3px 0 0 ${color.accent}` } as const;
   const [doneStep, toggleStep] = useChecklist();
 
   const total = totalMinutes(recipe);
@@ -242,19 +263,29 @@ export default function RecipeView({
                   )}
                   {items.map((ing) => {
                     const got = gotIngredient.has(ing.id);
+                    const shares = sharesText(sharesOf(ing.id, recipe.steps), factor, units);
                     return (
                       <ButtonBase
                         key={ing.id}
                         role="checkbox"
                         aria-checked={got}
                         onClick={() => toggleIngredient(ing.id)}
-                        sx={{ display: "flex", justifyContent: "flex-start", gap: 1.25, width: "100%", textAlign: "left", font: "inherit", fontSize: 15.5, lineHeight: 1.45, py: 0.75, px: 1, mx: -1, borderRadius: 2, color: got ? color.muted : color.ink, "&:hover": { bgcolor: color.highlight } }}
+                        {...point({ kind: "ingredient", id: ing.id })}
+                        sx={{ display: "flex", justifyContent: "flex-start", gap: 1.25, width: "100%", textAlign: "left", font: "inherit", fontSize: 15.5, lineHeight: 1.45, py: 0.75, px: 1, mx: -1, borderRadius: 2, color: got ? color.muted : color.ink, "&:hover": { bgcolor: color.highlight }, ...(litIngredients.has(ing.id) ? lit : {}) }}
                       >
                         <Box aria-hidden sx={{ flex: "none", width: 18, height: 18, mt: "2px", borderRadius: "5px", border: `1.5px solid ${got ? color.accent : color.muted}`, bgcolor: got ? color.accent : "transparent", color: color.onAccent, fontSize: 13, lineHeight: "15px", textAlign: "center" }}>
                           {got ? "✓" : ""}
                         </Box>
-                        <Box component="span" sx={{ textDecoration: got ? "line-through" : "none" }}>
-                          {showIngredient(ing.text, factor, units)}
+                        <Box component="span">
+                          <Box component="span" sx={{ textDecoration: got ? "line-through" : "none" }}>
+                            {showIngredient(ing.text, factor, units)}
+                          </Box>
+                          {shares && (
+                            <Box component="span" sx={{ color: color.muted, fontSize: 13.5 }}>
+                              {" "}
+                              · {shares}
+                            </Box>
+                          )}
                         </Box>
                       </ButtonBase>
                     );
@@ -279,7 +310,8 @@ export default function RecipeView({
                       <ButtonBase
                         aria-pressed={done}
                         onClick={() => toggleStep(s.id)}
-                        sx={{ display: "flex", justifyContent: "flex-start", alignItems: "flex-start", gap: 1.5, width: "100%", textAlign: "left", font: "inherit", fontSize: 16, lineHeight: 1.55, py: 1, px: 1.25, mx: -1.25, mb: 0.25, borderRadius: 2, opacity: done ? 0.5 : 1, "&:hover": { bgcolor: color.highlight } }}
+                        {...point({ kind: "step", id: s.id })}
+                        sx={{ display: "flex", justifyContent: "flex-start", alignItems: "flex-start", gap: 1.5, width: "100%", textAlign: "left", font: "inherit", fontSize: 16, lineHeight: 1.55, py: 1, px: 1.25, mx: -1.25, mb: 0.25, borderRadius: 2, opacity: done ? 0.5 : 1, "&:hover": { bgcolor: color.highlight }, ...(litSteps.has(s.id) ? lit : {}) }}
                       >
                         <Box component="span" aria-hidden sx={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontWeight: 600, color: color.accent, fontSize: 20, minWidth: 24, lineHeight: 1.25 }}>
                           {i + 1}

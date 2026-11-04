@@ -14,7 +14,7 @@ import ListAltIcon from "@mui/icons-material/ListAlt";
 import TimerOutlinedIcon from "@mui/icons-material/TimerOutlined";
 import { useWakeLock } from "@/components/shared/useWakeLock";
 import { formatClock, stepTimers, type RecipeIngredient, type RecipeStep } from "@/lib/recipes";
-import { showIngredient, showTemperatures, type UnitSystem } from "@/lib/recipe-units";
+import { showIngredient, showTemperatures, withAmount, type UnitSystem } from "@/lib/recipe-units";
 import { skinScope, skinSx } from "./RecipesSkin";
 import { color, plaidBand, radius } from "./tokens";
 
@@ -53,12 +53,15 @@ function IngredientChecklist({
   units,
   got,
   toggle,
+  lit,
 }: {
   ingredients: RecipeIngredient[];
   factor: number;
   units: UnitSystem;
   got: Set<string>;
   toggle: (id: string) => void;
+  /** The ingredients the current step uses. */
+  lit?: Set<string>;
 }) {
   return (
     <Box>
@@ -74,7 +77,7 @@ function IngredientChecklist({
               role="checkbox"
               aria-checked={on}
               onClick={() => toggle(ing.id)}
-              sx={{ display: "flex", justifyContent: "flex-start", gap: 1.25, width: "100%", textAlign: "left", font: "inherit", fontSize: 17, lineHeight: 1.45, py: 0.875, px: 1, mx: -1, borderRadius: 2, color: on ? color.muted : color.ink, "&:hover": { bgcolor: color.highlight } }}
+              sx={{ display: "flex", justifyContent: "flex-start", gap: 1.25, width: "100%", textAlign: "left", font: "inherit", fontSize: 17, lineHeight: 1.45, py: 0.875, px: 1, mx: -1, borderRadius: 2, color: on ? color.muted : color.ink, "&:hover": { bgcolor: color.highlight }, ...(lit?.has(ing.id) ? { bgcolor: color.highlight, boxShadow: `inset 3px 0 0 ${color.accent}` } : {}) }}
             >
               <Box aria-hidden sx={{ flex: "none", width: 20, height: 20, mt: "2px", borderRadius: "6px", border: `1.5px solid ${on ? color.accent : color.muted}`, bgcolor: on ? color.accent : "transparent", color: color.onAccent, fontSize: 14, lineHeight: "17px", textAlign: "center" }}>
                 {on ? "✓" : ""}
@@ -127,6 +130,7 @@ export default function CookMode({
   const step = at >= 0 ? steps[at] : undefined;
   const next = at >= 0 ? steps[at + 1] : undefined;
   const found = step ? stepTimers(step.text) : [];
+  const stepUses = (step?.uses ?? []).filter((u) => ingredients.some((i) => i.id === u.ingredientId));
   const waits = !!next && found.length > 0 && MEANWHILE.test(next.text);
 
   const toggle = (id: string) =>
@@ -215,7 +219,7 @@ export default function CookMode({
               aria-label="Ingredients"
               sx={{ width: { xs: "100%", md: 360 }, flex: "none", position: { xs: "absolute", md: "static" }, inset: 0, zIndex: 2, overflowY: "auto", p: 2.5, bgcolor: color.surface, borderRight: { md: `1px solid ${color.rule}` } }}
             >
-              <IngredientChecklist ingredients={ingredients} factor={factor} units={units} got={got} toggle={toggle} />
+              <IngredientChecklist ingredients={ingredients} factor={factor} units={units} got={got} toggle={toggle} lit={new Set(stepUses.map((u) => u.ingredientId))} />
             </Box>
           )}
 
@@ -259,6 +263,18 @@ export default function CookMode({
                   <Typography aria-live="polite" sx={{ fontSize: { xs: 26, md: 38 }, lineHeight: 1.35, fontWeight: 600, whiteSpace: "pre-line" }}>
                     {showTemperatures(step.text, units)}
                   </Typography>
+                  {stepUses.length > 0 && (
+                    <Box component="ul" aria-label="This step uses" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexWrap: "wrap", gap: 1 }}>
+                      {stepUses.map((u) => {
+                        const ing = ingredients.find((x) => x.id === u.ingredientId)!;
+                        return (
+                          <Box component="li" key={u.ingredientId} sx={{ px: 1.5, py: 0.5, borderRadius: 999, bgcolor: color.highlight, fontSize: { xs: 16, md: 18 }, fontWeight: 600 }}>
+                            {showIngredient(u.amount ? withAmount(ing.text, u.amount) : ing.text, factor, units)}
+                          </Box>
+                        );
+                      })}
+                    </Box>
+                  )}
                   {found.length > 0 && (
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
                       {found.map((f, i) => (

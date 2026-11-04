@@ -7,7 +7,8 @@
 
 import { recipeFromHtml, recipeFromPageText, recipeFromText, isoMinutes, textMinutes, yieldServings, tidyLine, withoutIngredientEcho } from "../lib/recipe-import.ts";
 import { splitPasted, webUrl } from "../lib/recipes.ts";
-import { formatAmount, showIngredient, showTemperatures } from "../lib/recipe-units.ts";
+import { formatAmount, showIngredient, showTemperatures, withAmount } from "../lib/recipe-units.ts";
+import { shortName, sharesOf, suggestUses } from "../lib/recipe-links.ts";
 import { summarizeRatings, type RatingLog } from "../lib/recipe-ratings.ts";
 import { checkUrl, isPrivateAddress, readBody, safeFetchText, SafeFetchError } from "../lib/safe-fetch.ts";
 import http from "node:http";
@@ -94,6 +95,20 @@ eq("format 26.4", formatAmount(26.4), "26");
 eq("paste bullets", splitPasted("- 2 cups flour\n• 1 tsp salt\n▢ 3 eggs"), ["2 cups flour", "1 tsp salt", "3 eggs"]);
 eq("paste numbers", splitPasted("1. Mix.\n2) Add eggs.\nStep 3: Bake."), ["Mix.", "Add eggs.", "Bake."]);
 eq("paste keeps ranges", splitPasted("10 - 12 cherry tomatoes\n1.5 cups milk"), ["10 - 12 cherry tomatoes", "1.5 cups milk"]);
+
+// ── Step links ────────────────────────────────────────────────────────────────
+const linkIngredients = ["2 cups all-purpose flour", "1 cup packed brown sugar", "1/2 cup granulated sugar", "2 large eggs", "1 tsp baking soda", "1 tsp baking powder", "Salt and pepper", "1 lb boneless chicken breast", "2 cups chicken broth"].map((text, i) => ({ id: `i${i}`, text }));
+const linkSteps = [
+  { id: "s0", text: "Whisk the flour, baking soda and baking powder." },
+  { id: "s1", text: "Beat in the brown sugar, then the eggs.", uses: [{ ingredientId: "i3", amount: "1" }] },
+  { id: "s2", text: "Season with salt. Add the broth." },
+  { id: "s3", text: "Sprinkle with sugar, then brush with the last egg.", uses: [{ ingredientId: "i3", amount: "1" }] },
+];
+const suggested = suggestUses(linkIngredients, linkSteps);
+eq("suggest links", linkSteps.map((st) => (suggested.get(st.id) ?? []).map((id) => shortName(linkIngredients.find((x) => x.id === id)!.text))), [["all-purpose flour", "baking soda", "baking powder"], ["brown sugar"], ["Salt and pepper", "chicken broth"], []]);
+eq("short names", ["1 can (14 oz) diced tomatoes", "2 cloves garlic, minced", "1/2 cup (115 g) unsalted butter, melted"].map(shortName), ["tomatoes", "garlic", "butter"]);
+eq("shares", sharesOf("i3", linkSteps), [{ step: 2, amount: "1" }, { step: 4, amount: "1" }]);
+eq("with amount", [withAmount("4 large eggs", "2"), withAmount("2 cups flour", "1"), withAmount("2 cups flour", "2 tbsp"), withAmount("1/2 cup (115 g) butter", "1/4")], ["2 large eggs", "1 cup flour", "2 tbsp flour", "1/4 cup butter"]);
 
 // ── Ratings ───────────────────────────────────────────────────────────────────
 const L = (profileId: number, cookedOn: string, rating: number | null, counted = true, recipeVersion = 1): RatingLog => ({ profileId, cookedOn, rating, counted, recipeVersion });

@@ -17,6 +17,7 @@ import { addRecipe, deleteRecipe, updateRecipe, type RecipeInput } from "@/app/a
 import type { Recipe } from "@/lib/db/schema";
 import { cleanTags, newLineId, type RecipeIngredient, type RecipeStep } from "@/lib/recipes";
 import LineEditor from "./LineEditor";
+import StepLinks, { type UsesByStep } from "./StepLinks";
 import { blankLine, ingredientLines, textLines, toIngredients, toSteps, type Line } from "./lines";
 import type { RecipeDraft } from "@/lib/recipe-import";
 import { skinScope, skinSx } from "./RecipesSkin";
@@ -70,6 +71,7 @@ export default function RecipeForm({
   const [steps, setSteps] = React.useState<Line[]>(() =>
     draft ? textLines(draft.steps) : recipe?.steps.length ? recipe.steps.map((s) => ({ key: s.id, text: s.text })) : [blankLine()],
   );
+  const [uses, setUses] = React.useState<UsesByStep>(() => Object.fromEntries((recipe?.steps ?? []).filter((s) => s.uses?.length).map((s) => [s.id, s.uses!])));
   const [notes, setNotes] = React.useState(recipe?.notes ?? draft?.notes ?? "");
   const [sourceName, setSourceName] = React.useState(start?.sourceName ?? "");
   const [sourceUrl, setSourceUrl] = React.useState(start?.sourceUrl ?? "");
@@ -108,7 +110,7 @@ export default function RecipeForm({
       sourceUrl,
       tags: cleanTags(tags),
       ingredients: toIngredients(ingredients, recipe?.ingredients ?? []),
-      steps: toSteps(steps, recipe?.steps ?? []),
+      steps: toSteps(steps, recipe?.steps ?? [], uses),
       ...(draft?.sourceUrl && sourceUrl === draft.sourceUrl ? { imported: { imageUrl: draft.imageUrl } } : {}),
     };
     // Once someone has cooked it, a change to what you cook asks whether it is a new version.
@@ -187,6 +189,10 @@ export default function RecipeForm({
 
         <Section title="Steps" hint="One step per box. Shift and Enter starts a new line inside a step.">
           <LineEditor kind="step" lines={steps} onChange={touched(setSteps)} />
+        </Section>
+
+        <Section title="Step links" hint="Which ingredients each step uses, so the recipe can highlight them. Tap a suggestion to link it; tap a linked one to give the amount when a step uses only part.">
+          <StepLinks ingredients={ingredients} steps={steps} uses={uses} onChange={touched(setUses)} />
         </Section>
 
         <Section title="Notes">

@@ -2,7 +2,7 @@
 
 Status: plan agreed 2026-11-03; the look (Sage & Butter) chosen 2026-11-03; PR 1 (the section, recipes,
 favorites) and PR 2 (the cook log and ratings) built 2026-11-03 (#88); PR 3 (cook mode, #89) and PR 4 (import)
-built 2026-11-04; PR 5 (units) built 2026-11-04. The dev mockup is retired now that every screen of it is real; the looks lab `/recipes/looks`
+built 2026-11-04; PR 5 (units) and PR 6 (step links) built 2026-11-04. The dev mockup is retired now that every screen of it is real; the looks lab `/recipes/looks`
 stays as the reference for the table view.
 
 Decided: a Recipes section of this site, shared by the household; anyone in the household edits any recipe, and
@@ -109,6 +109,11 @@ quiet pattern, soft colors, friendly type that stays easy to read.
 - An ingredient used in several steps shows its parts: "4 eggs · 2 in step 2, 2 in step 6".
 - Editing suggests links by matching ingredient words in each step; you confirm them and type split amounts.
   Imported recipes start with suggestions only.
+- As built (`lib/recipe-links.ts`, PR 6): a Step links section in the form shows each step with its linked
+  ingredients, dashed suggestions to tap, "Link all", and an amount for a part. A step names an ingredient by its
+  last word ("flour"), or its last two when two ingredients share the last word ("brown sugar"). Pointing at a
+  step or an ingredient (hover, focus or tap) lights up the other side; cook mode lists the step's uses
+  ("1/3 cup butter") and lights them in the ingredients panel. Links never count as a change to the recipe.
 
 ### At a glance (the table view)
 - Drawn from the step links, like cookingforengineers.com: ingredients down the left, each step a cell to the
@@ -190,7 +195,7 @@ reads it merges.
   - [x] PR 4: import from a link: safe fetch, recipe data parsing, review, paste fallback.
 - **Phase 2: smarter recipes**
   - [x] PR 5: units: As written, US or Metric per person; sensible units when scaling; baking weights.
-  - [ ] PR 6: step links: uses, splits, highlighting, suggested links in edit mode.
+  - [x] PR 6: step links: uses, splits, highlighting, suggested links in edit mode.
   - [ ] PR 7: My version.
   - [ ] PR 8: recipes inside recipes: the edit-mode picker, scaling through.
   - [ ] PR 9: meals: log a meal, meal page, meal ratings.

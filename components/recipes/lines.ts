@@ -1,6 +1,6 @@
 // The recipe form's editor lines and how they map to a recipe's ingredients and steps. Pure.
 
-import { newLineId, type RecipeIngredient, type RecipeStep } from "@/lib/recipes";
+import { newLineId, type RecipeIngredient, type RecipeStep, type RecipeUse } from "@/lib/recipes";
 
 /** One editable line: an ingredient, a step, or a heading over the ingredients below it. */
 export type Line = { key: string; text: string; heading?: boolean };
@@ -40,7 +40,12 @@ export function toIngredients(lines: Line[], before: RecipeIngredient[]): Recipe
   return out;
 }
 
-export function toSteps(lines: Line[], before: RecipeStep[]): RecipeStep[] {
+/** Editor lines back into steps, with the step links the form holds, keeping fields the form does not edit. */
+export function toSteps(lines: Line[], before: RecipeStep[], uses: Record<string, RecipeUse[]>): RecipeStep[] {
   const old = new Map(before.map((s) => [s.id, s]));
-  return lines.map((l) => ({ ...(old.get(l.key) ?? { id: l.key, text: "" }), id: l.key, text: l.text }));
+  return lines.map((l) => {
+    const { uses: _oldUses, ...kept } = old.get(l.key) ?? { id: l.key, text: "" };
+    const linked = uses[l.key]?.map((u) => (u.amount?.trim() ? { ...u, amount: u.amount.trim() } : { ingredientId: u.ingredientId }));
+    return { ...kept, id: l.key, text: l.text, ...(linked?.length ? { uses: linked } : {}) };
+  });
 }
