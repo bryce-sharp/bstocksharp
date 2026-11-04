@@ -18,7 +18,7 @@ import type { Recipe } from "@/lib/db/schema";
 import type { RecipeLogEntry } from "@/lib/queries/recipes";
 import type { RatingSummary } from "@/lib/recipe-ratings";
 import { formatMinutes, shortDay, totalMinutes, type RecipeIngredient } from "@/lib/recipes";
-import { formatAmount, showIngredient, showShare, showTemperatures, type UnitSystem } from "@/lib/recipe-units";
+import { batchesOf, formatAmount, showIngredient, showShare, showTemperatures, type UnitSystem } from "@/lib/recipe-units";
 import { sharesOf, type Share } from "@/lib/recipe-links";
 import { setRecipeUnits } from "@/app/actions/recipes";
 import CookHistory from "./CookHistory";
@@ -29,6 +29,7 @@ import FavoriteButton from "./FavoriteButton";
 import { panelSx } from "./RecipeCard";
 import RatingLine from "./RatingLine";
 import RatingsChart from "./RatingsChart";
+import RecipeLink from "./RecipeLink";
 import TagChip from "./TagChip";
 import UnitsSwitch from "./UnitsSwitch";
 import { skinScope } from "./RecipesSkin";
@@ -86,6 +87,8 @@ export default function RecipeView({
   defaultCook,
   today,
   units: savedUnits,
+  linked,
+  scale,
 }: {
   recipe: RecipeViewData;
   person: string | null;
@@ -97,6 +100,10 @@ export default function RecipeView({
   cooks: Cook[];
   defaultCook: number | null;
   today: string;
+  /** Titles of the recipes its ingredient lines link to; a deleted one is missing, so its line stays text. */
+  linked: Record<number, string>;
+  /** The size to open at, as a multiple of the recipe's own, when another recipe links here. */
+  scale: number;
 }) {
   const [dialog, setDialog] = React.useState<LogDialog>(null);
   const [cooking, setCooking] = React.useState(false);
@@ -106,7 +113,7 @@ export default function RecipeView({
   const servings = recipe.servings && recipe.servings > 0 ? recipe.servings : null;
   const base = servings ?? 1;
   const stepBy = servings ? 1 : 0.5;
-  const [amount, setAmount] = React.useState(base);
+  const [amount, setAmount] = React.useState(() => Math.min(base * 20, Math.max(stepBy, Math.round((base * scale) / stepBy) * stepBy)));
   const factor = amount / base;
   const [units, setUnits] = React.useState(savedUnits);
   const chooseUnits = (next: UnitSystem) => {
@@ -264,9 +271,10 @@ export default function RecipeView({
                   {items.map((ing) => {
                     const got = gotIngredient.has(ing.id);
                     const shares = sharesText(ing.text, sharesOf(ing.id, recipe.steps), factor, units);
+                    const inner = ing.recipeId !== undefined ? linked[ing.recipeId] : undefined;
                     return (
+                      <React.Fragment key={ing.id}>
                       <ButtonBase
-                        key={ing.id}
                         role="checkbox"
                         aria-checked={got}
                         onClick={() => toggleIngredient(ing.id)}
@@ -288,6 +296,8 @@ export default function RecipeView({
                           )}
                         </Box>
                       </ButtonBase>
+                      {inner && <RecipeLink id={ing.recipeId!} title={inner} scale={batchesOf(ing.text) * factor} />}
+                      </React.Fragment>
                     );
                   })}
                 </Box>
@@ -374,6 +384,7 @@ export default function RecipeView({
           steps={recipe.steps}
           factor={factor}
           units={units}
+          linked={linked}
           amountLabel={servings ? `${amount} ${amount === 1 ? "serving" : "servings"}` : `${formatAmount(amount)} ${amount === 1 ? "batch" : "batches"}`}
           onClose={() => setCooking(false)}
           onDone={() => {

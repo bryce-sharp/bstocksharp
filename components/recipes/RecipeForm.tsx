@@ -7,14 +7,18 @@ import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
 import Dialog from "@mui/material/Dialog";
+import IconButton from "@mui/material/IconButton";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
+import AddIcon from "@mui/icons-material/Add";
+import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
 import Link from "@/components/shared/AppLink";
 import { addRecipe, deleteRecipe, updateRecipe, type RecipeInput } from "@/app/actions/recipes";
 import type { Recipe } from "@/lib/db/schema";
+import type { RecipeChoice } from "@/lib/queries/recipes";
 import { cleanTags, newLineId, type RecipeIngredient, type RecipeStep } from "@/lib/recipes";
 import LineEditor from "./LineEditor";
 import StepLinks, { type UsesByStep } from "./StepLinks";
@@ -52,12 +56,15 @@ export default function RecipeForm({
   recipe,
   draft,
   tagOptions,
+  recipeChoices,
   logged = false,
 }: {
   recipe?: Recipe;
   /** A recipe read from a link or pasted text, shown for review as a new recipe. */
   draft?: RecipeDraft;
   tagOptions: string[];
+  /** The household's other recipes, for an ingredient line that is a recipe of its own ("1 batch Fry sauce"). */
+  recipeChoices: RecipeChoice[];
   logged?: boolean;
 }) {
   const start = recipe ?? draft;
@@ -84,6 +91,53 @@ export default function RecipeForm({
   const touched = <T,>(set: (v: T) => void) => (v: T) => {
     set(v);
     setDirty(true);
+  };
+
+  // Linking an ingredient line to another recipe: a picker per line, and a suggestion when the line names one.
+  const [picking, setPicking] = React.useState<string | null>(null);
+  const titleOf = new Map(recipeChoices.map((c) => [c.id, c.title]));
+  const linkLine = (key: string, recipeId: number | undefined) => {
+    const relink = ({ recipeId: _was, ...line }: Line): Line => (recipeId === undefined ? line : { ...line, recipeId });
+    touched(setIngredients)(ingredients.map((l) => (l.key === key ? relink(l) : l)));
+    setPicking(null);
+  };
+  const named = (text: string) => recipeChoices.find((c) => c.title.trim().length >= 3 && text.toLowerCase().includes(c.title.trim().toLowerCase()));
+  const linkButton = (line: Line, name: string) =>
+    line.heading || !recipeChoices.length ? null : (
+      <IconButton size="small" aria-label={`Link a recipe to ${name.toLowerCase()}`} aria-pressed={picking === line.key} onClick={() => setPicking((p) => (p === line.key ? null : line.key))}>
+        <MenuBookOutlinedIcon fontSize="small" />
+      </IconButton>
+    );
+  const linkUnder = (line: Line) => {
+    if (line.heading) return null;
+    const title = line.recipeId !== undefined ? titleOf.get(line.recipeId) : undefined;
+    if (title) {
+      return (
+        <Box sx={{ mt: 0.75 }}>
+          <TagChip selected size="small" icon={<MenuBookOutlinedIcon />} label={`Recipe: ${title}`} onDelete={() => linkLine(line.key, undefined)} />
+        </Box>
+      );
+    }
+    if (picking === line.key) {
+      return (
+        <Autocomplete
+          size="small"
+          openOnFocus
+          options={recipeChoices}
+          getOptionLabel={(c) => c.title}
+          onChange={(_, c) => c && linkLine(line.key, c.id)}
+          onBlur={() => setPicking(null)}
+          slotProps={{ popper: { disablePortal: true } }}
+          renderInput={(params) => <TextField {...params} autoFocus placeholder="Which recipe is this line?" sx={{ mt: 0.75, ...fieldSx }} />}
+        />
+      );
+    }
+    const guess = line.text.trim() ? named(line.text) : undefined;
+    return guess ? (
+      <Box sx={{ mt: 0.75 }}>
+        <TagChip size="small" variant="outlined" icon={<AddIcon />} label={`Link the ${guess.title} recipe`} onClick={() => linkLine(line.key, guess.id)} sx={{ borderStyle: "dashed" }} />
+      </Box>
+    ) : null;
   };
 
   React.useEffect(() => {
@@ -184,7 +238,7 @@ export default function RecipeForm({
         </Stack>
 
         <Section title="Ingredients" hint="One per line, as written. Enter starts the next line; pasting a list splits it into lines.">
-          <LineEditor kind="ingredient" lines={ingredients} onChange={touched(setIngredients)} />
+          <LineEditor kind="ingredient" lines={ingredients} onChange={touched(setIngredients)} lineAction={linkButton} lineFooter={linkUnder} />
         </Section>
 
         <Section title="Steps" hint="One step per box. Shift and Enter starts a new line inside a step.">

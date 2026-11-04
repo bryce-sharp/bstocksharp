@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { profiles, recipeFavorites, recipeLogs, recipes } from "@/lib/db/schema";
 import { requireEditor, requireEditorFor } from "@/lib/auth";
@@ -146,12 +146,21 @@ function problem(err: unknown): RecipeSaveResult {
   return { error: err instanceof Error ? err.message : "Could not save the recipe." };
 }
 
+/** Recipe links kept only to the household's other recipes; a deleted or foreign one leaves the line as text. */
+async function linkable(ingredients: RecipeIngredient[], self: number | null): Promise<RecipeIngredient[]> {
+  const ids = [...new Set(ingredients.flatMap((i) => (i.recipeId !== undefined && i.recipeId !== self ? [i.recipeId] : [])))];
+  const rows = ids.length ? await db.select({ id: recipes.id }).from(recipes).where(and(eq(recipes.groupId, await requireGroupId()), inArray(recipes.id, ids))) : [];
+  const known = new Set(rows.map((r) => r.id));
+  return ingredients.map(({ recipeId, ...line }) => (recipeId !== undefined && known.has(recipeId) ? { ...line, recipeId } : line));
+}
+
 export async function addRecipe(input: RecipeInput): Promise<RecipeSaveResult> {
   await requireApp("recipes");
   await requireEditor();
   let id: number;
   try {
-    const data = parseRecipe(input);
+    const parsed = parseRecipe(input);
+    const data = { ...parsed, ingredients: await linkable(parsed.ingredients, null) };
     const [row] = await db
       .insert(recipes)
       .values({ ...data, groupId: await requireGroupId(), createdByProfileId: (await getActiveProfile())?.id ?? null })
@@ -170,7 +179,8 @@ export async function updateRecipe(id: number, input: RecipeInput, changed = fal
   await requireEditor();
   if (!(await getRecipe(id))) return { error: "That recipe is gone." };
   try {
-    const data = parseRecipe(input);
+    const parsed = parseRecipe(input);
+    const data = { ...parsed, ingredients: await linkable(parsed.ingredients, id) };
     await db
       .update(recipes)
       .set({ ...data, updatedAt: new Date(), ...(changed === true ? { version: sql`${recipes.version} + 1` } : {}) })

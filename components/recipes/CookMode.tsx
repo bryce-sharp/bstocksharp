@@ -14,7 +14,8 @@ import ListAltIcon from "@mui/icons-material/ListAlt";
 import TimerOutlinedIcon from "@mui/icons-material/TimerOutlined";
 import { useWakeLock } from "@/components/shared/useWakeLock";
 import { formatClock, stepTimers, type RecipeIngredient, type RecipeStep } from "@/lib/recipes";
-import { showIngredient, showTemperatures, withAmount, type UnitSystem } from "@/lib/recipe-units";
+import { batchesOf, showIngredient, showTemperatures, withAmount, type UnitSystem } from "@/lib/recipe-units";
+import RecipeLink from "./RecipeLink";
 import { skinScope, skinSx } from "./RecipesSkin";
 import { color, plaidBand, radius } from "./tokens";
 
@@ -54,6 +55,7 @@ function IngredientChecklist({
   got,
   toggle,
   lit,
+  linked,
 }: {
   ingredients: RecipeIngredient[];
   factor: number;
@@ -62,6 +64,7 @@ function IngredientChecklist({
   toggle: (id: string) => void;
   /** The ingredients the current step uses. */
   lit?: Set<string>;
+  linked: Record<number, string>;
 }) {
   return (
     <Box>
@@ -86,6 +89,7 @@ function IngredientChecklist({
                 {showIngredient(ing.text, factor, units)}
               </Box>
             </ButtonBase>
+            {ing.recipeId !== undefined && linked[ing.recipeId] && <RecipeLink id={ing.recipeId} title={linked[ing.recipeId]!} scale={batchesOf(ing.text) * factor} newTab />}
           </React.Fragment>
         );
       })}
@@ -103,6 +107,7 @@ export default function CookMode({
   steps,
   factor,
   units,
+  linked,
   amountLabel,
   onClose,
   onDone,
@@ -112,6 +117,7 @@ export default function CookMode({
   steps: RecipeStep[];
   factor: number;
   units: UnitSystem;
+  linked: Record<number, string>;
   amountLabel: string;
   onClose: () => void;
   onDone: () => void;
@@ -219,7 +225,7 @@ export default function CookMode({
               aria-label="Ingredients"
               sx={{ width: { xs: "100%", md: 360 }, flex: "none", position: { xs: "absolute", md: "static" }, inset: 0, zIndex: 2, overflowY: "auto", p: 2.5, bgcolor: color.surface, borderRight: { md: `1px solid ${color.rule}` } }}
             >
-              <IngredientChecklist ingredients={ingredients} factor={factor} units={units} got={got} toggle={toggle} lit={new Set(stepUses.map((u) => u.ingredientId))} />
+              <IngredientChecklist ingredients={ingredients} factor={factor} units={units} linked={linked} got={got} toggle={toggle} lit={new Set(stepUses.map((u) => u.ingredientId))} />
             </Box>
           )}
 
@@ -235,7 +241,7 @@ export default function CookMode({
                     <Typography variant="h6" component="h4" sx={{ mb: 1 }}>
                       Get these out
                     </Typography>
-                    {ingredients.length ? <IngredientChecklist ingredients={ingredients} factor={factor} units={units} got={got} toggle={toggle} /> : <Typography sx={{ color: color.muted }}>No ingredients listed.</Typography>}
+                    {ingredients.length ? <IngredientChecklist ingredients={ingredients} factor={factor} units={units} linked={linked} got={got} toggle={toggle} /> : <Typography sx={{ color: color.muted }}>No ingredients listed.</Typography>}
                   </Box>
                   <Box>
                     <Typography variant="h6" component="h4" sx={{ mb: 1 }}>

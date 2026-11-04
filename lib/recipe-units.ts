@@ -336,6 +336,14 @@ function scaledParen(inner: string, factor: number): string {
   });
 }
 
+/** How many batches of a linked recipe a line asks for: "2 batches Fry sauce" is 2, "1 cup Fry sauce" is 1. */
+export function batchesOf(line: string): number {
+  const m = LEAD.exec(line);
+  if (!m || m[4] || !/^\s*(?:batch(?:es)?|recipes?|x)\b/i.test(line.slice(m[0].length))) return 1;
+  const n = amountOf(m[2]!, m[3]);
+  return n.high ?? n.low;
+}
+
 /** The ingredient line without its leading amount, unit and equivalent: "4 large eggs" is "large eggs". */
 export function withoutAmount(line: string): string {
   const m = LEAD.exec(line);

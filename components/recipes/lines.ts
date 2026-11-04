@@ -3,7 +3,7 @@
 import { newLineId, type RecipeIngredient, type RecipeStep, type RecipeUse } from "@/lib/recipes";
 
 /** One editable line: an ingredient, a step, or a heading over the ingredients below it. */
-export type Line = { key: string; text: string; heading?: boolean };
+export type Line = { key: string; text: string; heading?: boolean; recipeId?: number };
 
 export const blankLine = (heading = false): Line => ({ key: newLineId(), text: "", ...(heading ? { heading } : {}) });
 
@@ -19,7 +19,7 @@ export function ingredientLines(ingredients: RecipeIngredient[]): Line[] {
   for (const ing of ingredients) {
     if (ing.group !== group) lines.push({ ...blankLine(true), text: ing.group ?? "" });
     group = ing.group;
-    lines.push({ key: ing.id, text: ing.text });
+    lines.push({ key: ing.id, text: ing.text, ...(ing.recipeId !== undefined ? { recipeId: ing.recipeId } : {}) });
   }
   return lines.length ? lines : [blankLine()];
 }
@@ -34,8 +34,8 @@ export function toIngredients(lines: Line[], before: RecipeIngredient[]): Recipe
       group = l.text.trim() || undefined;
       continue;
     }
-    const { group: _oldGroup, ...kept } = old.get(l.key) ?? { id: l.key, text: "" };
-    out.push({ ...kept, id: l.key, text: l.text, ...(group ? { group } : {}) });
+    const { group: _oldGroup, recipeId: _oldLink, ...kept } = old.get(l.key) ?? { id: l.key, text: "" };
+    out.push({ ...kept, id: l.key, text: l.text, ...(group ? { group } : {}), ...(l.recipeId !== undefined ? { recipeId: l.recipeId } : {}) });
   }
   return out;
 }

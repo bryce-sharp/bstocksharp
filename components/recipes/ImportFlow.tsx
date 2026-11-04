@@ -16,12 +16,13 @@ import { recipeFromText, type RecipeDraft } from "@/lib/recipe-import";
 import BackLink from "./BackLink";
 import { panelSx } from "./RecipeCard";
 import RecipeForm from "./RecipeForm";
+import type { RecipeChoice } from "@/lib/queries/recipes";
 import { color } from "./tokens";
 
 type Found = { draft: RecipeDraft; existing: { id: number; title: string } | null; from: "link" | "text" };
 
 /** Paste a link (or the recipe's text), check what was read in the usual form, then save it as a new recipe. */
-export default function ImportFlow({ tagOptions }: { tagOptions: string[] }) {
+export default function ImportFlow({ tagOptions, recipeChoices }: { tagOptions: string[]; recipeChoices: RecipeChoice[] }) {
   const [link, setLink] = React.useState("");
   const [text, setText] = React.useState("");
   const [pasting, setPasting] = React.useState(false);
@@ -74,7 +75,7 @@ export default function ImportFlow({ tagOptions }: { tagOptions: string[] }) {
           </Alert>
         )}
         <Box sx={{ ...panelSx, p: { xs: 2, md: 4 } }}>
-          <RecipeForm draft={draft} tagOptions={tagOptions} />
+          <RecipeForm draft={draft} tagOptions={tagOptions} recipeChoices={recipeChoices} />
         </Box>
         <Button
           onClick={() => {

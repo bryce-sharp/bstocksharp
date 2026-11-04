@@ -2,7 +2,7 @@
 
 Status: plan agreed 2026-11-03; the look (Sage & Butter) chosen 2026-11-03; PR 1 (the section, recipes,
 favorites) and PR 2 (the cook log and ratings) built 2026-11-03 (#88); PR 3 (cook mode, #89) and PR 4 (import)
-built 2026-11-04; PR 5 (units) and PR 6 (step links) built 2026-11-04. The dev mockup is retired now that every screen of it is real; the looks lab `/recipes/looks`
+built 2026-11-04; PR 5 (units), PR 6 (step links) and PR 8 (recipes inside recipes) built 2026-11-04. The dev mockup is retired now that every screen of it is real; the looks lab `/recipes/looks`
 stays as the reference for the table view.
 
 Decided: a Recipes section of this site, shared by the household; anyone in the household edits any recipe, and
@@ -124,6 +124,10 @@ quiet pattern, soft colors, friendly type that stays easy to read.
 - In edit mode, an ingredient line can link to another recipe with a picker ("1 batch Fry sauce").
 - The link opens that recipe; scaling the outer recipe scales the inner one; a meal can pull it in.
 - Deleting a linked recipe leaves the line as text.
+- As built (PR 8): each ingredient line has a book button that opens a picker of the household's other recipes,
+  and a line that names one ("1 batch Fry sauce") offers "Link the Fry sauce recipe". Saving keeps a link only to
+  another recipe of the same household. The recipe page and cook mode show "Open the Fry sauce recipe", opened at
+  the size the outer recipe needs (`?scale=`): the line's batches ("2 batches", "1/2 recipe") times its scaling.
 
 ### Meals and saved menus
 - Log a meal: name, date, notes, the recipes in it. It creates one cook log entry per recipe (each person still
@@ -192,7 +196,7 @@ reads it merges.
   - [x] PR 5: units: As written, US or Metric per person; sensible units when scaling; baking weights.
   - [x] PR 6: step links: uses, splits, highlighting, suggested links in edit mode.
   - PR 7 (My version) dropped 2026-11-04: no personal copies of recipes.
-  - [ ] PR 8: recipes inside recipes: the edit-mode picker, scaling through.
+  - [x] PR 8: recipes inside recipes: the edit-mode picker, scaling through.
   - [ ] PR 9: meals: log a meal, meal page, meal ratings.
 - **Phase 3: the fancy parts**
   - [ ] PR 10: At a glance table view.

@@ -7,8 +7,8 @@
 
 import { recipeFromHtml, recipeFromPageText, recipeFromText, isoMinutes, textMinutes, yieldServings, tidyLine, withoutIngredientEcho } from "../lib/recipe-import.ts";
 import { splitPasted, webUrl } from "../lib/recipes.ts";
-import { formatAmount, showIngredient, showShare, showTemperatures, withAmount } from "../lib/recipe-units.ts";
-import { toSteps } from "../components/recipes/lines.ts";
+import { batchesOf, formatAmount, showIngredient, showShare, showTemperatures, withAmount } from "../lib/recipe-units.ts";
+import { ingredientLines, toIngredients, toSteps } from "../components/recipes/lines.ts";
 import { shortName, sharesOf, suggestUses } from "../lib/recipe-links.ts";
 import { summarizeRatings, type RatingLog } from "../lib/recipe-ratings.ts";
 import { checkUrl, isPrivateAddress, readBody, safeFetchText, SafeFetchError } from "../lib/safe-fetch.ts";
@@ -120,6 +120,12 @@ eq("shares", sharesOf("i3", linkSteps), [{ step: 2, amount: "1" }, { step: 4, am
 eq("share keeps the line's own equivalent", [withAmount("1 cup (150 g) all-purpose flour", "1/2"), showShare("1 cup (150 g) all-purpose flour", "1/2", 1, "metric"), showShare("4 large eggs", "2", 2, "us")], ["1/2 cup (75 g) all-purpose flour", "75 g", "4"]);
 eq("links keep their notes", toSteps([{ key: "s1", text: "Mix" }], [], { s1: [{ ingredientId: "i1", note: "the dry part" }, { ingredientId: "i2", amount: " 2 ", note: "n" }] })[0]!.uses, [{ ingredientId: "i1", note: "the dry part" }, { ingredientId: "i2", note: "n", amount: "2" }]);
 eq("with amount", [withAmount("4 large eggs", "2"), withAmount("2 cups flour", "1"), withAmount("2 cups flour", "2 tbsp"), withAmount("1/2 cup (115 g) butter", "1/4")], ["2 large eggs", "1 cup flour", "2 tbsp flour", "1/4 cup (58 g) butter"]);
+
+// ── Recipes inside recipes ────────────────────────────────────────────────────
+eq("batches", ["2 batches Fry sauce", "1 recipe pie crust", "1/2 batch dough", "1 cup fry sauce", "Fry sauce"].map(batchesOf), [2, 1, 0.5, 1, 1]);
+const withLink = [{ id: "a1", text: "1 batch Fry sauce", recipeId: 7 }, { id: "a2", text: "1 bun" }];
+eq("links survive the form", toIngredients(ingredientLines(withLink), withLink), withLink);
+eq("an unlinked line drops its link", toIngredients(ingredientLines(withLink).map(({ recipeId: _r, ...l }) => l), withLink), [{ id: "a1", text: "1 batch Fry sauce" }, { id: "a2", text: "1 bun" }]);
 
 // ── Ratings ───────────────────────────────────────────────────────────────────
 const L = (profileId: number, cookedOn: string, rating: number | null, counted = true, recipeVersion = 1): RatingLog => ({ profileId, cookedOn, rating, counted, recipeVersion });
