@@ -34,6 +34,7 @@ export default function CookLogDialog({
   defaultCook,
   today,
   servings,
+  made: madeDefault,
 }: {
   open: boolean;
   onClose: () => void;
@@ -43,6 +44,8 @@ export default function CookLogDialog({
   defaultCook: number | null;
   today: string;
   servings: number | null;
+  /** Servings just cooked, when cook mode ran at another amount than the recipe's. */
+  made?: number;
 }) {
   const loggable = cooks.filter((c) => c.canLog || c.id === entry?.profileId);
   const [profileId, setProfileId] = React.useState(entry?.profileId ?? (loggable.find((c) => c.id === defaultCook) ?? loggable[0])?.id ?? 0);
@@ -51,7 +54,7 @@ export default function CookLogDialog({
   const [hover, setHover] = React.useState(-1);
   const [wentWrong, setWentWrong] = React.useState(entry ? !entry.counted : false);
   const [notes, setNotes] = React.useState(entry?.notes ?? "");
-  const [made, setMade] = React.useState(entry?.servings?.toString() ?? "");
+  const [made, setMade] = React.useState(entry?.servings?.toString() ?? madeDefault?.toString() ?? "");
   const [error, setError] = React.useState<string | null>(null);
   const [busy, start] = React.useTransition();
 

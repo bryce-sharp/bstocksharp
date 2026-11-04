@@ -1,8 +1,8 @@
 # Recipes
 
 Status: plan agreed 2026-11-03; the look (Sage & Butter) chosen 2026-11-03; PR 1 (the section, recipes,
-favorites) and PR 2 (the cook log and ratings) built 2026-11-03. The dev pages `/recipes/mock` and
-`/recipes/looks` stay as references until cook mode and the table view are built.
+favorites) and PR 2 (the cook log and ratings) built 2026-11-03 (#88); PR 3 (cook mode) built 2026-11-04. The dev
+pages `/recipes/mock` and `/recipes/looks` stay as references until import and the table view are built.
 
 Decided: a Recipes section of this site, shared by the household; anyone in the household edits any recipe, and
 there are no private recipes; ratings and favorites belong to each person; grocery lists wait until later; the
@@ -164,7 +164,7 @@ reads it merges.
     favorites. Favorites belong to the person picked in the header's Viewing menu, as in Games and Garage.
   - [x] PR 2: cook log: per-person stars and notes, "something went wrong", versions, weighted stars, overall and
     trend on cards, not tried yet, last cooked, filters, the ratings chart.
-  - [ ] PR 3: cook mode: read-through, Up next, timers, "meanwhile" notes, keep the screen on (one shared hook,
+  - [x] PR 3: cook mode: read-through, Up next, timers, "meanwhile" notes, keep the screen on (one shared hook,
     which the workout runner moves onto), Done cooking asks for a log.
   - [ ] PR 4: import from a link: safe fetch, recipe data parsing, review, paste fallback.
 - **Phase 2: smarter recipes**

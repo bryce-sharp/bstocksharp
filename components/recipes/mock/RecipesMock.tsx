@@ -3,7 +3,7 @@
 // A clickable mockup of the Recipes section: the list, a recipe with scaling, import from a link, and cook mode.
 // Sample recipes live in memory only; nothing is saved or fetched.
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Checkbox from "@mui/material/Checkbox";
@@ -34,6 +34,7 @@ import LightModeOutlinedIcon from "@mui/icons-material/LightModeOutlined";
 import ListAltIcon from "@mui/icons-material/ListAlt";
 import { formatClock, scaleIngredient, stepTimers } from "@/lib/recipes";
 import { IMPORTED, SAMPLE_RECIPES, type MockRecipe } from "./sample";
+import { useWakeLock } from "@/components/shared/useWakeLock";
 
 type View = { kind: "list" } | { kind: "recipe"; id: string } | { kind: "import" };
 
@@ -421,38 +422,6 @@ function ImportFlow({ onCancel, onSave }: { onCancel: () => void; onSave: (r: Mo
       )}
     </>
   );
-}
-
-const subscribeNever = () => () => {};
-
-/** Keeps the screen on while `active`, asking again when the page comes back; "unavailable" when unsupported or refused. */
-function useWakeLock(active: boolean): "on" | "off" | "unavailable" {
-  const supported = useSyncExternalStore(subscribeNever, () => "wakeLock" in navigator, () => true);
-  const [held, setHeld] = useState<"on" | "off" | "denied">("off");
-  useEffect(() => {
-    if (!active || !supported) return;
-    let lock: WakeLockSentinel | null = null;
-    let live = true;
-    const acquire = () =>
-      navigator.wakeLock
-        .request("screen")
-        .then((l) => {
-          if (!live) return void l.release();
-          lock = l;
-          setHeld("on");
-          l.addEventListener("release", () => setHeld("off"));
-        })
-        .catch(() => setHeld("denied"));
-    void acquire();
-    const onVisible = () => document.visibilityState === "visible" && void acquire();
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      live = false;
-      document.removeEventListener("visibilitychange", onVisible);
-      void lock?.release().catch(() => {});
-    };
-  }, [active, supported]);
-  return !supported || held === "denied" ? "unavailable" : held;
 }
 
 type RunningTimer = { id: number; label: string; step: number; endsAt: number; done: boolean };

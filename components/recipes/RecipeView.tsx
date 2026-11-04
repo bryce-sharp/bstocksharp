@@ -11,6 +11,7 @@ import Typography from "@mui/material/Typography";
 import AddIcon from "@mui/icons-material/Add";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import RestaurantIcon from "@mui/icons-material/Restaurant";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import RemoveIcon from "@mui/icons-material/Remove";
 import Link from "@/components/shared/AppLink";
 import type { Recipe } from "@/lib/db/schema";
@@ -19,6 +20,7 @@ import type { RatingSummary } from "@/lib/recipe-ratings";
 import { formatAmount, formatMinutes, scaleIngredient, shortDay, totalMinutes, type RecipeIngredient } from "@/lib/recipes";
 import CookHistory from "./CookHistory";
 import CookLogDialog, { type Cook } from "./CookLogDialog";
+import CookMode from "./CookMode";
 import FavoriteButton from "./FavoriteButton";
 import { panelSx } from "./RecipeCard";
 import RatingLine from "./RatingLine";
@@ -58,7 +60,7 @@ function useChecklist() {
   return [done, toggle] as const;
 }
 
-type LogDialog = { entry?: RecipeLogEntry } | null;
+type LogDialog = { entry?: RecipeLogEntry; made?: number } | null;
 
 export default function RecipeView({
   recipe,
@@ -80,6 +82,7 @@ export default function RecipeView({
   today: string;
 }) {
   const [dialog, setDialog] = React.useState<LogDialog>(null);
+  const [cooking, setCooking] = React.useState(false);
   const canLog = new Set(cooks.filter((c) => c.canLog).map((c) => c.id));
   const nameOf = new Map(logs.map((l) => [l.profileId, { name: l.person, color: l.color }]));
   // Without servings the recipe scales by batches: 1/2, 1, 1 1/2, 2. A stored 0 counts as unknown.
@@ -175,7 +178,10 @@ export default function RecipeView({
               </Box>
             )}
             <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 2 }}>
-              <Button variant="contained" startIcon={<RestaurantIcon />} onClick={() => setDialog({})}>
+              <Button variant="contained" startIcon={<PlayArrowIcon />} onClick={() => setCooking(true)} disabled={recipe.steps.length === 0}>
+                Start cooking
+              </Button>
+              <Button variant="outlined" startIcon={<RestaurantIcon />} onClick={() => setDialog({})}>
                 Log a cook
               </Button>
               <Button component={Link} href={`/recipes/${recipe.id}/edit`} variant="outlined" startIcon={<EditOutlinedIcon />}>
@@ -310,6 +316,21 @@ export default function RecipeView({
           defaultCook={defaultCook}
           today={today}
           servings={servings}
+          made={dialog.made}
+        />
+      )}
+      {cooking && (
+        <CookMode
+          title={recipe.title}
+          ingredients={recipe.ingredients}
+          steps={recipe.steps}
+          factor={factor}
+          amountLabel={servings ? `${amount} ${amount === 1 ? "serving" : "servings"}` : `${formatAmount(amount)} ${amount === 1 ? "batch" : "batches"}`}
+          onClose={() => setCooking(false)}
+          onDone={() => {
+            setCooking(false);
+            setDialog({ made: servings && amount !== servings ? amount : undefined });
+          }}
         />
       )}
     </Container>
