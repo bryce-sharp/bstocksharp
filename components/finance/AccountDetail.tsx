@@ -16,11 +16,8 @@ import {
 } from "@/lib/format";
 import { INVESTMENT_KINDS, KIND_LABELS, accountStats, changesOf } from "@/lib/finance/net-worth";
 import type { AccountContributions, AccountFlows } from "@/lib/queries/finance-networth";
+import { useMounted } from "@/components/shared/useMounted";
 
-const noopSubscribe = () => () => {};
-function useMounted() {
-  return React.useSyncExternalStore(noopSubscribe, () => true, () => false);
-}
 
 export type DetailAccount = {
   id: number;

@@ -24,6 +24,7 @@ import {
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+import type { RecipeIngredient, RecipeStep } from "@/lib/recipes";
 
 const createdAt = () =>
   timestamp("created_at", { withTimezone: true }).defaultNow().notNull();
@@ -1303,3 +1304,76 @@ export const snugDays = pgTable(
 );
 
 export type SnugDayRow = typeof snugDays.$inferSelect;
+
+// ── Recipes ───────────────────────────────────────────────────────────────────
+// The household's cookbook (docs/recipes/plan.md). A recipe owns its ingredients
+// and steps as jsonb and is always edited whole; their ids stay stable across
+// edits so step links never need a migration. `version` rises when a change is
+// a real change to the recipe, so only that version's ratings count.
+export const recipes = pgTable(
+  "recipes",
+  {
+    id: serial("id").primaryKey(),
+    groupId: integer("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+    createdByProfileId: integer("created_by_profile_id").references(() => profiles.id, { onDelete: "set null" }),
+    version: integer("version").notNull().default(1),
+    title: varchar("title", { length: 160 }).notNull(),
+    description: text("description"),
+    servings: integer("servings"),
+    prepMin: integer("prep_min"),
+    cookMin: integer("cook_min"),
+    notes: text("notes"),
+    tags: jsonb("tags").$type<string[]>().notNull().default([]),
+    sourceKind: varchar("source_kind", { length: 20 }).notNull().default("mine"), // mine | imported | version
+    sourceUrl: text("source_url"),
+    sourceName: varchar("source_name", { length: 160 }),
+    imageUrl: text("image_url"),
+    basedOnRecipeId: integer("based_on_recipe_id").references((): AnyPgColumn => recipes.id, { onDelete: "set null" }),
+    ingredients: jsonb("ingredients").$type<RecipeIngredient[]>().notNull().default([]),
+    steps: jsonb("steps").$type<RecipeStep[]>().notNull().default([]),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("idx_recipes_group").on(t.groupId)],
+);
+
+// Each person's own favorites: one person's star changes no one else's list.
+export const recipeFavorites = pgTable(
+  "recipe_favorites",
+  {
+    profileId: integer("profile_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    recipeId: integer("recipe_id")
+      .notNull()
+      .references(() => recipes.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.profileId, t.recipeId] })],
+);
+
+// One person cooking a recipe once. `counted` is false when something went wrong, which keeps the stars out of
+// the ratings; only ratings on the recipe's current `version` count.
+export const recipeLogs = pgTable(
+  "recipe_logs",
+  {
+    id: serial("id").primaryKey(),
+    recipeId: integer("recipe_id")
+      .notNull()
+      .references(() => recipes.id, { onDelete: "cascade" }),
+    recipeVersion: integer("recipe_version").notNull(),
+    profileId: integer("profile_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    cookedOn: date("cooked_on").notNull(),
+    rating: integer("rating"), // 1 to 5, or null for no stars
+    counted: boolean("counted").notNull().default(true),
+    notes: text("notes"),
+    servings: integer("servings"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("idx_recipe_logs_recipe").on(t.recipeId, t.cookedOn)],
+);
+
+export type Recipe = typeof recipes.$inferSelect;
+export type RecipeLog = typeof recipeLogs.$inferSelect;

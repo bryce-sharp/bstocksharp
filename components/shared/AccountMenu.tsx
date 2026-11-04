@@ -21,8 +21,7 @@ import ManageAccountsIcon from "@mui/icons-material/ManageAccountsOutlined";
 import LogoutIcon from "@mui/icons-material/Logout";
 import PersonAvatar from "@/components/shared/PersonAvatar";
 import { logoutAction } from "@/app/actions/session";
-
-const noop = () => () => {};
+import { useMounted } from "@/components/shared/useMounted";
 
 // The top-right menu is always you: the person your login is (or the hub's shared login), plus
 // the app-wide bits. Whose stuff you are looking at is picked inside each app
@@ -51,7 +50,7 @@ export default function AccountMenu({
 
   // Color mode. useColorScheme() is undefined until mounted, so guard the toggle.
   const { mode, systemMode, setMode } = useColorScheme();
-  const mounted = React.useSyncExternalStore(noop, () => true, () => false);
+  const mounted = useMounted();
   const isDark = (mode === "system" ? systemMode : mode) === "dark";
 
   const closeMenu = () => setAnchor(null);

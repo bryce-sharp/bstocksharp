@@ -7,18 +7,8 @@ import { useTheme, alpha } from "@mui/material/styles";
 import Box from "@mui/material/Box";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Switch from "@mui/material/Switch";
+import { useMounted } from "@/components/shared/useMounted";
 
-// Hydration-safe "are we on the client yet?" — false on the server and during
-// hydration, true immediately after. No setState-in-effect (keeps the lint rule
-// happy), and it lets us skip SSR of the chart entirely.
-const noopSubscribe = () => () => {};
-function useMounted() {
-  return React.useSyncExternalStore(
-    noopSubscribe,
-    () => true,
-    () => false,
-  );
-}
 
 export type WeightChartProps = {
   dates: string[]; // YYYY-MM-DD weekly ticks

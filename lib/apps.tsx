@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import type { SvgIconProps } from "@mui/material/SvgIcon";
 import GarageIcon from "@mui/icons-material/Garage";
+import MenuBookIcon from "@mui/icons-material/MenuBook";
 import FitnessCenterIcon from "@mui/icons-material/FitnessCenter";
 import MonitorWeightIcon from "@mui/icons-material/MonitorWeight";
 import SavingsIcon from "@mui/icons-material/Savings";
@@ -75,6 +76,14 @@ export const APPS: AppDef[] = [
       { label: "ATLAS", href: "/finance/atlas" },
       { label: "Net Worth", href: "/finance/net-worth" },
     ],
+  },
+  {
+    slug: "recipes",
+    name: "Recipes",
+    tagline: "Our cookbook, scaled and ready to cook",
+    href: "/recipes",
+    Icon: MenuBookIcon,
+    accent: "#5c7c59",
   },
   {
     slug: "games",
