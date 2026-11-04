@@ -1,5 +1,5 @@
 // One-time: recipe_logs, each person's cook log with stars and notes (docs/recipes/plan.md). Additive and
-// idempotent; constraint and index names match Drizzle's. meal_id arrives with meals.
+// idempotent; constraint and index names match Drizzle's. meal_id arrives in migrate-meals.mjs.
 //
 //   node scripts/migrate-recipe-logs.mjs                    (dev database)
 //   node scripts/live.mjs scripts/migrate-recipe-logs.mjs   (live, before merging)

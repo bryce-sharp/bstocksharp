@@ -11,6 +11,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import AddIcon from "@mui/icons-material/Add";
 import LinkIcon from "@mui/icons-material/Link";
+import RestaurantIcon from "@mui/icons-material/Restaurant";
 import FavoriteIcon from "@mui/icons-material/Favorite";
 import SearchIcon from "@mui/icons-material/Search";
 import Link from "@/components/shared/AppLink";
@@ -121,6 +122,9 @@ export default function RecipeList({
           </Typography>
         </Box>
         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+          <Button component={Link} href="/recipes/meals" variant="outlined" startIcon={<RestaurantIcon />}>
+            Meals
+          </Button>
           <Button component={Link} href="/recipes/import" variant="outlined" startIcon={<LinkIcon />}>
             Import from a link
           </Button>

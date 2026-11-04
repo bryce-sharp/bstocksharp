@@ -2,14 +2,14 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { profiles, recipeFavorites, recipeLogs, recipes } from "@/lib/db/schema";
+import { mealRatings, meals, profiles, recipeFavorites, recipeLogs, recipes } from "@/lib/db/schema";
 import { requireEditor, requireEditorFor } from "@/lib/auth";
 import { getActiveProfile } from "@/lib/profile";
 import { requireGroupId } from "@/lib/session";
 import { requireApp } from "@/lib/hub-apps";
-import { findRecipeBySource, getRecipe, getRecipeLog } from "@/lib/queries/recipes";
+import { findRecipeBySource, getMeal, getRecipe, getRecipeLog } from "@/lib/queries/recipes";
 import { logEvent } from "@/lib/events";
 import { SafeFetchError, safeFetchText } from "@/lib/safe-fetch";
 import { recipeFromHtml, recipeFromPageText, type RecipeDraft } from "@/lib/recipe-import";
@@ -242,18 +242,25 @@ export type CookLogInput = {
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+function day(v: unknown): string {
+  if (typeof v !== "string" || !DATE_RE.test(v) || Number.isNaN(Date.parse(v))) throw new Error("Pick the day it was cooked.");
+  return v;
+}
+
+/** 1 to 5 stars, or null for none. */
+function stars(v: unknown): number | null {
+  const rating = v === null || v === undefined ? null : Number(v);
+  if (rating !== null && !(Number.isInteger(rating) && rating >= 1 && rating <= 5)) throw new Error("Stars go from 1 to 5.");
+  return rating;
+}
+
 function parseLog(input: unknown) {
   if (!isRecord(input)) throw new Error("Nothing to save.");
   if (!Number.isInteger(input.profileId)) throw new Error("Pick who cooked it.");
-  if (typeof input.cookedOn !== "string" || !DATE_RE.test(input.cookedOn) || Number.isNaN(Date.parse(input.cookedOn))) {
-    throw new Error("Pick the day it was cooked.");
-  }
-  const rating = input.rating === null || input.rating === undefined ? null : Number(input.rating);
-  if (rating !== null && !(Number.isInteger(rating) && rating >= 1 && rating <= 5)) throw new Error("Stars go from 1 to 5.");
   return {
     profileId: input.profileId as number,
-    cookedOn: input.cookedOn,
-    rating,
+    cookedOn: day(input.cookedOn),
+    rating: stars(input.rating),
     counted: input.wentWrong !== true,
     notes: text(input.notes, RECIPE_LIMITS.text),
     servings: count(input.servings, "Servings made", 999, 1),
@@ -289,6 +296,9 @@ export async function updateCookLog(logId: number, input: CookLogInput): Promise
     const data = parseLog(input);
     await requireEditorFor(log.profileId);
     await requireEditorFor(data.profileId);
+    if (log.mealId !== null && (data.profileId !== log.profileId || data.cookedOn !== log.cookedOn)) {
+      throw new Error("This cook is part of a meal; change its day on the meal.");
+    }
     await db.update(recipeLogs).set(data).where(eq(recipeLogs.id, logId));
   } catch (err) {
     return problem(err);
@@ -307,6 +317,141 @@ export async function deleteCookLog(logId: number): Promise<RecipeSaveResult> {
     return problem(err);
   }
   refreshRecipe(log.recipeId);
+}
+
+// ── Meals ─────────────────────────────────────────────────────────────────────
+
+/** What the meal form sends: its name, day, notes and recipes in order. */
+export type MealInput = { name: string; cookedOn: string; notes: string; recipeIds: number[] };
+
+/** One person's stars for a meal: the whole meal, and each recipe in it. */
+export type MealRatingsInput = { profileId: number; rating: number | null; notes: string; dishes: { recipeId: number; rating: number | null }[] };
+
+async function parseMeal(input: unknown) {
+  if (!isRecord(input)) throw new Error("Nothing to save.");
+  const name = text(input.name, RECIPE_LIMITS.title);
+  if (!name) throw new Error("Give the meal a name.");
+  const raw = input.recipeIds;
+  if (!Array.isArray(raw) || !raw.every((id) => Number.isInteger(id))) throw new Error("Pick the meal's recipes.");
+  const recipeIds = [...new Set(raw as number[])];
+  if (!recipeIds.length) throw new Error("Pick at least one recipe.");
+  if (recipeIds.length > RECIPE_LIMITS.dishes) throw new Error(`A meal can have up to ${RECIPE_LIMITS.dishes} recipes.`);
+  const found = await db.select({ id: recipes.id }).from(recipes).where(and(eq(recipes.groupId, await requireGroupId()), inArray(recipes.id, recipeIds)));
+  if (found.length !== recipeIds.length) throw new Error("One of those recipes is gone.");
+  return { name, cookedOn: day(input.cookedOn), notes: text(input.notes, RECIPE_LIMITS.text), recipeIds };
+}
+
+function refreshMeal(id: number, recipeIds: number[]) {
+  revalidatePath("/recipes");
+  revalidatePath("/recipes/meals");
+  revalidatePath(`/recipes/meals/${id}`);
+  for (const r of recipeIds) revalidatePath(`/recipes/${r}`);
+}
+
+/** Saves one person's meal stars and one cook log entry per recipe; a recipe's entry keeps its notes when re-rated. */
+async function saveMealRatings(meal: { id: number; cookedOn: string; recipeIds: number[] }, input: unknown) {
+  if (!isRecord(input) || !Number.isInteger(input.profileId)) throw new Error("Pick whose stars these are.");
+  const profileId = input.profileId as number;
+  await requireEditorFor(profileId);
+  const rating = stars(input.rating);
+  const notes = text(input.notes, RECIPE_LIMITS.text);
+  const given = new Map<number, number | null>();
+  for (const d of Array.isArray(input.dishes) ? input.dishes : []) {
+    if (isRecord(d) && Number.isInteger(d.recipeId)) given.set(d.recipeId as number, stars(d.rating));
+  }
+  const versions = await db
+    .select({ id: recipes.id, version: recipes.version })
+    .from(recipes)
+    .where(and(eq(recipes.groupId, await requireGroupId()), inArray(recipes.id, meal.recipeIds)));
+  const whole =
+    rating === null && notes === null
+      ? db.delete(mealRatings).where(and(eq(mealRatings.mealId, meal.id), eq(mealRatings.profileId, profileId)))
+      : db
+          .insert(mealRatings)
+          .values({ mealId: meal.id, profileId, rating, notes })
+          .onConflictDoUpdate({ target: [mealRatings.mealId, mealRatings.profileId], set: { rating, notes } });
+  const dishes = versions.map((r) => {
+    const dish = given.get(r.id) ?? null;
+    return db
+      .insert(recipeLogs)
+      .values({ recipeId: r.id, recipeVersion: r.version, profileId, cookedOn: meal.cookedOn, rating: dish, mealId: meal.id })
+      .onConflictDoUpdate({
+        target: [recipeLogs.mealId, recipeLogs.profileId, recipeLogs.recipeId],
+        targetWhere: sql`${recipeLogs.mealId} is not null`,
+        set: { rating: dish },
+      });
+  });
+  await db.batch([whole, ...dishes]);
+}
+
+/** Logs a meal with the logger's stars, then opens it. */
+export async function logMeal(input: MealInput, ratings: MealRatingsInput): Promise<RecipeSaveResult> {
+  await requireApp("recipes");
+  await requireEditor();
+  let id: number;
+  try {
+    const data = await parseMeal(input);
+    if (!isRecord(ratings) || !Number.isInteger(ratings.profileId)) throw new Error("Pick whose stars these are.");
+    await requireEditorFor(ratings.profileId as number);
+    const [row] = await db
+      .insert(meals)
+      .values({ ...data, groupId: await requireGroupId(), createdByProfileId: (await getActiveProfile())?.id ?? null })
+      .returning({ id: meals.id });
+    const mealId = row!.id;
+    id = mealId;
+    // A failed save takes the new meal back out, so trying again never makes a second one.
+    await saveMealRatings({ id: mealId, ...data }, ratings).catch(async (err: unknown) => {
+      await db.delete(meals).where(eq(meals.id, mealId));
+      throw err;
+    });
+    refreshMeal(mealId, data.recipeIds);
+  } catch (err) {
+    return problem(err);
+  }
+  redirect(`/recipes/meals/${id}`);
+}
+
+/** Changes a meal's details; its cook log entries move to its new day, and a removed recipe's entries go with it. */
+export async function updateMeal(id: number, input: MealInput): Promise<RecipeSaveResult> {
+  await requireApp("recipes");
+  await requireEditor();
+  const meal = await getMeal(id);
+  if (!meal) return { error: "That meal is gone." };
+  try {
+    const data = await parseMeal(input);
+    await db.batch([
+      db.update(meals).set(data).where(eq(meals.id, id)),
+      db.update(recipeLogs).set({ cookedOn: data.cookedOn }).where(eq(recipeLogs.mealId, id)),
+      db.delete(recipeLogs).where(and(eq(recipeLogs.mealId, id), notInArray(recipeLogs.recipeId, data.recipeIds))),
+    ]);
+    refreshMeal(id, [...new Set([...meal.recipeIds, ...data.recipeIds])]);
+  } catch (err) {
+    return problem(err);
+  }
+}
+
+/** Deletes a meal with its meal stars and the cook log entries it made, as deleting a recipe deletes its log. */
+export async function deleteMeal(id: number): Promise<void> {
+  await requireApp("recipes");
+  await requireEditor();
+  const meal = await getMeal(id);
+  if (!meal) return;
+  await db.delete(meals).where(and(eq(meals.id, id), eq(meals.groupId, await requireGroupId())));
+  refreshMeal(id, meal.recipeIds);
+  redirect("/recipes/meals");
+}
+
+/** Saves one person's stars for a meal and its recipes. */
+export async function rateMeal(id: number, ratings: MealRatingsInput): Promise<RecipeSaveResult> {
+  await requireApp("recipes");
+  const meal = await getMeal(id);
+  if (!meal) return { error: "That meal is gone." };
+  try {
+    await saveMealRatings(meal, ratings);
+  } catch (err) {
+    return problem(err);
+  }
+  refreshMeal(id, meal.recipeIds);
 }
 
 // ── Import from a link ────────────────────────────────────────────────────────

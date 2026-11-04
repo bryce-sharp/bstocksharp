@@ -2,7 +2,7 @@
 
 Status: plan agreed 2026-11-03; the look (Sage & Butter) chosen 2026-11-03; PR 1 (the section, recipes,
 favorites) and PR 2 (the cook log and ratings) built 2026-11-03 (#88); PR 3 (cook mode, #89) and PR 4 (import)
-built 2026-11-04; PR 5 (units), PR 6 (step links) and PR 8 (recipes inside recipes) built 2026-11-04. The dev mockup is retired now that every screen of it is real; the looks lab `/recipes/looks`
+built 2026-11-04; PR 5 (units), PR 6 (step links), PR 8 (recipes inside recipes) and PR 9 (meals) built 2026-11-04. The dev mockup is retired now that every screen of it is real; the looks lab `/recipes/looks`
 stays as the reference for the table view.
 
 Decided: a Recipes section of this site, shared by the household; anyone in the household edits any recipe, and
@@ -133,6 +133,15 @@ quiet pattern, soft colors, friendly type that stays easy to read.
 - Log a meal: name, date, notes, the recipes in it. It creates one cook log entry per recipe (each person still
   rates each recipe), and each person can rate the meal overall.
 - Each recipe's history shows "Part of Thanksgiving 2026"; the meal page shows the whole dinner.
+- A meal's stars answer "did it all go together?" and never change a recipe's own stars, so a bad pairing never
+  pulls down a good recipe; the meal's notes say why.
+- As built (PR 9): Meals (`/recipes/meals`) lists the household's meals; Log a meal takes a name, day, notes and
+  its recipes, then the logger's meal stars, notes and optional stars for each recipe. Each person who rates a meal
+  gets one cook log entry per recipe in it (unique per meal, person and recipe), so re-rating changes that entry.
+  A meal entry keeps the meal's person and day; changing the meal's day moves its entries, removing a recipe
+  removes that recipe's entries, and deleting the meal deletes its stars and entries, as deleting a recipe does.
+  The cook log lists the newest version first, then newest first within it, so a back-dated cook stays with its
+  version and each "Version N starts here" marker sits under that version's first cook.
 - A saved menu is a meal you can start again. Starting it begins a **multi-recipe cook mode**: every recipe's
   steps in tabs, one shared timer tray, and one read-through for the whole meal.
 
@@ -166,8 +175,8 @@ whole. Ingredient and step ids are stable from the first PR, so uses, links and 
 | `recipes` | id, groupId, createdByProfileId, version, title, description, servings, prepMin, cookMin, notes, tags (jsonb), sourceKind (`mine` · `imported`), sourceUrl, sourceName, imageUrl, ingredients (jsonb), steps (jsonb), createdAt, updatedAt |
 | `recipe_favorites` | profileId, recipeId (unique together) |
 | `recipe_logs` | id, recipeId, recipeVersion, profileId, cookedOn, rating (1 to 5, optional), counted (false when something went wrong), notes, servings, mealId, createdAt |
-| `meals` | id, groupId, name, cookedOn, notes, menuId, createdByProfileId, createdAt |
-| `meal_ratings` | mealId, profileId, rating, notes |
+| `meals` | id, groupId, name, cookedOn, notes, recipeIds (jsonb, ordered), createdByProfileId, createdAt; menuId arrives with menus |
+| `meal_ratings` | mealId, profileId, rating (1 to 5, optional), notes |
 | `menus` | id, groupId, name, recipeIds (jsonb, ordered), notes, createdAt |
 
 jsonb shapes:
@@ -197,7 +206,7 @@ reads it merges.
   - [x] PR 6: step links: uses, splits, highlighting, suggested links in edit mode.
   - PR 7 (My version) dropped 2026-11-04: no personal copies of recipes.
   - [x] PR 8: recipes inside recipes: the edit-mode picker, scaling through.
-  - [ ] PR 9: meals: log a meal, meal page, meal ratings.
+  - [x] PR 9: meals: log a meal, meal page, meal ratings.
 - **Phase 3: the fancy parts**
   - [ ] PR 10: At a glance table view.
   - [ ] PR 11: saved menus.
