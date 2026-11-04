@@ -32,6 +32,7 @@ import {
 } from "@/lib/workout";
 import ExerciseInfoButton from "@/components/workout/ExerciseInfoButton";
 import { RUN_TIMING, RUN_CUES } from "@/lib/workout-config";
+import { useWakeLock } from "@/components/shared/useWakeLock";
 
 // ── Timing plan derived from a step ───────────────────────────────────────────
 type Plan =
@@ -273,7 +274,6 @@ export default function WorkoutRunner({
   const repRef = React.useRef(0);
   const holdBeepedRef = React.useRef(false);
   const audioRef = React.useRef<AudioContext | null>(null);
-  const wakeRef = React.useRef<WakeLockSentinel | null>(null);
   const anchorKeyRef = React.useRef<string | null>(null);
   const mutedRef = React.useRef(false); // live value for the clock loop
   // Fire-once guards for the per-timer cues (reset each step in initStep).
@@ -355,26 +355,8 @@ export default function WorkoutRunner({
     [playBeep],
   );
 
-  // ── Wake lock ─────────────────────────────────────────────────────────────
-  const acquireWake = React.useCallback(async () => {
-    try {
-      wakeRef.current = await navigator.wakeLock?.request("screen");
-    } catch {
-      /* not supported / denied — fine */
-    }
-  }, []);
-  React.useEffect(() => {
-    const onVis = () => {
-      if (document.visibilityState === "visible" && started && !done)
-        acquireWake();
-    };
-    document.addEventListener("visibilitychange", onVis);
-    return () => {
-      document.removeEventListener("visibilitychange", onVis);
-      wakeRef.current?.release().catch(() => {});
-      wakeRef.current = null;
-    };
-  }, [started, done, acquireWake]);
+  // ── Wake lock: the screen stays on from Start until the workout is done ────
+  useWakeLock(started && !done);
 
   // ── Step init ─────────────────────────────────────────────────────────────
   const initStep = React.useCallback(
@@ -461,7 +443,6 @@ export default function WorkoutRunner({
   const advance = React.useCallback(() => {
     if (stepIndex + 1 >= steps.length) {
       setDone(true);
-      wakeRef.current?.release().catch(() => {});
     } else {
       goTo(stepIndex + 1);
     }
@@ -570,7 +551,6 @@ export default function WorkoutRunner({
     } catch {
       /* audio not available */
     }
-    acquireWake();
     setStarted(true);
     goTo(stepIndex);
   }

@@ -7,7 +7,7 @@ import { canView } from "@/lib/sharing";
 import ViewingMenu, { type ViewingPick } from "./ViewingMenu";
 
 // The apps whose pages show one person's stuff, so they get a Viewing picker.
-export const VIEWING_APPS = ["weight", "workout", "games", "garage"];
+export const VIEWING_APPS = ["weight", "workout", "games", "garage", "recipes"];
 
 // Whose stuff this app shows. People another login holds are marked with a
 // lock, and people whose sharing leaves you out are marked "private here".

@@ -33,6 +33,7 @@ app/
   actions/*.ts          "use server" mutations, one file per domain (session, auth, vehicles, …)
   garage/**             the Garage app (its own layout/error + CRUD routes)
   workout/**            the Workout app
+  recipes/**            the Recipes section (docs/recipes/plan.md), dressed in its own look (components/recipes/tokens.ts)
   games/**              PUBLIC: the games gallery (lib/games.ts registry) and each game
   embed/**              PUBLIC: frameless games for other sites to iframe (allowed hosts in next.config.mjs)
 
@@ -44,6 +45,7 @@ components/
              NumberField, SavedToast
   garage/    car-specific (Vehicle*, Build*, Maintenance*, Fuel*, Parts*, Wishlist*, Journal*)
   workout/   workout-specific (WorkoutRunner, WeekSchedule, CatalogList, builder forms, …)
+  recipes/   the Recipes section: list, recipe page, form, line editor, the Sage & Butter skin and tokens
   games/     one folder per game (snug/), plus daily.ts (date keys, seeded RNG, attempt store)
 
 proxy.ts                the login gate (session check + redirect, rolling renewal)

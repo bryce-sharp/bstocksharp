@@ -6,12 +6,8 @@ import { useTheme } from "@mui/material/styles";
 import Box from "@mui/material/Box";
 import { formatMoney, formatMoneyCompact, formatMonth } from "@/lib/format";
 import type { PriceMonth } from "@/lib/finance/bill-history";
+import { useMounted } from "@/components/shared/useMounted";
 
-// Hydration-safe "are we on the client yet?" (x-charts measures the DOM).
-const noopSubscribe = () => () => {};
-function useMounted() {
-  return React.useSyncExternalStore(noopSubscribe, () => true, () => false);
-}
 
 const shortMonth = (month: string) =>
   new Date(`${month.slice(0, 7)}-01T12:00:00`).toLocaleDateString("en-US", { month: "short", year: "2-digit" });
