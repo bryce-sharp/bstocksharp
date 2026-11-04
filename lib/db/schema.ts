@@ -1372,10 +1372,49 @@ export const recipeLogs = pgTable(
     counted: boolean("counted").notNull().default(true),
     notes: text("notes"),
     servings: integer("servings"),
+    // Set when this cook was part of a meal: one entry per person and recipe, dated with the meal.
+    mealId: integer("meal_id").references(() => meals.id, { onDelete: "cascade" }),
     createdAt: createdAt(),
   },
-  (t) => [index("idx_recipe_logs_recipe").on(t.recipeId, t.cookedOn)],
+  (t) => [
+    index("idx_recipe_logs_recipe").on(t.recipeId, t.cookedOn),
+    uniqueIndex("uniq_recipe_logs_meal").on(t.mealId, t.profileId, t.recipeId).where(sql`${t.mealId} is not null`),
+  ],
+);
+
+// One dinner or occasion ("Thanksgiving 2026"): its recipes in order, and each person's cook log entries for them.
+export const meals = pgTable(
+  "meals",
+  {
+    id: serial("id").primaryKey(),
+    groupId: integer("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 160 }).notNull(),
+    cookedOn: date("cooked_on").notNull(),
+    notes: text("notes"),
+    recipeIds: jsonb("recipe_ids").$type<number[]>().notNull().default([]),
+    createdByProfileId: integer("created_by_profile_id").references(() => profiles.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("idx_meals_group").on(t.groupId, t.cookedOn)],
+);
+
+// Each person's stars for the meal as a whole; they never change a recipe's own stars.
+export const mealRatings = pgTable(
+  "meal_ratings",
+  {
+    mealId: integer("meal_id")
+      .notNull()
+      .references(() => meals.id, { onDelete: "cascade" }),
+    profileId: integer("profile_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    rating: integer("rating"), // 1 to 5, or null for notes only
+    notes: text("notes"),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.mealId, t.profileId] })],
 );
 
 export type Recipe = typeof recipes.$inferSelect;
 export type RecipeLog = typeof recipeLogs.$inferSelect;
+export type Meal = typeof meals.$inferSelect;

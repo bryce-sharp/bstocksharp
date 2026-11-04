@@ -5,12 +5,13 @@ import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import Link from "@/components/shared/AppLink";
 import type { RecipeLogEntry } from "@/lib/queries/recipes";
 import { shortDay } from "@/lib/recipes";
 import Stars from "./Stars";
 import { color } from "./tokens";
 
-/** The cook log, newest first, with a marker where each version of the recipe begins. */
+/** The cook log, grouped newest version first, with a marker under the first cook of each version. */
 export default function CookHistory({
   logs,
   version,
@@ -47,6 +48,14 @@ export default function CookHistory({
                   {!l.counted && (
                     <Typography variant="body2" sx={{ fontWeight: 600, color: color.second }}>
                       Something went wrong
+                    </Typography>
+                  )}
+                  {l.mealId !== null && (
+                    <Typography variant="body2" sx={{ color: color.muted }}>
+                      Part of{" "}
+                      <Box component={Link} href={`/recipes/meals/${l.mealId}`} sx={{ fontWeight: 600, color: color.accent, textDecoration: "underline", textUnderlineOffset: 3 }}>
+                        {l.meal}
+                      </Box>
                     </Typography>
                   )}
                 </Box>

@@ -6,7 +6,7 @@ export type RecipeIngredient = { id: string; text: string; group?: string; recip
 export type RecipeUse = { ingredientId: string; amount?: string; note?: string };
 export type RecipeStep = { id: string; text: string; label?: string; after?: string[]; uses?: RecipeUse[] };
 
-export const RECIPE_LIMITS = { title: 160, line: 600, step: 3000, lines: 200, tags: 20, tag: 40, text: 20000 } as const;
+export const RECIPE_LIMITS = { title: 160, line: 600, step: 3000, lines: 200, tags: 20, tag: 40, text: 20000, dishes: 30 } as const;
 
 /** A complete http or https address, normalized, or null. */
 export function webUrl(v: unknown): string | null {

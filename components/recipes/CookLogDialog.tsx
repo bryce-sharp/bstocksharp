@@ -10,19 +10,18 @@ import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
 import FormControlLabel from "@mui/material/FormControlLabel";
-import Rating from "@mui/material/Rating";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { deleteCookLog, logCook, updateCookLog, type CookLogInput } from "@/app/actions/recipes";
 import type { RecipeLogEntry } from "@/lib/queries/recipes";
 import { skinScope, skinSx } from "./RecipesSkin";
+import StarInput from "./StarInput";
+import { useSave } from "./useSave";
 import { color } from "./tokens";
 
 /** Someone in the household, and whether this login may log for them. */
 export type Cook = { id: number; name: string; canLog: boolean };
-
-const STAR_WORDS = ["", "Not again", "It was okay", "Good", "Really good", "A favorite"];
 
 /** Log a cook, or change one: who, when, the stars, and whether something went wrong. */
 export default function CookLogDialog({
@@ -51,20 +50,11 @@ export default function CookLogDialog({
   const [profileId, setProfileId] = React.useState(entry?.profileId ?? (loggable.find((c) => c.id === defaultCook) ?? loggable[0])?.id ?? 0);
   const [cookedOn, setCookedOn] = React.useState(entry?.cookedOn ?? today);
   const [rating, setRating] = React.useState<number | null>(entry?.rating ?? null);
-  const [hover, setHover] = React.useState(-1);
   const [wentWrong, setWentWrong] = React.useState(entry ? !entry.counted : false);
   const [notes, setNotes] = React.useState(entry?.notes ?? "");
   const [made, setMade] = React.useState(entry?.servings?.toString() ?? madeDefault?.toString() ?? "");
-  const [error, setError] = React.useState<string | null>(null);
-  const [busy, start] = React.useTransition();
-
-  const run = (work: () => Promise<{ error: string } | undefined>) =>
-    start(async () => {
-      setError(null);
-      const result = await work();
-      if (result?.error) setError(result.error);
-      else onClose();
-    });
+  const { error, busy, run } = useSave(onClose);
+  const inMeal = entry ? entry.mealId !== null : false;
 
   const save = (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,8 +66,6 @@ export default function CookLogDialog({
     if (entry && window.confirm("Delete this log entry?")) run(() => deleteCookLog(entry.id));
   };
 
-  const shown = hover !== -1 ? hover : (rating ?? 0);
-
   return (
     <Dialog open={open} onClose={busy ? undefined : onClose} fullWidth maxWidth="xs" className={skinScope.className} style={skinScope.style} sx={skinSx}>
       <Box component="form" onSubmit={save} noValidate>
@@ -88,33 +76,26 @@ export default function CookLogDialog({
           <Stack spacing={2.25} sx={{ pt: 0.5 }}>
             {loggable.length === 0 && <Alert severity="info">This login can only log for its own person.</Alert>}
             <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" } }}>
-              <TextField select label="Who cooked" value={String(profileId)} onChange={(e) => setProfileId(Number(e.target.value))} slotProps={{ select: { native: true } }}>
+              <TextField select label="Who cooked" value={String(profileId)} onChange={(e) => setProfileId(Number(e.target.value))} disabled={inMeal} slotProps={{ select: { native: true } }}>
                 {loggable.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
                   </option>
                 ))}
               </TextField>
-              <TextField label="When" type="date" value={cookedOn} onChange={(e) => setCookedOn(e.target.value)} slotProps={{ inputLabel: { shrink: true }, htmlInput: { max: today } }} />
+              <TextField label="When" type="date" value={cookedOn} onChange={(e) => setCookedOn(e.target.value)} disabled={inMeal} slotProps={{ inputLabel: { shrink: true }, htmlInput: { max: today } }} />
             </Box>
+            {inMeal && (
+              <Typography variant="body2" sx={{ color: color.muted, mt: -1 }}>
+                Part of {entry?.meal}: its day is the meal&apos;s.
+              </Typography>
+            )}
 
             <Box>
               <Typography component="legend" variant="body2" sx={{ color: color.muted, mb: 0.25 }}>
                 Stars, if you want to rate it
               </Typography>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                <Rating
-                  name="stars"
-                  value={rating}
-                  onChange={(_, v) => setRating(v)}
-                  onChangeActive={(_, v) => setHover(v)}
-                  size="large"
-                  sx={{ color: color.star, "& .MuiRating-iconEmpty": { color: color.rule } }}
-                />
-                <Typography variant="body2" sx={{ color: color.muted, minWidth: 90 }}>
-                  {STAR_WORDS[shown] ?? ""}
-                </Typography>
-              </Box>
+              <StarInput name="stars" value={rating} onChange={setRating} />
             </Box>
 
             <Box>
