@@ -20,6 +20,7 @@ import type { RatingSummary } from "@/lib/recipe-ratings";
 import { formatAmount, formatMinutes, scaleIngredient, shortDay, totalMinutes, type RecipeIngredient } from "@/lib/recipes";
 import CookHistory from "./CookHistory";
 import CookLogDialog, { type Cook } from "./CookLogDialog";
+import BackLink from "./BackLink";
 import CookMode from "./CookMode";
 import FavoriteButton from "./FavoriteButton";
 import { panelSx } from "./RecipeCard";
@@ -102,7 +103,8 @@ export default function RecipeView({
   ].filter(Boolean);
 
   return (
-    <Container maxWidth="lg" sx={{ py: { xs: 2.5, md: 4 } }}>
+    <Container maxWidth="lg" sx={{ py: { xs: 2, md: 3 } }}>
+      <BackLink />
       <Box sx={{ ...panelSx, p: { xs: 2, md: 3 } }}>
         <Box sx={{ display: "grid", gap: { xs: 2, md: 3 }, gridTemplateColumns: { xs: "1fr", md: "minmax(220px, 1fr) 2fr" }, alignItems: "stretch" }}>
           <Box aria-hidden sx={{ minHeight: { xs: 120, md: 200 }, borderRadius: `${radius.base - 4}px`, background: gingham() }} />

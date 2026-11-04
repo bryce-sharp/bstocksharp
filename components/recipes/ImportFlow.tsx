@@ -13,6 +13,7 @@ import LinkIcon from "@mui/icons-material/Link";
 import Link from "@/components/shared/AppLink";
 import { readRecipeLink } from "@/app/actions/recipes";
 import { recipeFromText, type RecipeDraft } from "@/lib/recipe-import";
+import BackLink from "./BackLink";
 import { panelSx } from "./RecipeCard";
 import RecipeForm from "./RecipeForm";
 import { color } from "./tokens";
@@ -51,7 +52,8 @@ export default function ImportFlow({ tagOptions }: { tagOptions: string[] }) {
   if (found) {
     const { draft, existing } = found;
     return (
-      <Container maxWidth="md" sx={{ py: { xs: 3, md: 5 } }}>
+      <Container maxWidth="md" sx={{ py: { xs: 2, md: 4 } }}>
+        <BackLink />
         <Typography variant="h3" component="h1" sx={{ fontSize: "clamp(28px, 4vw, 40px)" }}>
           Check it over
         </Typography>
@@ -90,7 +92,8 @@ export default function ImportFlow({ tagOptions }: { tagOptions: string[] }) {
   }
 
   return (
-    <Container maxWidth="md" sx={{ py: { xs: 3, md: 5 } }}>
+    <Container maxWidth="md" sx={{ py: { xs: 2, md: 4 } }}>
+      <BackLink />
       <Typography variant="h3" component="h1" sx={{ fontSize: "clamp(28px, 4vw, 40px)" }}>
         Import a recipe
       </Typography>

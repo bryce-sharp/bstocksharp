@@ -17,6 +17,7 @@ import Link from "@/components/shared/AppLink";
 import type { RecipeSummary } from "@/lib/queries/recipes";
 import { matchesSearch } from "@/lib/recipes";
 import RecipeCard, { panelSx } from "./RecipeCard";
+import { rememberList } from "./BackLink";
 import TagChip from "./TagChip";
 import { color } from "./tokens";
 
@@ -53,6 +54,7 @@ function writeUrl(f: Filters) {
   if (f.sort !== "az") params.set("sort", f.sort);
   const query = params.toString();
   window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
+  rememberList(query ? `?${query}` : "");
 }
 
 /** Tags by how many recipes use them, then A to Z. */
@@ -92,6 +94,7 @@ export default function RecipeList({
     writeUrl(f);
   };
 
+  React.useEffect(() => rememberList(window.location.search), []);
   const tags = React.useMemo(() => tagsByUse(recipes), [recipes]);
   const shown = recipes
     .filter(
