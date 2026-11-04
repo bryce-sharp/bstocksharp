@@ -18,6 +18,7 @@ import type { Cook } from "./CookLogDialog";
 import { skinScope, skinSx } from "./RecipesSkin";
 import StarInput from "./StarInput";
 import TagChip from "./TagChip";
+import { useSave } from "./useSave";
 import { color } from "./tokens";
 
 type Stars = Record<number, number | null>;
@@ -99,19 +100,6 @@ function MealStarsFields({ stars, dishes }: { stars: MealStarsState; dishes: Rec
       )}
     </Stack>
   );
-}
-
-function useSave(onClose: () => void) {
-  const [error, setError] = React.useState<string | null>(null);
-  const [busy, start] = React.useTransition();
-  const run = (work: () => Promise<{ error: string } | undefined>) =>
-    start(async () => {
-      setError(null);
-      const result = await work();
-      if (result?.error) setError(result.error);
-      else onClose();
-    });
-  return { error, busy, run };
 }
 
 function MealShell({ open, onClose, busy, title, onSubmit, children, actions }: { open: boolean; onClose: () => void; busy: boolean; title: string; onSubmit: () => void; children: React.ReactNode; actions: React.ReactNode }) {

@@ -295,11 +295,10 @@ export async function updateCookLog(logId: number, input: CookLogInput): Promise
   try {
     const data = parseLog(input);
     await requireEditorFor(log.profileId);
-    await requireEditorFor(data.profileId);
-    if (log.mealId !== null && (data.profileId !== log.profileId || data.cookedOn !== log.cookedOn)) {
-      throw new Error("This cook is part of a meal; change its day on the meal.");
-    }
-    await db.update(recipeLogs).set(data).where(eq(recipeLogs.id, logId));
+    if (log.mealId === null) await requireEditorFor(data.profileId);
+    // A meal's cook takes its person and day from the meal, so only the rest is saved here.
+    const { profileId, cookedOn, ...rest } = data;
+    await db.update(recipeLogs).set(log.mealId === null ? { ...rest, profileId, cookedOn } : rest).where(eq(recipeLogs.id, logId));
   } catch (err) {
     return problem(err);
   }
@@ -348,63 +347,57 @@ function refreshMeal(id: number, recipeIds: number[]) {
   for (const r of recipeIds) revalidatePath(`/recipes/${r}`);
 }
 
-/** Saves one person's meal stars and one cook log entry per recipe; a recipe's entry keeps its notes when re-rated. */
-async function saveMealRatings(meal: { id: number; cookedOn: string; recipeIds: number[] }, input: unknown) {
+type MealStars = { profileId: number; rating: number | null; notes: string | null; dishes: { recipe_id: number; rating: number | null }[] };
+
+/** One person's stars for a meal, checked, for someone this login may rate for. */
+async function parseMealStars(input: unknown): Promise<MealStars> {
   if (!isRecord(input) || !Number.isInteger(input.profileId)) throw new Error("Pick whose stars these are.");
   const profileId = input.profileId as number;
   await requireEditorFor(profileId);
-  const rating = stars(input.rating);
-  const notes = text(input.notes, RECIPE_LIMITS.text);
-  const given = new Map<number, number | null>();
-  for (const d of Array.isArray(input.dishes) ? input.dishes : []) {
-    if (isRecord(d) && Number.isInteger(d.recipeId)) given.set(d.recipeId as number, stars(d.rating));
-  }
-  const versions = await db
-    .select({ id: recipes.id, version: recipes.version })
-    .from(recipes)
-    .where(and(eq(recipes.groupId, await requireGroupId()), inArray(recipes.id, meal.recipeIds)));
-  const whole =
-    rating === null && notes === null
-      ? db.delete(mealRatings).where(and(eq(mealRatings.mealId, meal.id), eq(mealRatings.profileId, profileId)))
-      : db
-          .insert(mealRatings)
-          .values({ mealId: meal.id, profileId, rating, notes })
-          .onConflictDoUpdate({ target: [mealRatings.mealId, mealRatings.profileId], set: { rating, notes } });
-  const dishes = versions.map((r) => {
-    const dish = given.get(r.id) ?? null;
-    return db
-      .insert(recipeLogs)
-      .values({ recipeId: r.id, recipeVersion: r.version, profileId, cookedOn: meal.cookedOn, rating: dish, mealId: meal.id })
-      .onConflictDoUpdate({
-        target: [recipeLogs.mealId, recipeLogs.profileId, recipeLogs.recipeId],
-        targetWhere: sql`${recipeLogs.mealId} is not null`,
-        set: { rating: dish },
-      });
-  });
-  await db.batch([whole, ...dishes]);
+  const dishes = (Array.isArray(input.dishes) ? input.dishes : []).flatMap((d: unknown) =>
+    isRecord(d) && Number.isInteger(d.recipeId) ? [{ recipe_id: d.recipeId as number, rating: stars(d.rating) }] : [],
+  );
+  return { profileId, rating: stars(input.rating), notes: text(input.notes, RECIPE_LIMITS.text), dishes: dishes.slice(0, RECIPE_LIMITS.dishes) };
 }
 
-/** Logs a meal with the logger's stars, then opens it. */
+/** One person's meal stars as one batch: lock the meal, save its stars, then an entry per recipe it holds now, on its day. */
+function mealStarWrites(mealId: number, s: MealStars) {
+  const lock = db.select({ id: meals.id }).from(meals).where(eq(meals.id, mealId)).for("update");
+  const whole =
+    s.rating === null && s.notes === null
+      ? db.delete(mealRatings).where(and(eq(mealRatings.mealId, mealId), eq(mealRatings.profileId, s.profileId)))
+      : db
+          .insert(mealRatings)
+          .values({ mealId, profileId: s.profileId, rating: s.rating, notes: s.notes })
+          .onConflictDoUpdate({ target: [mealRatings.mealId, mealRatings.profileId], set: { rating: s.rating, notes: s.notes } });
+  const dishes = db.execute(sql`
+    INSERT INTO recipe_logs (recipe_id, recipe_version, profile_id, cooked_on, rating, meal_id)
+    SELECT r.id, r.version, ${s.profileId}, m.cooked_on, d.rating, m.id
+    FROM meals m
+    CROSS JOIN LATERAL jsonb_array_elements_text(m.recipe_ids) AS e(recipe_id)
+    JOIN recipes r ON r.id = e.recipe_id::int AND r.group_id = m.group_id
+    LEFT JOIN jsonb_to_recordset(${JSON.stringify(s.dishes)}::jsonb) AS d(recipe_id int, rating int) ON d.recipe_id = r.id
+    WHERE m.id = ${mealId}
+    ON CONFLICT (meal_id, profile_id, recipe_id) WHERE meal_id IS NOT NULL DO UPDATE SET rating = EXCLUDED.rating`);
+  return [lock, whole, dishes] as const;
+}
+
+/** Logs a meal and the logger's stars in one batch, then opens it. */
 export async function logMeal(input: MealInput, ratings: MealRatingsInput): Promise<RecipeSaveResult> {
   await requireApp("recipes");
   await requireEditor();
   let id: number;
   try {
     const data = await parseMeal(input);
-    if (!isRecord(ratings) || !Number.isInteger(ratings.profileId)) throw new Error("Pick whose stars these are.");
-    await requireEditorFor(ratings.profileId as number);
-    const [row] = await db
-      .insert(meals)
-      .values({ ...data, groupId: await requireGroupId(), createdByProfileId: (await getActiveProfile())?.id ?? null })
-      .returning({ id: meals.id });
-    const mealId = row!.id;
-    id = mealId;
-    // A failed save takes the new meal back out, so trying again never makes a second one.
-    await saveMealRatings({ id: mealId, ...data }, ratings).catch(async (err: unknown) => {
-      await db.delete(meals).where(eq(meals.id, mealId));
-      throw err;
-    });
-    refreshMeal(mealId, data.recipeIds);
+    const starsFor = await parseMealStars(ratings);
+    // The id comes first so the meal and its stars save together; a failure saves neither.
+    const next = await db.execute<{ id: number }>(sql`SELECT nextval(pg_get_serial_sequence('meals', 'id'))::int AS id`);
+    id = next.rows[0]!.id;
+    await db.batch([
+      db.insert(meals).values({ ...data, id, groupId: await requireGroupId(), createdByProfileId: (await getActiveProfile())?.id ?? null }),
+      ...mealStarWrites(id, starsFor),
+    ]);
+    refreshMeal(id, data.recipeIds);
   } catch (err) {
     return problem(err);
   }
@@ -447,7 +440,7 @@ export async function rateMeal(id: number, ratings: MealRatingsInput): Promise<R
   const meal = await getMeal(id);
   if (!meal) return { error: "That meal is gone." };
   try {
-    await saveMealRatings(meal, ratings);
+    await db.batch([...mealStarWrites(id, await parseMealStars(ratings))]);
   } catch (err) {
     return problem(err);
   }

@@ -17,6 +17,7 @@ import { deleteCookLog, logCook, updateCookLog, type CookLogInput } from "@/app/
 import type { RecipeLogEntry } from "@/lib/queries/recipes";
 import { skinScope, skinSx } from "./RecipesSkin";
 import StarInput from "./StarInput";
+import { useSave } from "./useSave";
 import { color } from "./tokens";
 
 /** Someone in the household, and whether this login may log for them. */
@@ -52,17 +53,8 @@ export default function CookLogDialog({
   const [wentWrong, setWentWrong] = React.useState(entry ? !entry.counted : false);
   const [notes, setNotes] = React.useState(entry?.notes ?? "");
   const [made, setMade] = React.useState(entry?.servings?.toString() ?? madeDefault?.toString() ?? "");
-  const [error, setError] = React.useState<string | null>(null);
-  const [busy, start] = React.useTransition();
+  const { error, busy, run } = useSave(onClose);
   const inMeal = entry ? entry.mealId !== null : false;
-
-  const run = (work: () => Promise<{ error: string } | undefined>) =>
-    start(async () => {
-      setError(null);
-      const result = await work();
-      if (result?.error) setError(result.error);
-      else onClose();
-    });
 
   const save = (e: React.FormEvent) => {
     e.preventDefault();
