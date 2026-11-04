@@ -284,7 +284,7 @@ export default function RecipeView({
               {stepper}
               {unitsRow}
             </Box>
-            <GlanceTable table={table} ingredients={recipe.ingredients} steps={recipe.steps} factor={factor} units={units} />
+            <GlanceTable table={table} ingredients={recipe.ingredients} steps={recipe.steps} factor={factor} units={units} linked={linked} />
           </Box>
         ) : (
         <Box sx={{ display: "grid", gap: { xs: 3, md: 4 }, gridTemplateColumns: { xs: "1fr", md: "minmax(220px, 1fr) 2fr" }, alignItems: "start", mt: { xs: 3, md: 4 } }}>

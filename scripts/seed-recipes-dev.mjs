@@ -326,7 +326,7 @@ async function main() {
       await sql`INSERT INTO meal_ratings (meal_id, profile_id, rating, notes) VALUES (${row.id}, ${who.get(name)}, ${stars}, ${notes})`;
       for (const [i, recipeId] of ids.entries()) {
         await sql`INSERT INTO recipe_logs (recipe_id, recipe_version, profile_id, cooked_on, rating, meal_id)
-                  VALUES (${recipeId}, 1, ${who.get(name)}, ${m.cookedOn}, ${dishes[i]}, ${row.id})`;
+                  SELECT id, version, ${who.get(name)}, ${m.cookedOn}, ${dishes[i]}, ${row.id} FROM recipes WHERE id = ${recipeId}`;
       }
     }
     console.log(`added meal ${m.name}`);

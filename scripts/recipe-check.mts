@@ -9,7 +9,7 @@ import { recipeFromHtml, recipeFromPageText, recipeFromText, isoMinutes, textMin
 import { splitPasted, webUrl } from "../lib/recipes.ts";
 import { batchesOf, formatAmount, showIngredient, showShare, showTemperatures, withAmount } from "../lib/recipe-units.ts";
 import { ingredientLines, toIngredients, toSteps } from "../components/recipes/lines.ts";
-import { shortName, sharesOf, suggestUses } from "../lib/recipe-links.ts";
+import { lineForUse, shortName, sharesOf, suggestUses } from "../lib/recipe-links.ts";
 import { summarizeRatings, type RatingLog } from "../lib/recipe-ratings.ts";
 import { checkUrl, isPrivateAddress, readBody, safeFetchText, SafeFetchError } from "../lib/safe-fetch.ts";
 import http from "node:http";
@@ -125,6 +125,9 @@ eq("short names", ["1 can (14 oz) diced tomatoes", "2 cloves garlic, minced", "1
 eq("shares", sharesOf("i3", linkSteps), [{ step: 2, amount: "1" }, { step: 4, amount: "1" }]);
 eq("share keeps the line's own equivalent", [withAmount("1 cup (150 g) all-purpose flour", "1/2"), showShare("1 cup (150 g) all-purpose flour", "1/2", 1, "metric"), showShare("4 large eggs", "2", 2, "us")], ["1/2 cup (75 g) all-purpose flour", "75 g", "4"]);
 eq("links keep their notes", toSteps([{ key: "s1", text: "Mix" }], [], { s1: [{ ingredientId: "i1", note: "the dry part" }, { ingredientId: "i2", amount: " 2 ", note: "n" }] })[0]!.uses, [{ ingredientId: "i1", note: "the dry part" }, { ingredientId: "i2", note: "n", amount: "2" }]);
+const eggs = { id: "e", text: "2 eggs" };
+const eggSteps = [{ id: "s1", text: "Beat", uses: [{ ingredientId: "e", amount: "1" }] }, { id: "s2", text: "Brush", uses: [{ ingredientId: "e" }] }];
+eq("a use with no share after a share is the rest", [lineForUse(eggs, "1", eggSteps), lineForUse(eggs, undefined, eggSteps), lineForUse(eggs, undefined, [eggSteps[1]!])], ["1 egg", "Rest of the eggs", "2 eggs"]);
 eq("with amount", [withAmount("4 large eggs", "2"), withAmount("2 cups flour", "1"), withAmount("2 cups flour", "2 tbsp"), withAmount("1/2 cup (115 g) butter", "1/4")], ["2 large eggs", "1 cup flour", "2 tbsp flour", "1/4 cup (58 g) butter"]);
 
 // ── Recipes inside recipes ────────────────────────────────────────────────────

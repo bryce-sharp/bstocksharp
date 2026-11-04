@@ -6,7 +6,9 @@ import ButtonBase from "@mui/material/ButtonBase";
 import Typography from "@mui/material/Typography";
 import type { RecipeIngredient, RecipeStep } from "@/lib/recipes";
 import { stepLabel, type RecipeTable } from "@/lib/recipe-table";
-import { showIngredient, showTemperatures, withAmount, type UnitSystem } from "@/lib/recipe-units";
+import { lineForUse } from "@/lib/recipe-links";
+import { batchesOf, showIngredient, showTemperatures, type UnitSystem } from "@/lib/recipe-units";
+import RecipeLink from "./RecipeLink";
 import { color } from "./tokens";
 
 /** The At a glance table: ingredient uses down the left, each step a cell spanning what it combines; a tap reads the step. */
@@ -16,12 +18,14 @@ export default function GlanceTable({
   steps,
   factor,
   units,
+  linked,
 }: {
   table: RecipeTable;
   ingredients: RecipeIngredient[];
   steps: RecipeStep[];
   factor: number;
   units: UnitSystem;
+  linked: Record<number, string>;
 }) {
   const [picked, setPicked] = React.useState<string | null>(null);
   const [pointed, setPointed] = React.useState<string | null>(null);
@@ -57,9 +61,11 @@ export default function GlanceTable({
           ))}
           {table.rows.map((r, i) => {
             const ing = byId.get(r.ingredientId)!;
+            const inner = ing.recipeId !== undefined ? linked[ing.recipeId] : undefined;
             return (
-              <Box key={`row-${i}`} sx={{ ...box, gridColumn: 1, gridRow: top + i + 1, ...(lit(i) ? { bgcolor: color.highlight } : {}) }}>
-                {showIngredient(r.amount ? withAmount(ing.text, r.amount) : ing.text, factor, units)}
+              <Box key={`row-${i}`} sx={{ ...box, flexDirection: "column", alignItems: "flex-start", justifyContent: "center", gridColumn: 1, gridRow: top + i + 1, ...(lit(i) ? { bgcolor: color.highlight } : {}) }}>
+                {showIngredient(lineForUse(ing, r.amount, steps), factor, units)}
+                {inner && <RecipeLink id={ing.recipeId!} title={inner} scale={batchesOf(ing.text) * factor} sx={{ ml: 0, mb: 0, mt: 0.25 }} />}
               </Box>
             );
           })}

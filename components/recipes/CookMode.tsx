@@ -14,7 +14,8 @@ import ListAltIcon from "@mui/icons-material/ListAlt";
 import TimerOutlinedIcon from "@mui/icons-material/TimerOutlined";
 import { useWakeLock } from "@/components/shared/useWakeLock";
 import { formatClock, stepTimers, type RecipeIngredient, type RecipeStep } from "@/lib/recipes";
-import { batchesOf, showIngredient, showTemperatures, withAmount, type UnitSystem } from "@/lib/recipe-units";
+import { lineForUse } from "@/lib/recipe-links";
+import { batchesOf, showIngredient, showTemperatures, type UnitSystem } from "@/lib/recipe-units";
 import RecipeLink from "./RecipeLink";
 import { skinScope, skinSx } from "./RecipesSkin";
 import { color, plaidBand, radius } from "./tokens";
@@ -275,7 +276,7 @@ export default function CookMode({
                         const ing = ingredients.find((x) => x.id === u.ingredientId)!;
                         return (
                           <Box component="li" key={u.ingredientId} sx={{ px: 1.5, py: 0.5, borderRadius: 999, bgcolor: color.highlight, fontSize: { xs: 16, md: 18 }, fontWeight: 600 }}>
-                            {showIngredient(u.amount ? withAmount(ing.text, u.amount) : ing.text, factor, units)}
+                            {showIngredient(lineForUse(ing, u.amount, steps), factor, units)}
                           </Box>
                         );
                       })}

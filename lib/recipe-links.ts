@@ -2,7 +2,7 @@
 // shares read (docs/recipes/plan.md, "Step links, splits and highlighting"). Pure.
 
 import type { RecipeIngredient, RecipeStep, RecipeUse } from "@/lib/recipes";
-import { withoutAmount } from "@/lib/recipe-units";
+import { withAmount, withoutAmount } from "@/lib/recipe-units";
 
 // Words that describe an ingredient without naming it.
 const STOP = new Set(
@@ -83,6 +83,14 @@ export type Share = { step: number; amount?: string };
 /** Where an ingredient goes: each step that uses it, in order, with that step's amount when only part is used. */
 export function sharesOf(ingredientId: string, steps: RecipeStep[]): Share[] {
   return steps.flatMap((s, i) => (s.uses ?? []).filter((u) => u.ingredientId === ingredientId).map((u) => ({ step: i + 1, ...(u.amount ? { amount: u.amount } : {}) })));
+}
+
+/** The line a step's use reads as: its share, the rest when another step takes a share, or the whole line. */
+export function lineForUse(ingredient: RecipeIngredient, amount: string | undefined, steps: RecipeStep[]): string {
+  if (amount) return withAmount(ingredient.text, amount);
+  if (!sharesOf(ingredient.id, steps).some((s) => s.amount)) return ingredient.text;
+  const name = withoutAmount(ingredient.text);
+  return `Rest of the ${name.charAt(0).toLowerCase()}${name.slice(1)}`;
 }
 
 /** The uses that still point at an ingredient of the recipe. */
