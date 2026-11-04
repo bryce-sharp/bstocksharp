@@ -6,14 +6,14 @@ built 2026-11-04; PR 5 (units) and PR 6 (step links) built 2026-11-04. The dev m
 stays as the reference for the table view.
 
 Decided: a Recipes section of this site, shared by the household; anyone in the household edits any recipe, and
-there are no private recipes; ratings and favorites belong to each person; grocery lists wait until later; the
+there are no private recipes or personal copies of one; ratings and favorites belong to each person; grocery lists wait until later; the
 look is **Sage & Butter** (below); the section is called **Recipes** for now.
 
 ## The idea
 
 A household cookbook that remembers how each recipe went. You save your own recipes or import them from a link,
 cook them step by step with timers, and log each time you make one, with your own stars and notes. Recipes can
-use other recipes, belong to meals, and grow into your own versions.
+use other recipes and belong to meals.
 
 ## The look: Sage & Butter
 
@@ -50,7 +50,6 @@ quiet pattern, soft colors, friendly type that stays easy to read.
 | Cook log entry | One person cooking a recipe once: date, stars (optional), notes, servings made. |
 | Meal | One dinner or occasion ("Thanksgiving 2026") that groups several cook log entries, with its own notes. |
 | Saved menu | A reusable set of recipes ("Burger night"), started again as a meal. |
-| My version | A copy of a recipe you change freely, linked to the one it came from. |
 
 ## How it behaves
 
@@ -76,7 +75,7 @@ quiet pattern, soft colors, friendly type that stays easy to read.
 
 ### Search and filters
 - Search covers titles, tags, ingredients and log notes.
-- Filters: favorites, tags, not tried yet, 4 stars and up, mine (written here) or from a site, my versions,
+- Filters: favorites, tags, not tried yet, 4 stars and up, mine (written here) or from a site,
   recently cooked.
 
 ### Scaling and units
@@ -133,10 +132,6 @@ quiet pattern, soft colors, friendly type that stays easy to read.
 - A saved menu is a meal you can start again. Starting it begins a **multi-recipe cook mode**: every recipe's
   steps in tabs, one shared timer tray, and one read-through for the whole meal.
 
-### My version
-- "Make my version" copies a recipe into an editable one, linked to its original ("Based on Lemon garlic
-  chicken"). Logs stay with the version you cooked.
-
 ### Import from a link
 - Reads the page's standard recipe data (schema.org Recipe, JSON-LD), then shows it for review before saving.
 - A new safe-fetch helper does the fetching: web addresses only, private and local network addresses refused
@@ -164,7 +159,7 @@ whole. Ingredient and step ids are stable from the first PR, so uses, links and 
 
 | Table | Columns |
 | --- | --- |
-| `recipes` | id, groupId, createdByProfileId, version, title, description, servings, prepMin, cookMin, notes, tags (jsonb), sourceKind (`mine` · `imported` · `version`), sourceUrl, sourceName, imageUrl, basedOnRecipeId, ingredients (jsonb), steps (jsonb), createdAt, updatedAt |
+| `recipes` | id, groupId, createdByProfileId, version, title, description, servings, prepMin, cookMin, notes, tags (jsonb), sourceKind (`mine` · `imported`), sourceUrl, sourceName, imageUrl, ingredients (jsonb), steps (jsonb), createdAt, updatedAt |
 | `recipe_favorites` | profileId, recipeId (unique together) |
 | `recipe_logs` | id, recipeId, recipeVersion, profileId, cookedOn, rating (1 to 5, optional), counted (false when something went wrong), notes, servings, mealId, createdAt |
 | `meals` | id, groupId, name, cookedOn, notes, menuId, createdByProfileId, createdAt |
@@ -196,7 +191,7 @@ reads it merges.
 - **Phase 2: smarter recipes**
   - [x] PR 5: units: As written, US or Metric per person; sensible units when scaling; baking weights.
   - [x] PR 6: step links: uses, splits, highlighting, suggested links in edit mode.
-  - [ ] PR 7: My version.
+  - PR 7 (My version) dropped 2026-11-04: no personal copies of recipes.
   - [ ] PR 8: recipes inside recipes: the edit-mode picker, scaling through.
   - [ ] PR 9: meals: log a meal, meal page, meal ratings.
 - **Phase 3: the fancy parts**

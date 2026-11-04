@@ -35,7 +35,6 @@ async function main() {
       source_url text,
       source_name varchar(160),
       image_url text,
-      based_on_recipe_id integer CONSTRAINT recipes_based_on_recipe_id_recipes_id_fk REFERENCES recipes(id) ON DELETE SET NULL,
       ingredients jsonb NOT NULL DEFAULT '[]'::jsonb,
       steps jsonb NOT NULL DEFAULT '[]'::jsonb,
       created_at timestamptz NOT NULL DEFAULT now(),

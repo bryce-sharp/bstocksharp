@@ -1327,11 +1327,10 @@ export const recipes = pgTable(
     cookMin: integer("cook_min"),
     notes: text("notes"),
     tags: jsonb("tags").$type<string[]>().notNull().default([]),
-    sourceKind: varchar("source_kind", { length: 20 }).notNull().default("mine"), // mine | imported | version
+    sourceKind: varchar("source_kind", { length: 20 }).notNull().default("mine"), // mine | imported
     sourceUrl: text("source_url"),
     sourceName: varchar("source_name", { length: 160 }),
     imageUrl: text("image_url"),
-    basedOnRecipeId: integer("based_on_recipe_id").references((): AnyPgColumn => recipes.id, { onDelete: "set null" }),
     ingredients: jsonb("ingredients").$type<RecipeIngredient[]>().notNull().default([]),
     steps: jsonb("steps").$type<RecipeStep[]>().notNull().default([]),
     createdAt: createdAt(),
