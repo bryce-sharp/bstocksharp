@@ -82,9 +82,10 @@ export default function RecipeView({
   const [dialog, setDialog] = React.useState<LogDialog>(null);
   const canLog = new Set(cooks.filter((c) => c.canLog).map((c) => c.id));
   const nameOf = new Map(logs.map((l) => [l.profileId, { name: l.person, color: l.color }]));
-  // Without servings the recipe scales by batches: 1/2, 1, 1 1/2, 2.
-  const base = recipe.servings ?? 1;
-  const stepBy = recipe.servings ? 1 : 0.5;
+  // Without servings the recipe scales by batches: 1/2, 1, 1 1/2, 2. A stored 0 counts as unknown.
+  const servings = recipe.servings && recipe.servings > 0 ? recipe.servings : null;
+  const base = servings ?? 1;
+  const stepBy = servings ? 1 : 0.5;
   const [amount, setAmount] = React.useState(base);
   const factor = amount / base;
   const [gotIngredient, toggleIngredient] = useChecklist();
@@ -195,7 +196,7 @@ export default function RecipeView({
                   <RemoveIcon fontSize="small" />
                 </IconButton>
                 <Typography variant="body2" aria-live="polite" sx={{ minWidth: 92, textAlign: "center", fontWeight: 600 }}>
-                  {recipe.servings ? `${amount} ${amount === 1 ? "serving" : "servings"}` : `${formatAmount(amount)} ${amount === 1 ? "batch" : "batches"}`}
+                  {servings ? `${amount} ${amount === 1 ? "serving" : "servings"}` : `${formatAmount(amount)} ${amount === 1 ? "batch" : "batches"}`}
                 </Typography>
                 <IconButton size="small" aria-label="More" disabled={amount >= base * 20} onClick={() => setAmount((a) => a + stepBy)}>
                   <AddIcon fontSize="small" />
@@ -204,7 +205,7 @@ export default function RecipeView({
             </Box>
             {factor !== 1 && (
               <Button size="small" onClick={() => setAmount(base)} sx={{ mb: 1, px: 1 }}>
-                Back to {recipe.servings ? `${base} servings` : "1 batch"}
+                Back to {servings ? `${base} servings` : "1 batch"}
               </Button>
             )}
             {recipe.ingredients.length === 0 ? (
@@ -308,7 +309,7 @@ export default function RecipeView({
           cooks={cooks}
           defaultCook={defaultCook}
           today={today}
-          servings={recipe.servings}
+          servings={servings}
         />
       )}
     </Container>

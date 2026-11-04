@@ -90,9 +90,10 @@ export function formatAmount(n: number): string {
   return whole ? `${whole} ${text}` : text;
 }
 
-// The same amount in another unit, right after the first: the "(115 g)" in "1/2 cup (115 g) butter". Without a unit
-// word before it, a parenthesis is a package size ("2 (14 oz) cans") and stays as it is.
-const EQUIVALENT = new RegExp(String.raw`^(\s*[a-z.]+\s*\(\s*)(${NUMBER})(?:\s*(?:-|–|to)\s*(${NUMBER}))?`, "i");
+// The same amount in another unit, right after a measuring unit: the "(115 g)" in "1/2 cup (115 g) butter". After
+// a count word or none ("1 can (14 oz)", "2 (14 oz) cans") the parenthesis is a package size and stays as it is.
+const UNITS = String.raw`cups?|c|tablespoons?|tbsps?|tbs|tb|teaspoons?|tsps?|t|ounces?|oz|fl\.?\s*oz|pounds?|lbs?|grams?|g|kilograms?|kgs?|kg|milliliters?|millilitres?|ml|liters?|litres?|l|pints?|pt|quarts?|qt|gallons?|gal|sticks?`;
+const EQUIVALENT = new RegExp(String.raw`^(\s*(?:${UNITS})\.?\s*\(\s*)(${NUMBER})(?:\s*(?:-|–|to)\s*(${NUMBER}))?`, "i");
 
 function scaled(low: string, high: string | undefined, factor: number): string {
   const a = formatAmount(toNumber(low) * factor);

@@ -39,12 +39,12 @@ function text(v: unknown, max: number): string | null {
   return t ? t.slice(0, max) : null;
 }
 
-/** A whole number from 0 to `max`, or null when blank; throws on anything else. */
-function count(v: unknown, label: string, max: number): number | null {
+/** A whole number from `min` to `max`, or null when blank; throws on anything else. */
+function count(v: unknown, label: string, max: number, min = 0): number | null {
   const t = typeof v === "string" ? v.trim() : "";
   if (!t) return null;
   const n = Number(t);
-  if (!Number.isInteger(n) || n < 0 || n > max) throw new Error(`${label} must be a whole number from 0 to ${max}.`);
+  if (!Number.isInteger(n) || n < min || n > max) throw new Error(`${label} must be a whole number from ${min} to ${max}.`);
   return n;
 }
 
@@ -123,7 +123,7 @@ function parseRecipe(input: unknown) {
   return {
     title,
     description: text(input.description, RECIPE_LIMITS.text),
-    servings: count(input.servings, "Servings", 999),
+    servings: count(input.servings, "Servings", 999, 1),
     prepMin: count(input.prepMin, "Prep time", 10_000),
     cookMin: count(input.cookMin, "Cook time", 10_000),
     notes: text(input.notes, RECIPE_LIMITS.text),
@@ -228,7 +228,7 @@ function parseLog(input: unknown) {
     rating,
     counted: input.wentWrong !== true,
     notes: text(input.notes, RECIPE_LIMITS.text),
-    servings: count(input.servings, "Servings", 999),
+    servings: count(input.servings, "Servings made", 999, 1),
   };
 }
 

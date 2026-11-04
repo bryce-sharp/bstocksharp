@@ -9,13 +9,9 @@ import AddIcon from "@mui/icons-material/Add";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import CloseIcon from "@mui/icons-material/Close";
-import { newLineId, splitPasted } from "@/lib/recipes";
+import { splitPasted } from "@/lib/recipes";
+import { blankLine, type Line } from "./lines";
 import { color } from "./tokens";
-
-/** One editable line: an ingredient, a step, or a heading over the ingredients below it. */
-export type Line = { key: string; text: string; heading?: boolean };
-
-export const blankLine = (heading = false): Line => ({ key: newLineId(), text: "", ...(heading ? { heading } : {}) });
 
 /**
  * A list of lines typed like a list: Enter starts the next line, Backspace on an empty line removes it, and
@@ -86,7 +82,7 @@ export default function LineEditor({
               size="small"
               multiline={kind === "step"}
               value={line.text}
-              placeholder={line.heading ? "Heading, like For the sauce" : kind === "step" ? "What to do" : "1 cup (125 g) flour"}
+              placeholder={line.heading ? "Heading, like For the sauce, or blank to end the one above" : kind === "step" ? "What to do" : "1 cup (125 g) flour"}
               inputRef={(el: HTMLInputElement | HTMLTextAreaElement | null) => {
                 if (el) inputs.current.set(line.key, el);
                 else inputs.current.delete(line.key);

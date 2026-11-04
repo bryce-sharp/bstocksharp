@@ -16,43 +16,11 @@ import Link from "@/components/shared/AppLink";
 import { addRecipe, deleteRecipe, updateRecipe, type RecipeInput } from "@/app/actions/recipes";
 import type { Recipe } from "@/lib/db/schema";
 import { cleanTags, type RecipeIngredient, type RecipeStep } from "@/lib/recipes";
-import LineEditor, { blankLine, type Line } from "./LineEditor";
+import LineEditor from "./LineEditor";
+import { blankLine, ingredientLines, toIngredients, toSteps, type Line } from "./lines";
 import { skinScope, skinSx } from "./RecipesSkin";
 import TagChip from "./TagChip";
 import { color } from "./tokens";
-
-/** Ingredients as editor lines, with a heading line wherever the group changes. */
-function ingredientLines(ingredients: RecipeIngredient[]): Line[] {
-  const lines: Line[] = [];
-  let group: string | undefined;
-  for (const ing of ingredients) {
-    if (ing.group && ing.group !== group) lines.push({ ...blankLine(true), text: ing.group });
-    group = ing.group;
-    lines.push({ key: ing.id, text: ing.text });
-  }
-  return lines.length ? lines : [blankLine()];
-}
-
-/** Editor lines back into ingredients: each one under the heading above it, keeping fields this form does not edit. */
-function toIngredients(lines: Line[], before: RecipeIngredient[]): RecipeIngredient[] {
-  const old = new Map(before.map((i) => [i.id, i]));
-  let group: string | undefined;
-  const out: RecipeIngredient[] = [];
-  for (const l of lines) {
-    if (l.heading) {
-      group = l.text.trim() || undefined;
-      continue;
-    }
-    const { group: _oldGroup, ...kept } = old.get(l.key) ?? { id: l.key, text: "" };
-    out.push({ ...kept, id: l.key, text: l.text, ...(group ? { group } : {}) });
-  }
-  return out;
-}
-
-function toSteps(lines: Line[], before: RecipeStep[]): RecipeStep[] {
-  const old = new Map(before.map((s) => [s.id, s]));
-  return lines.map((l) => ({ ...(old.get(l.key) ?? { id: l.key, text: "" }), id: l.key, text: l.text }));
-}
 
 /** What a cook follows: the ingredient lines with their groups and the steps, ignoring spacing. */
 const cookable = (ingredients: RecipeIngredient[], steps: RecipeStep[]) =>
