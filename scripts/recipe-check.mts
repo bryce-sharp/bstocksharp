@@ -6,7 +6,7 @@
 //   npm run recipes:check -- --live
 
 import { recipeFromHtml, recipeFromPageText, recipeFromText, isoMinutes, textMinutes, yieldServings, tidyLine, withoutIngredientEcho } from "../lib/recipe-import.ts";
-import { splitPasted, webUrl } from "../lib/recipes.ts";
+import { parseOrigin, recipeHref, splitPasted, webUrl } from "../lib/recipes.ts";
 import { batchesOf, formatAmount, showIngredient, showShare, showTemperatures, withAmount } from "../lib/recipe-units.ts";
 import { ingredientLines, toIngredients, toSteps } from "../components/recipes/lines.ts";
 import { lineForUse, shortName, sharesOf, suggestUses } from "../lib/recipe-links.ts";
@@ -135,6 +135,8 @@ eq("batches", ["2 batches Fry sauce", "1 recipe pie crust", "1/2 batch dough", "
 const withLink = [{ id: "a1", text: "1 batch Fry sauce", recipeId: 7 }, { id: "a2", text: "1 bun" }];
 eq("links survive the form", toIngredients(ingredientLines(withLink), withLink), withLink);
 eq("an unlinked line drops its link", toIngredients(ingredientLines(withLink).map(({ recipeId: _r, ...l }) => l), withLink), [{ id: "a1", text: "1 batch Fry sauce" }, { id: "a2", text: "1 bun" }]);
+eq("a recipe link carries its size and where it came from", [recipeHref(7), recipeHref(7, { scale: 2, from: { kind: "recipe", id: 3 } }), recipeHref(7, { from: { kind: "menu", id: 5 } })], ["/recipes/7", "/recipes/7?scale=2&from=recipe-3", "/recipes/7?from=menu-5"]);
+eq("only a menu or recipe origin is read", ["menu-5", "recipe-3", "menu-", "x-5", "/evil", undefined, ["menu-5", "recipe-3"]].map(parseOrigin), [{ kind: "menu", id: 5 }, { kind: "recipe", id: 3 }, null, null, null, null, null]);
 
 // ── Ratings ───────────────────────────────────────────────────────────────────
 const L = (profileId: number, cookedOn: string, rating: number | null, counted = true, recipeVersion = 1): RatingLog => ({ profileId, cookedOn, rating, counted, recipeVersion });

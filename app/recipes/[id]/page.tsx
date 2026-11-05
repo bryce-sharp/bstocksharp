@@ -3,10 +3,11 @@ import { notFound } from "next/navigation";
 import RecipeView from "@/components/recipes/RecipeView";
 import { canEditProfile } from "@/lib/auth";
 import { getActiveProfile } from "@/lib/profile";
-import { getRecipe, listCooks, listRecipeChoices, listRecipeLogs, recipeToday } from "@/lib/queries/recipes";
+import { backTo, getRecipe, listCooks, listRecipeChoices, listRecipeLogs, recipeToday } from "@/lib/queries/recipes";
+import { parseOrigin } from "@/lib/recipes";
 import { summarizeRatings } from "@/lib/recipe-ratings";
 
-type Props = { params: Promise<{ id: string }>; searchParams?: Promise<{ scale?: string }> };
+type Props = { params: Promise<{ id: string }>; searchParams?: Promise<{ scale?: string | string[]; from?: string | string[] }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const recipe = await getRecipe(Number((await params).id));
@@ -16,15 +17,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function RecipePage({ params, searchParams }: Props) {
   const id = Number((await params).id);
   // A linked recipe opens at the size the outer one needs ("?scale=2" for 2 batches).
-  const asked = Number((await searchParams)?.scale);
+  const query = await searchParams;
+  const asked = Number(query?.scale);
   const scale = Number.isFinite(asked) && asked >= 0.1 && asked <= 20 ? asked : 1;
   const person = await getActiveProfile();
-  const [recipe, canFavorite, logs, cooks, today] = await Promise.all([
+  const [recipe, canFavorite, logs, cooks, today, back] = await Promise.all([
     getRecipe(id, person?.id ?? null),
     canEditProfile(person?.id),
     listRecipeLogs(id),
     listCooks(),
     recipeToday(),
+    backTo(parseOrigin(query?.from)),
   ]);
   if (!recipe) notFound();
   const linkedIds = new Set(recipe.ingredients.flatMap((i) => (i.recipeId !== undefined ? [i.recipeId] : [])));
@@ -43,6 +46,7 @@ export default async function RecipePage({ params, searchParams }: Props) {
       units={person?.recipeUnits ?? "written"}
       linked={linked}
       scale={scale}
+      back={back}
     />
   );
 }

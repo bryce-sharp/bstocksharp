@@ -1,11 +1,12 @@
 import "server-only";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { mealRatings, meals, profiles, recipeFavorites, recipeLogs, recipes } from "@/lib/db/schema";
+import { mealRatings, meals, menus, profiles, recipeFavorites, recipeLogs, recipes } from "@/lib/db/schema";
 import { requireGroupId } from "@/lib/session";
 import { getGroupTimezone } from "@/lib/queries/group";
-import { todayISO } from "@/lib/finance/parse";
+import { dateInTz, todayISO } from "@/lib/finance/parse";
 import { summarizeRatings, type RatingSummary } from "@/lib/recipe-ratings";
+import type { RecipeOrigin } from "@/lib/recipes";
 import { canEditProfile } from "@/lib/auth";
 import { listProfiles } from "@/lib/queries/profiles";
 
@@ -121,12 +122,14 @@ export async function listRecipeLogs(recipeId: number) {
       person: profiles.name,
       color: profiles.color,
       mealId: recipeLogs.mealId,
-      meal: meals.name,
+      menuId: meals.menuId,
+      menu: menus.name,
     })
     .from(recipeLogs)
     .innerJoin(recipes, eq(recipes.id, recipeLogs.recipeId))
     .innerJoin(profiles, eq(profiles.id, recipeLogs.profileId))
     .leftJoin(meals, eq(meals.id, recipeLogs.mealId))
+    .leftJoin(menus, eq(menus.id, meals.menuId))
     .where(and(eq(recipeLogs.recipeId, recipeId), eq(recipes.groupId, groupId)))
     .orderBy(desc(recipeLogs.recipeVersion), desc(recipeLogs.cookedOn), desc(recipeLogs.id));
 }
@@ -169,70 +172,118 @@ export async function findRecipeBySource(sourceUrl: string): Promise<{ id: numbe
   return row ?? null;
 }
 
-// ── Meals ─────────────────────────────────────────────────────────────────────
+// ── Menus ─────────────────────────────────────────────────────────────────────
 
-/** The household's meals, newest first, with their recipe count and each person's stars for the whole meal. */
-export async function listMeals() {
+const average = (stars: number[]) => (stars.length ? stars.reduce((a, b) => a + b, 0) / stars.length : null);
+
+/** The household's menus, most recently made or added first, with how often they were made and their whole-meal stars. */
+export async function listMenus() {
   const groupId = await requireGroupId();
-  const [rows, ratings] = await Promise.all([
+  const [rows, made, ratings, choices, tz] = await Promise.all([
+    db.select({ id: menus.id, name: menus.name, recipeIds: menus.recipeIds, createdAt: menus.createdAt }).from(menus).where(eq(menus.groupId, groupId)),
+    db.select({ menuId: meals.menuId, cookedOn: meals.cookedOn }).from(meals).where(eq(meals.groupId, groupId)),
     db
-      .select({ id: meals.id, name: meals.name, cookedOn: meals.cookedOn, recipeIds: meals.recipeIds })
-      .from(meals)
-      .where(eq(meals.groupId, groupId))
-      .orderBy(desc(meals.cookedOn), desc(meals.id)),
-    db
-      .select({ mealId: mealRatings.mealId, rating: mealRatings.rating })
+      .select({ menuId: meals.menuId, rating: mealRatings.rating })
       .from(mealRatings)
       .innerJoin(meals, eq(meals.id, mealRatings.mealId))
       .where(eq(meals.groupId, groupId)),
+    listRecipeChoices(),
+    getGroupTimezone(groupId),
   ]);
-  const titles = new Map((await listRecipeChoices()).map((c) => [c.id, c.title]));
-  return rows.map((m) => {
-    const stars = ratings.flatMap((r) => (r.mealId === m.id && r.rating !== null ? [r.rating] : []));
-    return {
-      id: m.id,
-      name: m.name,
-      cookedOn: m.cookedOn,
-      dishes: m.recipeIds.flatMap((id) => titles.get(id) ?? []),
-      stars: stars.length ? stars.reduce((a, b) => a + b, 0) / stars.length : null,
-    };
-  });
+  const titles = new Map(choices.map((c) => [c.id, c.title]));
+  return rows
+    .map((m) => {
+      const days = made.flatMap((t) => (t.menuId === m.id ? [t.cookedOn] : [])).sort();
+      return {
+        id: m.id,
+        name: m.name,
+        dishes: m.recipeIds.flatMap((id) => titles.get(id) ?? []),
+        timesMade: days.length,
+        lastMade: days.at(-1) ?? null,
+        stars: average(ratings.flatMap((r) => (r.menuId === m.id && r.rating !== null ? [r.rating] : []))),
+        addedOn: dateInTz(m.createdAt.getTime(), tz),
+      };
+    })
+    .sort((a, b) => (b.lastMade ?? b.addedOn).localeCompare(a.lastMade ?? a.addedOn) || b.id - a.id);
 }
 
-export type MealSummary = Awaited<ReturnType<typeof listMeals>>[number];
+export type MenuSummary = Awaited<ReturnType<typeof listMenus>>[number];
 
-/** One of our meals with its recipes in order, everyone's cook log entries for them, and everyone's meal stars. */
+/** The back button for a recipe opened from one of our menus or recipes; null when that page is gone. */
+export async function backTo(from: RecipeOrigin | null): Promise<{ href: string; label: string } | null> {
+  if (!from) return null;
+  const groupId = await requireGroupId();
+  const [row] =
+    from.kind === "menu"
+      ? await db.select({ name: menus.name }).from(menus).where(and(eq(menus.id, from.id), eq(menus.groupId, groupId))).limit(1)
+      : await db.select({ name: recipes.title }).from(recipes).where(and(eq(recipes.id, from.id), eq(recipes.groupId, groupId))).limit(1);
+  return row ? { href: from.kind === "menu" ? `/recipes/menus/${from.id}` : `/recipes/${from.id}`, label: `Back to ${row.name}` } : null;
+}
+
+/** One of our menus with its recipes, then each time it was made, newest first, with that time's entries and stars. */
+export async function getMenu(id: number) {
+  if (!Number.isInteger(id)) return null;
+  const groupId = await requireGroupId();
+  const [menu] = await db
+    .select()
+    .from(menus)
+    .where(and(eq(menus.id, id), eq(menus.groupId, groupId)))
+    .limit(1);
+  if (!menu) return null;
+  const times = await db.select().from(meals).where(eq(meals.menuId, id)).orderBy(desc(meals.cookedOn), desc(meals.id));
+  const mealIds = times.map((t) => t.id);
+  const recipeIds = [...new Set([...menu.recipeIds, ...times.flatMap((t) => t.recipeIds)])];
+  const [found, logs, ratings] = await Promise.all([
+    recipeIds.length
+      ? db
+          .select({ id: recipes.id, title: recipes.title, servings: recipes.servings, prepMin: recipes.prepMin, cookMin: recipes.cookMin })
+          .from(recipes)
+          .where(and(eq(recipes.groupId, groupId), inArray(recipes.id, recipeIds)))
+      : [],
+    mealIds.length
+      ? db
+          .select({ id: recipeLogs.id, mealId: recipeLogs.mealId, recipeId: recipeLogs.recipeId, profileId: recipeLogs.profileId, rating: recipeLogs.rating, counted: recipeLogs.counted, notes: recipeLogs.notes, person: profiles.name, color: profiles.color })
+          .from(recipeLogs)
+          .innerJoin(profiles, eq(profiles.id, recipeLogs.profileId))
+          .where(inArray(recipeLogs.mealId, mealIds))
+          .orderBy(asc(profiles.name))
+      : [],
+    mealIds.length
+      ? db
+          .select({ mealId: mealRatings.mealId, profileId: mealRatings.profileId, rating: mealRatings.rating, notes: mealRatings.notes, person: profiles.name, color: profiles.color })
+          .from(mealRatings)
+          .innerJoin(profiles, eq(profiles.id, mealRatings.profileId))
+          .where(inArray(mealRatings.mealId, mealIds))
+          .orderBy(asc(profiles.name))
+      : [],
+  ]);
+  const byId = new Map(found.map((r) => [r.id, r]));
+  const dishes = (ids: number[]) => ids.flatMap((r) => byId.get(r) ?? []);
+  return {
+    ...menu,
+    dishes: dishes(menu.recipeIds),
+    meals: times.map((t) => ({
+      ...t,
+      name: menu.name,
+      dishes: dishes(t.recipeIds),
+      logs: logs.filter((l) => l.mealId === t.id),
+      ratings: ratings.filter((r) => r.mealId === t.id),
+    })),
+  };
+}
+
+export type MenuDetail = NonNullable<Awaited<ReturnType<typeof getMenu>>>;
+/** One time a menu was made, as the menu page shows it. */
+export type MealDetail = MenuDetail["meals"][number];
+
+/** One time one of our menus was made, or null for another household's id. */
 export async function getMeal(id: number) {
   if (!Number.isInteger(id)) return null;
   const groupId = await requireGroupId();
   const [meal] = await db
-    .select()
+    .select({ id: meals.id, menuId: meals.menuId, recipeIds: meals.recipeIds })
     .from(meals)
     .where(and(eq(meals.id, id), eq(meals.groupId, groupId)))
     .limit(1);
-  if (!meal) return null;
-  const [found, logs, ratings] = await Promise.all([
-    meal.recipeIds.length
-      ? db
-          .select({ id: recipes.id, title: recipes.title, servings: recipes.servings })
-          .from(recipes)
-          .where(and(eq(recipes.groupId, groupId), inArray(recipes.id, meal.recipeIds)))
-      : [],
-    db
-      .select({ id: recipeLogs.id, recipeId: recipeLogs.recipeId, profileId: recipeLogs.profileId, rating: recipeLogs.rating, counted: recipeLogs.counted, notes: recipeLogs.notes, person: profiles.name, color: profiles.color })
-      .from(recipeLogs)
-      .innerJoin(profiles, eq(profiles.id, recipeLogs.profileId))
-      .where(eq(recipeLogs.mealId, id))
-      .orderBy(asc(profiles.name)),
-    db
-      .select({ profileId: mealRatings.profileId, rating: mealRatings.rating, notes: mealRatings.notes, person: profiles.name, color: profiles.color })
-      .from(mealRatings)
-      .innerJoin(profiles, eq(profiles.id, mealRatings.profileId))
-      .where(eq(mealRatings.mealId, id))
-      .orderBy(asc(profiles.name)),
-  ]);
-  const byId = new Map(found.map((r) => [r.id, r]));
-  return { ...meal, dishes: meal.recipeIds.flatMap((r) => byId.get(r) ?? []), logs, ratings };
+  return meal ?? null;
 }
-
-export type MealDetail = NonNullable<Awaited<ReturnType<typeof getMeal>>>;

@@ -1,9 +1,9 @@
-// Dev only: fills a household's Recipes with real-looking recipes, step links, recipes inside recipes, meals and
+// Dev only: fills a household's Recipes with real-looking recipes, step links, recipes inside recipes, menus and
 // months of cook logs from two people, for trying every Recipes screen. Refuses the live database.
 //
 //   node scripts/seed-recipes-dev.mjs            (the household with Bryce and Lauren)
 //
-// Idempotent: a recipe or meal whose name the household already has is left alone, with its logs.
+// Idempotent: a recipe or menu whose name the household already has is left alone, and a time made is added once per day.
 
 import { config } from "dotenv";
 import { neon } from "@neondatabase/serverless";
@@ -256,31 +256,36 @@ const LOGS = [
 ];
 
 // Meals: name, day, notes, recipes, then each person's [meal stars, notes, stars per recipe in order].
-const MEALS = [
+// Menus with the times they were made; ratings are { person: [meal stars, notes, stars for each recipe] }.
+const MENUS = [
   {
     name: "Burger night",
-    cookedOn: "2026-10-18",
-    notes: "Watched the game",
+    notes: "Make the fry sauce first so it can sit",
     recipes: ["Smash burgers", "Fry sauce"],
-    ratings: { Bryce: [5, "The fry sauce made it", [5, 5]], Lauren: [4, null, [4, 5]] },
+    made: [
+      { cookedOn: "2026-10-18", notes: "Watched the game", ratings: { Bryce: [5, "The fry sauce made it", [5, 5]], Lauren: [4, null, [4, 5]] } },
+      { cookedOn: "2026-11-02", notes: null, ratings: { Bryce: [4, "Buns were a little stale", [4, 5]] } },
+    ],
   },
   {
     name: "Taco Tuesday",
-    cookedOn: "2026-10-27",
     notes: null,
     recipes: ["Chicken tacos", "Pico de gallo"],
-    ratings: { Bryce: [4, null, [4, 4]], Lauren: [5, "Pico was the star", [4, 5]] },
+    made: [{ cookedOn: "2026-10-27", notes: null, ratings: { Bryce: [4, null, [4, 4]], Lauren: [5, "Pico was the star", [4, 5]] } }],
   },
   {
     name: "Friendsgiving 2026",
-    cookedOn: "2026-11-01",
-    notes: "Eight of us; Jamie brought rolls",
+    notes: "Turkey goes in first; the pie can be made the day before",
     recipes: ["Herb roast turkey breast", "Garlic mashed potatoes", "Cranberry orange sauce", "Pumpkin pie"],
-    ratings: {
-      Bryce: [3, "Everything rich at once; next time a green salad", [5, 5, 3, 4]],
-      Lauren: [4, "Pie first, honestly", [4, 5, 4, 5]],
-    },
+    made: [
+      {
+        cookedOn: "2026-11-01",
+        notes: "Eight of us; Jamie brought rolls",
+        ratings: { Bryce: [3, "Everything rich at once; next time a green salad", [5, 5, 3, 4]], Lauren: [4, "Pie first, honestly", [4, 5, 4, 5]] },
+      },
+    ],
   },
+  { name: "Bake sale", notes: "Both freeze well, so bake ahead", recipes: ["Brown butter chocolate chip cookies", "Cinnamon swirl banana bread"], made: [] },
 ];
 
 async function main() {
@@ -316,20 +321,30 @@ async function main() {
               VALUES (${existing.get(title)}, 1, ${who.get(name)}, ${day}, ${stars}, ${!wrong}, ${notes ?? null})`;
   }
 
-  const meals = new Set((await sql`SELECT name FROM meals WHERE group_id = ${groupId}`).map((m) => m.name));
-  for (const m of MEALS) {
-    if (meals.has(m.name)) continue;
+  const menus = new Map((await sql`SELECT id, name FROM menus WHERE group_id = ${groupId}`).map((m) => [m.name, m.id]));
+  for (const m of MENUS) {
     const ids = m.recipes.map((t) => existing.get(t));
-    const [row] = await sql`INSERT INTO meals (group_id, name, cooked_on, notes, recipe_ids, created_by_profile_id)
-                            VALUES (${groupId}, ${m.name}, ${m.cookedOn}, ${m.notes}, ${JSON.stringify(ids)}::jsonb, ${who.get("Bryce")}) RETURNING id`;
-    for (const [name, [stars, notes, dishes]] of Object.entries(m.ratings)) {
-      await sql`INSERT INTO meal_ratings (meal_id, profile_id, rating, notes) VALUES (${row.id}, ${who.get(name)}, ${stars}, ${notes})`;
-      for (const [i, recipeId] of ids.entries()) {
-        await sql`INSERT INTO recipe_logs (recipe_id, recipe_version, profile_id, cooked_on, rating, meal_id)
-                  SELECT id, version, ${who.get(name)}, ${m.cookedOn}, ${dishes[i]}, ${row.id} FROM recipes WHERE id = ${recipeId}`;
-      }
+    if (!menus.has(m.name)) {
+      const [row] = await sql`INSERT INTO menus (group_id, name, notes, recipe_ids, created_by_profile_id)
+                              VALUES (${groupId}, ${m.name}, ${m.notes}, ${JSON.stringify(ids)}::jsonb, ${who.get("Bryce")}) RETURNING id`;
+      menus.set(m.name, row.id);
+      console.log(`added menu ${m.name}`);
     }
-    console.log(`added meal ${m.name}`);
+    const menuId = menus.get(m.name);
+    const days = new Set((await sql`SELECT cooked_on::text AS day FROM meals WHERE menu_id = ${menuId}`).map((r) => r.day));
+    for (const time of m.made) {
+      if (days.has(time.cookedOn)) continue;
+      const [row] = await sql`INSERT INTO meals (group_id, menu_id, cooked_on, notes, recipe_ids, created_by_profile_id)
+                              VALUES (${groupId}, ${menuId}, ${time.cookedOn}, ${time.notes}, ${JSON.stringify(ids)}::jsonb, ${who.get("Bryce")}) RETURNING id`;
+      for (const [name, [stars, notes, dishes]] of Object.entries(time.ratings)) {
+        await sql`INSERT INTO meal_ratings (meal_id, profile_id, rating, notes) VALUES (${row.id}, ${who.get(name)}, ${stars}, ${notes})`;
+        for (const [i, recipeId] of ids.entries()) {
+          await sql`INSERT INTO recipe_logs (recipe_id, recipe_version, profile_id, cooked_on, rating, meal_id)
+                    SELECT id, version, ${who.get(name)}, ${time.cookedOn}, ${dishes[i]}, ${row.id} FROM recipes WHERE id = ${recipeId}`;
+        }
+      }
+      console.log(`added ${m.name} on ${time.cookedOn}`);
+    }
   }
   console.log(`done: ${added.size} recipes added`);
 }

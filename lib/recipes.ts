@@ -100,3 +100,19 @@ export function shortDay(key: string, today: string): string {
   const day = `${MONTHS[Number(key.slice(5, 7)) - 1]} ${Number(key.slice(8, 10))}`;
   return key.slice(0, 4) === today.slice(0, 4) ? day : `${day}, ${key.slice(0, 4)}`;
 }
+
+/** The page a recipe was opened from, so its back button returns there; it rides in the link as "?from=menu-5". */
+export type RecipeOrigin = { kind: "menu" | "recipe"; id: number };
+
+/** A recipe page's address, at a size and with where it was opened from. */
+export function recipeHref(id: number, { scale = 1, from }: { scale?: number; from?: RecipeOrigin } = {}): string {
+  const size = Math.round(scale * 1000) / 1000;
+  const query = new URLSearchParams({ ...(size !== 1 ? { scale: String(size) } : {}), ...(from ? { from: `${from.kind}-${from.id}` } : {}) }).toString();
+  return `/recipes/${id}${query ? `?${query}` : ""}`;
+}
+
+/** A `from` query value; anything but one "menu-N" or "recipe-N" string, such as a repeated parameter, is null. */
+export function parseOrigin(value: unknown): RecipeOrigin | null {
+  const m = typeof value === "string" ? value.match(/^(menu|recipe)-(\d{1,9})$/) : null;
+  return m ? { kind: m[1] as RecipeOrigin["kind"], id: Number(m[2]) } : null;
+}

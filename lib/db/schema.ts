@@ -1372,7 +1372,7 @@ export const recipeLogs = pgTable(
     counted: boolean("counted").notNull().default(true),
     notes: text("notes"),
     servings: integer("servings"),
-    // Set when this cook was part of a meal: one entry per person and recipe, dated with the meal.
+    // Set when this cook was part of making a menu: one entry per person and recipe, dated with that time.
     mealId: integer("meal_id").references(() => meals.id, { onDelete: "cascade" }),
     createdAt: createdAt(),
   },
@@ -1382,23 +1382,40 @@ export const recipeLogs = pgTable(
   ],
 );
 
-// One dinner or occasion ("Thanksgiving 2026"): its recipes in order, and each person's cook log entries for them.
+// Recipes that go together ("Burger night"), kept whether or not anyone has made them yet.
+export const menus = pgTable(
+  "menus",
+  {
+    id: serial("id").primaryKey(),
+    groupId: integer("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 160 }).notNull(),
+    notes: text("notes"),
+    recipeIds: jsonb("recipe_ids").$type<number[]>().notNull().default([]),
+    createdByProfileId: integer("created_by_profile_id").references(() => profiles.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("idx_menus_group").on(t.groupId)],
+);
+
+// One time a menu was made: its day, the recipes actually made, and each person's cook log entries for them.
 export const meals = pgTable(
   "meals",
   {
     id: serial("id").primaryKey(),
     groupId: integer("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
-    name: varchar("name", { length: 160 }).notNull(),
+    menuId: integer("menu_id")
+      .notNull()
+      .references(() => menus.id, { onDelete: "cascade" }),
     cookedOn: date("cooked_on").notNull(),
     notes: text("notes"),
     recipeIds: jsonb("recipe_ids").$type<number[]>().notNull().default([]),
     createdByProfileId: integer("created_by_profile_id").references(() => profiles.id, { onDelete: "set null" }),
     createdAt: createdAt(),
   },
-  (t) => [index("idx_meals_group").on(t.groupId, t.cookedOn)],
+  (t) => [index("idx_meals_group").on(t.groupId, t.cookedOn), index("idx_meals_menu").on(t.menuId, t.cookedOn)],
 );
 
-// Each person's stars for the meal as a whole; they never change a recipe's own stars.
+// Each person's stars for one time a menu was made, as a whole; they never change a recipe's own stars.
 export const mealRatings = pgTable(
   "meal_ratings",
   {
@@ -1417,4 +1434,5 @@ export const mealRatings = pgTable(
 
 export type Recipe = typeof recipes.$inferSelect;
 export type RecipeLog = typeof recipeLogs.$inferSelect;
+export type Menu = typeof menus.$inferSelect;
 export type Meal = typeof meals.$inferSelect;

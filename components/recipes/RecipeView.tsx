@@ -93,6 +93,7 @@ export default function RecipeView({
   units: savedUnits,
   linked,
   scale,
+  back,
 }: {
   recipe: RecipeViewData;
   person: string | null;
@@ -108,6 +109,8 @@ export default function RecipeView({
   linked: Record<number, string>;
   /** The size to open at, as a multiple of the recipe's own, when another recipe links here. */
   scale: number;
+  /** Where it was opened from, when that was a menu or another recipe. */
+  back: { href: string; label: string } | null;
 }) {
   const [dialog, setDialog] = React.useState<LogDialog>(null);
   const [cooking, setCooking] = React.useState(false);
@@ -183,7 +186,7 @@ export default function RecipeView({
 
   return (
     <Container maxWidth="lg" sx={{ py: { xs: 2, md: 3 } }}>
-      <BackLink />
+      <BackLink {...back} />
       <Box sx={{ ...panelSx, p: { xs: 2, md: 3 } }}>
         <Box sx={{ display: "grid", gap: { xs: 2, md: 3 }, gridTemplateColumns: { xs: "1fr", md: "minmax(220px, 1fr) 2fr" }, alignItems: "stretch" }}>
           <Box aria-hidden sx={{ minHeight: { xs: 120, md: 200 }, borderRadius: `${radius.base - 4}px`, background: gingham() }} />
@@ -284,7 +287,7 @@ export default function RecipeView({
               {stepper}
               {unitsRow}
             </Box>
-            <GlanceTable table={table} ingredients={recipe.ingredients} steps={recipe.steps} factor={factor} units={units} linked={linked} />
+            <GlanceTable recipeId={recipe.id} table={table} ingredients={recipe.ingredients} steps={recipe.steps} factor={factor} units={units} linked={linked} />
           </Box>
         ) : (
         <Box sx={{ display: "grid", gap: { xs: 3, md: 4 }, gridTemplateColumns: { xs: "1fr", md: "minmax(220px, 1fr) 2fr" }, alignItems: "start", mt: { xs: 3, md: 4 } }}>
@@ -334,7 +337,7 @@ export default function RecipeView({
                           )}
                         </Box>
                       </ButtonBase>
-                      {inner && <RecipeLink id={ing.recipeId!} title={inner} scale={batchesOf(ing.text) * factor} />}
+                      {inner && <RecipeLink id={ing.recipeId!} title={inner} scale={batchesOf(ing.text) * factor} from={recipe.id} />}
                       </React.Fragment>
                     );
                   })}
