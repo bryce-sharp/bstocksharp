@@ -111,7 +111,8 @@ export function recipeHref(id: number, { scale = 1, from }: { scale?: number; fr
   return `/recipes/${id}${query ? `?${query}` : ""}`;
 }
 
-export function parseOrigin(value: string | undefined): RecipeOrigin | null {
-  const m = value?.match(/^(menu|recipe)-(\d{1,9})$/);
+/** A `from` query value; anything but one "menu-N" or "recipe-N" string, such as a repeated parameter, is null. */
+export function parseOrigin(value: unknown): RecipeOrigin | null {
+  const m = typeof value === "string" ? value.match(/^(menu|recipe)-(\d{1,9})$/) : null;
   return m ? { kind: m[1] as RecipeOrigin["kind"], id: Number(m[2]) } : null;
 }

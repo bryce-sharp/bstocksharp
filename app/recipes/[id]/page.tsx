@@ -7,7 +7,7 @@ import { backTo, getRecipe, listCooks, listRecipeChoices, listRecipeLogs, recipe
 import { parseOrigin } from "@/lib/recipes";
 import { summarizeRatings } from "@/lib/recipe-ratings";
 
-type Props = { params: Promise<{ id: string }>; searchParams?: Promise<{ scale?: string; from?: string }> };
+type Props = { params: Promise<{ id: string }>; searchParams?: Promise<{ scale?: string | string[]; from?: string | string[] }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const recipe = await getRecipe(Number((await params).id));

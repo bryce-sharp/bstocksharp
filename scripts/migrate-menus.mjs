@@ -73,6 +73,14 @@ async function main() {
   if (finish) {
     const [{ loose }] = await sql`SELECT count(*)::int AS loose FROM meals WHERE menu_id IS NULL`;
     if (loose) throw new Error(`${loose} meals still have no menu; nothing was finished`);
+    // The old code could rename a meal after it was linked; dropping the name then would lose that rename.
+    const renamed = (await hasColumn("meals", "name"))
+      ? await sql`SELECT m.id, m.name, u.name AS menu FROM meals m JOIN menus u ON u.id = m.menu_id WHERE m.name IS NOT NULL AND m.name <> u.name`
+      : [];
+    if (renamed.length) {
+      const list = renamed.map((r) => `  meal ${r.id} "${r.name}" is on menu ${JSON.stringify(r.menu)}`).join("\n");
+      throw new Error(`meals renamed since their menu was made; fix their menus by hand, then finish again:\n${list}`);
+    }
     await sql`ALTER TABLE meals ALTER COLUMN menu_id SET NOT NULL`;
     await sql`ALTER TABLE meals DROP COLUMN IF EXISTS name`;
     console.log("finished: every meal has a menu, and meals.name is gone");

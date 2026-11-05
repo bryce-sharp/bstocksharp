@@ -136,7 +136,7 @@ const withLink = [{ id: "a1", text: "1 batch Fry sauce", recipeId: 7 }, { id: "a
 eq("links survive the form", toIngredients(ingredientLines(withLink), withLink), withLink);
 eq("an unlinked line drops its link", toIngredients(ingredientLines(withLink).map(({ recipeId: _r, ...l }) => l), withLink), [{ id: "a1", text: "1 batch Fry sauce" }, { id: "a2", text: "1 bun" }]);
 eq("a recipe link carries its size and where it came from", [recipeHref(7), recipeHref(7, { scale: 2, from: { kind: "recipe", id: 3 } }), recipeHref(7, { from: { kind: "menu", id: 5 } })], ["/recipes/7", "/recipes/7?scale=2&from=recipe-3", "/recipes/7?from=menu-5"]);
-eq("only a menu or recipe origin is read", ["menu-5", "recipe-3", "menu-", "x-5", "/evil", undefined].map(parseOrigin), [{ kind: "menu", id: 5 }, { kind: "recipe", id: 3 }, null, null, null, null]);
+eq("only a menu or recipe origin is read", ["menu-5", "recipe-3", "menu-", "x-5", "/evil", undefined, ["menu-5", "recipe-3"]].map(parseOrigin), [{ kind: "menu", id: 5 }, { kind: "recipe", id: 3 }, null, null, null, null, null]);
 
 // ── Ratings ───────────────────────────────────────────────────────────────────
 const L = (profileId: number, cookedOn: string, rating: number | null, counted = true, recipeVersion = 1): RatingLog => ({ profileId, cookedOn, rating, counted, recipeVersion });
