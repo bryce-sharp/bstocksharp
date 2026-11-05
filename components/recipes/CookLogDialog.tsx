@@ -87,7 +87,7 @@ export default function CookLogDialog({
             </Box>
             {inMeal && (
               <Typography variant="body2" sx={{ color: color.muted, mt: -1 }}>
-                Part of {entry?.meal}: its day is the meal&apos;s.
+                Part of making {entry?.menu}: its day is that time&apos;s.
               </Typography>
             )}
 

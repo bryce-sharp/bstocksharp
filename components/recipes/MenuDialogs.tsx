@@ -12,8 +12,8 @@ import DialogTitle from "@mui/material/DialogTitle";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import { deleteMeal, logMeal, rateMeal, updateMeal, type MealInput, type MealRatingsInput } from "@/app/actions/recipes";
-import type { MealDetail, RecipeChoice } from "@/lib/queries/recipes";
+import { createMenu, deleteMeal, deleteMenu, logMeal, rateMeal, updateMeal, updateMenu, type MealInput, type MealRatingsInput, type MenuInput } from "@/app/actions/recipes";
+import type { MealDetail, MenuDetail, RecipeChoice } from "@/lib/queries/recipes";
 import type { Cook } from "./CookLogDialog";
 import { skinScope, skinSx } from "./RecipesSkin";
 import StarInput from "./StarInput";
@@ -102,7 +102,7 @@ function MealStarsFields({ stars, dishes }: { stars: MealStarsState; dishes: Rec
   );
 }
 
-function MealShell({ open, onClose, busy, title, onSubmit, children, actions }: { open: boolean; onClose: () => void; busy: boolean; title: string; onSubmit: () => void; children: React.ReactNode; actions: React.ReactNode }) {
+function FormShell({ open, onClose, busy, title, onSubmit, children, actions }: { open: boolean; onClose: () => void; busy: boolean; title: string; onSubmit: () => void; children: React.ReactNode; actions: React.ReactNode }) {
   return (
     <Dialog open={open} onClose={busy ? undefined : onClose} fullWidth maxWidth="sm" className={skinScope.className} style={skinScope.style} sx={skinSx}>
       <Box
@@ -123,10 +123,83 @@ function MealShell({ open, onClose, busy, title, onSubmit, children, actions }: 
   );
 }
 
-/** Log a new meal with your stars, or change a meal's name, day, notes and recipes. */
-export default function MealDialog({
+/** The recipes picker both forms share; the order picked is the order shown. */
+function RecipePicker({ choices, value, onChange, label, placeholder }: { choices: RecipeChoice[]; value: RecipeChoice[]; onChange: (v: RecipeChoice[]) => void; label: string; placeholder: string }) {
+  return (
+    <Autocomplete
+      multiple
+      options={choices}
+      value={value}
+      onChange={(_, v) => onChange(v)}
+      getOptionLabel={(c) => c.title}
+      isOptionEqualToValue={(a, b) => a.id === b.id}
+      filterSelectedOptions
+      renderValue={(picked, getItemProps) =>
+        picked.map((c, index) => {
+          const { key, ...item } = getItemProps({ index });
+          return <TagChip key={key} label={c.title} {...item} />;
+        })
+      }
+      renderInput={(params) => <TextField {...params} label={label} placeholder={value.length ? "Add another" : placeholder} />}
+    />
+  );
+}
+
+const choicesOf = (dishes: { id: number; title: string }[]): RecipeChoice[] => dishes.map((d) => ({ id: d.id, title: d.title }));
+
+/** Make a menu, or change its name, notes and recipes; the times it was made keep theirs. */
+export function MenuDialog({ open, onClose, menu, recipeChoices }: { open: boolean; onClose: () => void; menu?: MenuDetail; recipeChoices: RecipeChoice[] }) {
+  const [name, setName] = React.useState(menu?.name ?? "");
+  const [notes, setNotes] = React.useState(menu?.notes ?? "");
+  const [dishes, setDishes] = React.useState<RecipeChoice[]>(menu ? choicesOf(menu.dishes) : []);
+  const { error, busy, run } = useSave(onClose);
+  const save = () => {
+    const input: MenuInput = { name, notes, recipeIds: dishes.map((d) => d.id) };
+    run(() => (menu ? updateMenu(menu.id, input) : createMenu(input)));
+  };
+  const remove = () => {
+    if (!menu) return;
+    const made = menu.meals.length ? ` The ${menu.meals.length === 1 ? "time" : `${menu.meals.length} times`} you made it, with everyone's stars and cook log entries, go with it.` : "";
+    if (window.confirm(`Delete ${menu.name}?${made}`)) run(() => deleteMenu(menu.id).then(() => undefined));
+  };
+  return (
+    <FormShell
+      open={open}
+      onClose={onClose}
+      busy={busy}
+      title={menu ? "Change this menu" : "New menu"}
+      onSubmit={save}
+      actions={
+        <>
+          {menu && (
+            <Button color="error" onClick={remove} disabled={busy} sx={{ mr: "auto" }}>
+              Delete
+            </Button>
+          )}
+          <Button color="inherit" onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="contained" disabled={busy}>
+            {busy ? "Saving…" : "Save"}
+          </Button>
+        </>
+      }
+    >
+      <Stack spacing={2.25} sx={{ pt: 0.5 }}>
+        <TextField label="Menu" value={name} onChange={(e) => setName(e.target.value)} placeholder="Burger night" autoFocus={!menu} />
+        <RecipePicker choices={recipeChoices} value={dishes} onChange={setDishes} label="Recipes" placeholder="Which recipes go together?" />
+        <TextField label="About the menu" multiline minRows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="When it works, what to make ahead" />
+        {error && <Alert severity="error">{error}</Alert>}
+      </Stack>
+    </FormShell>
+  );
+}
+
+/** Log a time the menu was made with your stars, or change that time's day, notes and recipes. */
+export function MealDialog({
   open,
   onClose,
+  menu,
   meal,
   recipeChoices,
   cooks,
@@ -135,34 +208,34 @@ export default function MealDialog({
 }: {
   open: boolean;
   onClose: () => void;
+  menu: MenuDetail;
   meal?: MealDetail;
   recipeChoices: RecipeChoice[];
   cooks: Cook[];
   defaultCook: number | null;
   today: string;
 }) {
-  const [name, setName] = React.useState(meal?.name ?? "");
   const [cookedOn, setCookedOn] = React.useState(meal?.cookedOn ?? today);
   const [notes, setNotes] = React.useState(meal?.notes ?? "");
-  const [dishes, setDishes] = React.useState<RecipeChoice[]>(meal?.dishes.map((d) => ({ id: d.id, title: d.title })) ?? []);
+  const [dishes, setDishes] = React.useState<RecipeChoice[]>(choicesOf(meal?.dishes ?? menu.dishes));
   const stars = useMealStars(undefined, cooks, defaultCook);
   const { error, busy, run } = useSave(onClose);
 
   const save = () => {
-    const input: MealInput = { name, cookedOn, notes, recipeIds: dishes.map((d) => d.id) };
-    run(() => (meal ? updateMeal(meal.id, input) : logMeal(input, stars.input(input.recipeIds))));
+    const input: MealInput = { cookedOn, notes, recipeIds: dishes.map((d) => d.id) };
+    run(() => (meal ? updateMeal(meal.id, input) : logMeal(menu.id, input, stars.input(input.recipeIds))));
   };
   const remove = () => {
-    if (meal && window.confirm(`Delete ${meal.name}? Everyone's stars for it and its cook log entries go with it.`)) run(() => deleteMeal(meal.id).then(() => undefined));
+    if (meal && window.confirm("Delete this time? Everyone's stars for it and its cook log entries go with it; the menu stays.")) run(() => deleteMeal(meal.id));
   };
   const dropped = meal ? meal.dishes.filter((d) => !dishes.some((x) => x.id === d.id) && meal.logs.some((l) => l.recipeId === d.id)) : [];
 
   return (
-    <MealShell
+    <FormShell
       open={open}
       onClose={onClose}
       busy={busy}
-      title={meal ? "Change this meal" : "Log a meal"}
+      title={meal ? "Change this time" : `We made ${menu.name}`}
       onSubmit={save}
       actions={
         <>
@@ -181,28 +254,10 @@ export default function MealDialog({
       }
     >
       <Stack spacing={2.25} sx={{ pt: 0.5 }}>
-        <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", sm: "2fr 1fr" } }}>
-          <TextField label="Meal" value={name} onChange={(e) => setName(e.target.value)} placeholder="Thanksgiving 2026" autoFocus={!meal} />
-          <TextField label="When" type="date" value={cookedOn} onChange={(e) => setCookedOn(e.target.value)} slotProps={{ inputLabel: { shrink: true }, htmlInput: { max: today } }} />
-        </Box>
-        <Autocomplete
-          multiple
-          options={recipeChoices}
-          value={dishes}
-          onChange={(_, v) => setDishes(v)}
-          getOptionLabel={(c) => c.title}
-          isOptionEqualToValue={(a, b) => a.id === b.id}
-          filterSelectedOptions
-          renderValue={(value, getItemProps) =>
-            value.map((c, index) => {
-              const { key, ...item } = getItemProps({ index });
-              return <TagChip key={key} label={c.title} {...item} />;
-            })
-          }
-          renderInput={(params) => <TextField {...params} label="Recipes" placeholder={dishes.length ? "Add another" : "Which recipes were in it?"} />}
-        />
-        {dropped.length > 0 && <Alert severity="warning">Removing {dropped.map((d) => d.title).join(", ")} also removes the stars given to it in this meal.</Alert>}
-        <TextField label="About the meal" multiline minRows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="The occasion, who came" />
+        <TextField label="When" type="date" value={cookedOn} onChange={(e) => setCookedOn(e.target.value)} autoFocus={!meal} slotProps={{ inputLabel: { shrink: true }, htmlInput: { max: today } }} sx={{ maxWidth: 240 }} />
+        <RecipePicker choices={recipeChoices} value={dishes} onChange={setDishes} label="Recipes made" placeholder="Which recipes did you make?" />
+        {dropped.length > 0 && <Alert severity="warning">Removing {dropped.map((d) => d.title).join(", ")} also removes the stars given to it this time.</Alert>}
+        <TextField label="About this time" multiline minRows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="The occasion, who came" />
         {!meal && (
           <Box sx={{ pt: 1, borderTop: `1px solid ${color.rule}` }}>
             <Typography variant="h6" component="h3" sx={{ fontSize: 18, mb: 1 }}>
@@ -213,17 +268,17 @@ export default function MealDialog({
         )}
         {error && <Alert severity="error">{error}</Alert>}
       </Stack>
-    </MealShell>
+    </FormShell>
   );
 }
 
-/** One person's stars for a meal they were at: the whole meal, then each recipe. */
+/** One person's stars for a time they were at: the whole meal, then each recipe. */
 export function RateMealDialog({ open, onClose, meal, cooks, defaultCook }: { open: boolean; onClose: () => void; meal: MealDetail; cooks: Cook[]; defaultCook: number | null }) {
   const stars = useMealStars(meal, cooks, defaultCook);
   const { error, busy, run } = useSave(onClose);
   const dishes = meal.dishes.map((d) => ({ id: d.id, title: d.title }));
   return (
-    <MealShell
+    <FormShell
       open={open}
       onClose={onClose}
       busy={busy}
@@ -248,6 +303,6 @@ export function RateMealDialog({ open, onClose, meal, cooks, defaultCook }: { op
           </Alert>
         )}
       </Box>
-    </MealShell>
+    </FormShell>
   );
 }

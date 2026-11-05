@@ -2,7 +2,7 @@
 
 Status: plan agreed 2026-11-03; the look (Sage & Butter) chosen 2026-11-03; PR 1 (the section, recipes,
 favorites) and PR 2 (the cook log and ratings) built 2026-11-03 (#88); PR 3 (cook mode, #89) and PR 4 (import)
-built 2026-11-04; PR 5 (units), PR 6 (step links), PR 8 (recipes inside recipes), PR 9 (meals) and PR 10 (At a glance) built 2026-11-04. The dev mockup is retired now that every screen of it is real; the looks lab `/recipes/looks`
+built 2026-11-04; PR 5 (units), PR 6 (step links), PR 8 (recipes inside recipes), PR 9 (meals) and PR 10 (At a glance) built 2026-11-04; PR 11 (menus) built 2026-11-04. The dev mockup is retired now that every screen of it is real; the looks lab `/recipes/looks`
 stays as the reference for the table view.
 
 Decided: a Recipes section of this site, shared by the household; anyone in the household edits any recipe, and
@@ -13,7 +13,7 @@ look is **Sage & Butter** (below); the section is called **Recipes** for now.
 
 A household cookbook that remembers how each recipe went. You save your own recipes or import them from a link,
 cook them step by step with timers, and log each time you make one, with your own stars and notes. Recipes can
-use other recipes and belong to meals.
+use other recipes and be grouped into menus you can make again.
 
 ## The look: Sage & Butter
 
@@ -48,8 +48,8 @@ quiet pattern, soft colors, friendly type that stays easy to read.
 | Step | One instruction, with an optional short action word ("Fold in") and its **uses**. |
 | Use | A step taking some of an ingredient: "2 eggs" of "4 eggs". Uses power highlighting, split ingredients and the table view. |
 | Cook log entry | One person cooking a recipe once: date, stars (optional), notes, servings made. |
-| Meal | One dinner or occasion ("Thanksgiving 2026") that groups several cook log entries, with its own notes. |
-| Saved menu | A reusable set of recipes ("Burger night"), started again as a meal. |
+| Menu | Recipes that go together ("Burger night"), kept whether or not anyone has made them yet. |
+| Time made | One time a menu was made (the `meals` table): its day, the recipes made, notes and each person's stars. |
 
 ## How it behaves
 
@@ -126,33 +126,40 @@ quiet pattern, soft colors, friendly type that stays easy to read.
   like "add" or "into the"; the last step takes in whatever is left. It rebuilds the looks lab's hand-made tree.
   Link suggestions now offer each ingredient at its first step only, count lines agree with their amount
   ("1 egg", "2 cloves garlic"), and a temperature given in both scales shows just the one in your units.
-- `scripts/seed-recipes-dev.mjs` fills the dev household with 12 linked recipes, 3 meals and months of cook logs;
+- `scripts/seed-recipes-dev.mjs` fills the dev household with 12 linked recipes, 4 menus (one made twice, one never made) and months of cook logs;
   it refuses the live database.
 
 ### Recipes inside recipes
 - In edit mode, an ingredient line can link to another recipe with a picker ("1 batch Fry sauce").
-- The link opens that recipe; scaling the outer recipe scales the inner one; a meal can pull it in.
+- The link opens that recipe; scaling the outer recipe scales the inner one; a menu can include it.
 - Deleting a linked recipe leaves the line as text.
 - As built (PR 8): each ingredient line has a book button that opens a picker of the household's other recipes,
   and a line that names one ("1 batch Fry sauce") offers "Link the Fry sauce recipe". Saving keeps a link only to
   another recipe of the same household. The recipe page and cook mode show "Open the Fry sauce recipe", opened at
   the size the outer recipe needs (`?scale=`): the line's batches ("2 batches", "1/2 recipe") times its scaling.
 
-### Meals and saved menus
+### Menus
 - Log a meal: name, date, notes, the recipes in it. It creates one cook log entry per recipe (each person still
   rates each recipe), and each person can rate the meal overall.
 - Each recipe's history shows "Part of Thanksgiving 2026"; the meal page shows the whole dinner.
 - A meal's stars answer "did it all go together?" and never change a recipe's own stars, so a bad pairing never
   pulls down a good recipe; the meal's notes say why.
-- As built (PR 9): Meals (`/recipes/meals`) lists the household's meals; Log a meal takes a name, day, notes and
+- As built (PR 9; PR 11 turned each meal into a time a menu was made): Meals (`/recipes/meals`) listed the household's meals; Log a meal takes a name, day, notes and
   its recipes, then the logger's meal stars, notes and optional stars for each recipe. Each person who rates a meal
   gets one cook log entry per recipe in it (unique per meal, person and recipe), so re-rating changes that entry.
   A meal entry keeps the meal's person and day; changing the meal's day moves its entries, removing a recipe
   removes that recipe's entries, and deleting the meal deletes its stars and entries, as deleting a recipe does.
   The cook log lists the newest version first, then newest first within it, so a back-dated cook stays with its
   version and each "Version N starts here" marker sits under that version's first cook.
-- A saved menu is a meal you can start again. Starting it begins a **multi-recipe cook mode**: every recipe's
-  steps in tabs, one shared timer tray, and one read-through for the whole meal.
+- As built (PR 11, 2026-11-04): a menu is a named, ordered group of recipes, like a recipe it exists before anyone
+  makes it. Menus (`/recipes/menus`) lists them, most recently made or added first; a menu's page lists its recipes
+  to open, then the times it was made. We made it logs a time: its day, the recipes actually made (the menu's by
+  default), notes and the logger's stars, exactly as PR 9's meals did. Each time keeps its own recipe list, so
+  changing the menu never rewrites history. Deleting a menu deletes its times, their stars and entries.
+  `scripts/migrate-menus.mjs` gave every PR 9 meal a menu (meals with the same name and recipes share one); its
+  `--finish` step, run after the deploy, requires a menu on every meal and drops `meals.name`.
+- A menu's play button (PR 12) opens a **multi-recipe cook mode**: every recipe's steps in tabs, one shared timer
+  tray, and one read-through for the whole meal.
 
 ### Import from a link
 - Reads the page's standard recipe data (schema.org Recipe, JSON-LD), then shows it for review before saving.
@@ -184,9 +191,9 @@ whole. Ingredient and step ids are stable from the first PR, so uses, links and 
 | `recipes` | id, groupId, createdByProfileId, version, title, description, servings, prepMin, cookMin, notes, tags (jsonb), sourceKind (`mine` · `imported`), sourceUrl, sourceName, imageUrl, ingredients (jsonb), steps (jsonb), createdAt, updatedAt |
 | `recipe_favorites` | profileId, recipeId (unique together) |
 | `recipe_logs` | id, recipeId, recipeVersion, profileId, cookedOn, rating (1 to 5, optional), counted (false when something went wrong), notes, servings, mealId, createdAt |
-| `meals` | id, groupId, name, cookedOn, notes, recipeIds (jsonb, ordered), createdByProfileId, createdAt; menuId arrives with menus |
+| `meals` | id, groupId, menuId, cookedOn, notes, recipeIds (jsonb, ordered: what was made), createdByProfileId, createdAt |
 | `meal_ratings` | mealId, profileId, rating (1 to 5, optional), notes |
-| `menus` | id, groupId, name, recipeIds (jsonb, ordered), notes, createdAt |
+| `menus` | id, groupId, name, notes, recipeIds (jsonb, ordered), createdByProfileId, createdAt |
 
 jsonb shapes:
 
@@ -218,10 +225,10 @@ reads it merges.
   - [x] PR 9: meals: log a meal, meal page, meal ratings.
 - **Phase 3: the fancy parts**
   - [x] PR 10: At a glance table view.
-  - [ ] PR 11: saved menus.
+  - [x] PR 11: menus: groups of recipes, made or not; PR 9's meals become the times a menu was made.
   - [ ] PR 12: multi-recipe cook mode.
   - [ ] PR 13: photos (Vercel Blob uploads; the `attachments` table exists) on recipes and log entries.
-- **Later:** grocery list from a recipe, meal or menu.
+- **Later:** grocery list from a recipe or menu.
 
 ## Open questions
 

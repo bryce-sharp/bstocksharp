@@ -4,12 +4,12 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { mealRatings, meals, profiles, recipeFavorites, recipeLogs, recipes } from "@/lib/db/schema";
+import { mealRatings, meals, menus, profiles, recipeFavorites, recipeLogs, recipes } from "@/lib/db/schema";
 import { requireEditor, requireEditorFor } from "@/lib/auth";
 import { getActiveProfile } from "@/lib/profile";
 import { requireGroupId } from "@/lib/session";
 import { requireApp } from "@/lib/hub-apps";
-import { findRecipeBySource, getMeal, getRecipe, getRecipeLog } from "@/lib/queries/recipes";
+import { findRecipeBySource, getMeal, getMenu, getRecipe, getRecipeLog } from "@/lib/queries/recipes";
 import { logEvent } from "@/lib/events";
 import { SafeFetchError, safeFetchText } from "@/lib/safe-fetch";
 import { recipeFromHtml, recipeFromPageText, type RecipeDraft } from "@/lib/recipe-import";
@@ -318,33 +318,90 @@ export async function deleteCookLog(logId: number): Promise<RecipeSaveResult> {
   refreshRecipe(log.recipeId);
 }
 
-// ── Meals ─────────────────────────────────────────────────────────────────────
+// ── Menus ─────────────────────────────────────────────────────────────────────
 
-/** What the meal form sends: its name, day, notes and recipes in order. */
-export type MealInput = { name: string; cookedOn: string; notes: string; recipeIds: number[] };
+/** What the menu form sends: its name, notes and recipes in order. */
+export type MenuInput = { name: string; notes: string; recipeIds: number[] };
 
-/** One person's stars for a meal: the whole meal, and each recipe in it. */
+/** What the made-it form sends: the day, notes about that time, and the recipes actually made. */
+export type MealInput = { cookedOn: string; notes: string; recipeIds: number[] };
+
+/** One person's stars for a time the menu was made: the whole meal, and each recipe in it. */
 export type MealRatingsInput = { profileId: number; rating: number | null; notes: string; dishes: { recipeId: number; rating: number | null }[] };
+
+/** A list of our recipes, in order, without repeats. */
+async function parseRecipeIds(raw: unknown): Promise<number[]> {
+  if (!Array.isArray(raw) || !raw.every((id) => Number.isInteger(id))) throw new Error("Pick the recipes.");
+  const recipeIds = [...new Set(raw as number[])];
+  if (!recipeIds.length) throw new Error("Pick at least one recipe.");
+  if (recipeIds.length > RECIPE_LIMITS.dishes) throw new Error(`A menu can have up to ${RECIPE_LIMITS.dishes} recipes.`);
+  const found = await db.select({ id: recipes.id }).from(recipes).where(and(eq(recipes.groupId, await requireGroupId()), inArray(recipes.id, recipeIds)));
+  if (found.length !== recipeIds.length) throw new Error("One of those recipes is gone.");
+  return recipeIds;
+}
+
+async function parseMenu(input: unknown) {
+  if (!isRecord(input)) throw new Error("Nothing to save.");
+  const name = text(input.name, RECIPE_LIMITS.title);
+  if (!name) throw new Error("Give the menu a name.");
+  return { name, notes: text(input.notes, RECIPE_LIMITS.text), recipeIds: await parseRecipeIds(input.recipeIds) };
+}
 
 async function parseMeal(input: unknown) {
   if (!isRecord(input)) throw new Error("Nothing to save.");
-  const name = text(input.name, RECIPE_LIMITS.title);
-  if (!name) throw new Error("Give the meal a name.");
-  const raw = input.recipeIds;
-  if (!Array.isArray(raw) || !raw.every((id) => Number.isInteger(id))) throw new Error("Pick the meal's recipes.");
-  const recipeIds = [...new Set(raw as number[])];
-  if (!recipeIds.length) throw new Error("Pick at least one recipe.");
-  if (recipeIds.length > RECIPE_LIMITS.dishes) throw new Error(`A meal can have up to ${RECIPE_LIMITS.dishes} recipes.`);
-  const found = await db.select({ id: recipes.id }).from(recipes).where(and(eq(recipes.groupId, await requireGroupId()), inArray(recipes.id, recipeIds)));
-  if (found.length !== recipeIds.length) throw new Error("One of those recipes is gone.");
-  return { name, cookedOn: day(input.cookedOn), notes: text(input.notes, RECIPE_LIMITS.text), recipeIds };
+  return { cookedOn: day(input.cookedOn), notes: text(input.notes, RECIPE_LIMITS.text), recipeIds: await parseRecipeIds(input.recipeIds) };
 }
 
-function refreshMeal(id: number, recipeIds: number[]) {
+function refreshMenu(id: number, recipeIds: number[]) {
   revalidatePath("/recipes");
-  revalidatePath("/recipes/meals");
-  revalidatePath(`/recipes/meals/${id}`);
+  revalidatePath("/recipes/menus");
+  revalidatePath(`/recipes/menus/${id}`);
   for (const r of recipeIds) revalidatePath(`/recipes/${r}`);
+}
+
+/** Saves a new menu, then opens it. */
+export async function createMenu(input: MenuInput): Promise<RecipeSaveResult> {
+  await requireApp("recipes");
+  await requireEditor();
+  let id: number;
+  try {
+    const data = await parseMenu(input);
+    const [row] = await db
+      .insert(menus)
+      .values({ ...data, groupId: await requireGroupId(), createdByProfileId: (await getActiveProfile())?.id ?? null })
+      .returning({ id: menus.id });
+    id = row!.id;
+    refreshMenu(id, data.recipeIds);
+  } catch (err) {
+    return problem(err);
+  }
+  redirect(`/recipes/menus/${id}`);
+}
+
+/** Changes a menu; the times it was made keep the recipes they had. */
+export async function updateMenu(id: number, input: MenuInput): Promise<RecipeSaveResult> {
+  await requireApp("recipes");
+  await requireEditor();
+  const menu = await getMenu(id);
+  if (!menu) return { error: "That menu is gone." };
+  try {
+    const data = await parseMenu(input);
+    await db.update(menus).set(data).where(eq(menus.id, id));
+    refreshMenu(id, [...new Set([...menu.recipeIds, ...data.recipeIds])]);
+  } catch (err) {
+    return problem(err);
+  }
+}
+
+/** Deletes a menu with every time it was made, their stars and the cook log entries they made. */
+export async function deleteMenu(id: number): Promise<void> {
+  await requireApp("recipes");
+  await requireEditor();
+  const menu = await getMenu(id);
+  if (!menu) return;
+  await db.delete(menus).where(and(eq(menus.id, id), eq(menus.groupId, await requireGroupId())));
+  refreshMenu(id, [...new Set([...menu.recipeIds, ...menu.meals.flatMap((m) => m.recipeIds)])]);
+  redirect("/recipes/menus");
 }
 
 type MealStars = { profileId: number; rating: number | null; notes: string | null; dishes: { recipe_id: number; rating: number | null }[] };
@@ -382,34 +439,34 @@ function mealStarWrites(mealId: number, s: MealStars) {
   return [lock, whole, dishes] as const;
 }
 
-/** Logs a meal and the logger's stars in one batch, then opens it. */
-export async function logMeal(input: MealInput, ratings: MealRatingsInput): Promise<RecipeSaveResult> {
+/** Logs a time the menu was made with the logger's stars, in one batch. */
+export async function logMeal(menuId: number, input: MealInput, ratings: MealRatingsInput): Promise<RecipeSaveResult> {
   await requireApp("recipes");
   await requireEditor();
-  let id: number;
+  const menu = await getMenu(menuId);
+  if (!menu) return { error: "That menu is gone." };
   try {
     const data = await parseMeal(input);
     const starsFor = await parseMealStars(ratings);
     // The id comes first so the meal and its stars save together; a failure saves neither.
     const next = await db.execute<{ id: number }>(sql`SELECT nextval(pg_get_serial_sequence('meals', 'id'))::int AS id`);
-    id = next.rows[0]!.id;
+    const id = next.rows[0]!.id;
     await db.batch([
-      db.insert(meals).values({ ...data, id, groupId: await requireGroupId(), createdByProfileId: (await getActiveProfile())?.id ?? null }),
+      db.insert(meals).values({ ...data, id, menuId, groupId: menu.groupId, createdByProfileId: (await getActiveProfile())?.id ?? null }),
       ...mealStarWrites(id, starsFor),
     ]);
-    refreshMeal(id, data.recipeIds);
+    refreshMenu(menuId, data.recipeIds);
   } catch (err) {
     return problem(err);
   }
-  redirect(`/recipes/meals/${id}`);
 }
 
-/** Changes a meal's details; its cook log entries move to its new day, and a removed recipe's entries go with it. */
+/** Changes one time the menu was made; its cook log entries move to its new day, and a removed recipe's entries go with it. */
 export async function updateMeal(id: number, input: MealInput): Promise<RecipeSaveResult> {
   await requireApp("recipes");
   await requireEditor();
   const meal = await getMeal(id);
-  if (!meal) return { error: "That meal is gone." };
+  if (!meal) return { error: "That time is gone." };
   try {
     const data = await parseMeal(input);
     await db.batch([
@@ -417,34 +474,37 @@ export async function updateMeal(id: number, input: MealInput): Promise<RecipeSa
       db.update(recipeLogs).set({ cookedOn: data.cookedOn }).where(eq(recipeLogs.mealId, id)),
       db.delete(recipeLogs).where(and(eq(recipeLogs.mealId, id), notInArray(recipeLogs.recipeId, data.recipeIds))),
     ]);
-    refreshMeal(id, [...new Set([...meal.recipeIds, ...data.recipeIds])]);
+    refreshMenu(meal.menuId, [...new Set([...meal.recipeIds, ...data.recipeIds])]);
   } catch (err) {
     return problem(err);
   }
 }
 
-/** Deletes a meal with its meal stars and the cook log entries it made, as deleting a recipe deletes its log. */
-export async function deleteMeal(id: number): Promise<void> {
+/** Deletes one time the menu was made with its stars and the cook log entries it made; the menu stays. */
+export async function deleteMeal(id: number): Promise<RecipeSaveResult> {
   await requireApp("recipes");
   await requireEditor();
   const meal = await getMeal(id);
   if (!meal) return;
-  await db.delete(meals).where(and(eq(meals.id, id), eq(meals.groupId, await requireGroupId())));
-  refreshMeal(id, meal.recipeIds);
-  redirect("/recipes/meals");
+  try {
+    await db.delete(meals).where(eq(meals.id, id));
+  } catch (err) {
+    return problem(err);
+  }
+  refreshMenu(meal.menuId, meal.recipeIds);
 }
 
-/** Saves one person's stars for a meal and its recipes. */
+/** Saves one person's stars for a time the menu was made and its recipes. */
 export async function rateMeal(id: number, ratings: MealRatingsInput): Promise<RecipeSaveResult> {
   await requireApp("recipes");
   const meal = await getMeal(id);
-  if (!meal) return { error: "That meal is gone." };
+  if (!meal) return { error: "That time is gone." };
   try {
     await db.batch([...mealStarWrites(id, await parseMealStars(ratings))]);
   } catch (err) {
     return problem(err);
   }
-  refreshMeal(id, meal.recipeIds);
+  refreshMenu(meal.menuId, meal.recipeIds);
 }
 
 // ── Import from a link ────────────────────────────────────────────────────────

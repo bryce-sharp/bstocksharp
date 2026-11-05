@@ -122,8 +122,8 @@ export default function RecipeList({
           </Typography>
         </Box>
         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-          <Button component={Link} href="/recipes/meals" variant="outlined" startIcon={<RestaurantIcon />}>
-            Meals
+          <Button component={Link} href="/recipes/menus" variant="outlined" startIcon={<RestaurantIcon />}>
+            Menus
           </Button>
           <Button component={Link} href="/recipes/import" variant="outlined" startIcon={<LinkIcon />}>
             Import from a link

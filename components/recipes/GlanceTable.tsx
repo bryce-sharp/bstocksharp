@@ -13,6 +13,7 @@ import { color } from "./tokens";
 
 /** The At a glance table: ingredient uses down the left, each step a cell spanning what it combines; a tap reads the step. */
 export default function GlanceTable({
+  recipeId,
   table,
   ingredients,
   steps,
@@ -20,6 +21,7 @@ export default function GlanceTable({
   units,
   linked,
 }: {
+  recipeId: number;
   table: RecipeTable;
   ingredients: RecipeIngredient[];
   steps: RecipeStep[];
@@ -65,7 +67,7 @@ export default function GlanceTable({
             return (
               <Box key={`row-${i}`} sx={{ ...box, flexDirection: "column", alignItems: "flex-start", justifyContent: "center", gridColumn: 1, gridRow: top + i + 1, ...(lit(i) ? { bgcolor: color.highlight } : {}) }}>
                 {showIngredient(lineForUse(ing, r.amount, steps), factor, units)}
-                {inner && <RecipeLink id={ing.recipeId!} title={inner} scale={batchesOf(ing.text) * factor} sx={{ ml: 0, mb: 0, mt: 0.25 }} />}
+                {inner && <RecipeLink id={ing.recipeId!} title={inner} scale={batchesOf(ing.text) * factor} from={recipeId} sx={{ ml: 0, mb: 0, mt: 0.25 }} />}
               </Box>
             );
           })}

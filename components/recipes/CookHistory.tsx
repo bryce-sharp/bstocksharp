@@ -50,11 +50,11 @@ export default function CookHistory({
                       Something went wrong
                     </Typography>
                   )}
-                  {l.mealId !== null && (
+                  {l.menuId !== null && (
                     <Typography variant="body2" sx={{ color: color.muted }}>
                       Part of{" "}
-                      <Box component={Link} href={`/recipes/meals/${l.mealId}`} sx={{ fontWeight: 600, color: color.accent, textDecoration: "underline", textUnderlineOffset: 3 }}>
-                        {l.meal}
+                      <Box component={Link} href={`/recipes/menus/${l.menuId}`} sx={{ fontWeight: 600, color: color.accent, textDecoration: "underline", textUnderlineOffset: 3 }}>
+                        {l.menu}
                       </Box>
                     </Typography>
                   )}
