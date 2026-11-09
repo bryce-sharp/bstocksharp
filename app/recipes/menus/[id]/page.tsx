@@ -15,5 +15,5 @@ export default async function MenuPage({ params }: Props) {
   const person = await getActiveProfile();
   const [menu, recipeChoices, cooks, today] = await Promise.all([getMenu(Number((await params).id)), listRecipeChoices(), listCooks(), recipeToday()]);
   if (!menu) notFound();
-  return <MenuView menu={menu} recipeChoices={recipeChoices} cooks={cooks} defaultCook={person?.id ?? null} today={today} />;
+  return <MenuView menu={menu} recipeChoices={recipeChoices} cooks={cooks} defaultCook={person?.id ?? null} today={today} units={person?.recipeUnits ?? "written"} />;
 }

@@ -7,6 +7,7 @@ import { getGroupTimezone } from "@/lib/queries/group";
 import { dateInTz, todayISO } from "@/lib/finance/parse";
 import { summarizeRatings, type RatingSummary } from "@/lib/recipe-ratings";
 import type { RecipeOrigin } from "@/lib/recipes";
+import { menuAmount, servingsOf, type MenuSize } from "@/lib/recipe-units";
 import { canEditProfile } from "@/lib/auth";
 import { listProfiles } from "@/lib/queries/profiles";
 
@@ -98,12 +99,12 @@ export async function listRecipeTags(): Promise<string[]> {
   return [...new Set(rows.map((r) => r.tag))].sort((a, b) => a.localeCompare(b));
 }
 
-export type RecipeChoice = { id: number; title: string };
+export type RecipeChoice = { id: number; title: string; servings: number | null };
 
-/** The household's recipes by title, for linking one inside another. */
+/** The household's recipes by title, for linking one inside another or putting on a menu. */
 export async function listRecipeChoices(): Promise<RecipeChoice[]> {
   const groupId = await requireGroupId();
-  return db.select({ id: recipes.id, title: recipes.title }).from(recipes).where(eq(recipes.groupId, groupId)).orderBy(asc(recipes.title));
+  return db.select({ id: recipes.id, title: recipes.title, servings: recipes.servings }).from(recipes).where(eq(recipes.groupId, groupId)).orderBy(asc(recipes.title));
 }
 
 /** A recipe's cook log, newest version first and newest first within it, so a back-dated cook stays with its version. */
@@ -122,6 +123,7 @@ export async function listRecipeLogs(recipeId: number) {
       person: profiles.name,
       color: profiles.color,
       mealId: recipeLogs.mealId,
+      mealSizes: meals.sizes,
       menuId: meals.menuId,
       menu: menus.name,
     })
@@ -131,7 +133,8 @@ export async function listRecipeLogs(recipeId: number) {
     .leftJoin(meals, eq(meals.id, recipeLogs.mealId))
     .leftJoin(menus, eq(menus.id, meals.menuId))
     .where(and(eq(recipeLogs.recipeId, recipeId), eq(recipes.groupId, groupId)))
-    .orderBy(desc(recipeLogs.recipeVersion), desc(recipeLogs.cookedOn), desc(recipeLogs.id));
+    .orderBy(desc(recipeLogs.recipeVersion), desc(recipeLogs.cookedOn), desc(recipeLogs.id))
+    .then((rows) => rows.map(({ mealSizes, ...l }) => ({ ...l, mealSize: mealSizes?.[recipeId] ?? null })));
 }
 
 export type RecipeLogEntry = Awaited<ReturnType<typeof listRecipeLogs>>[number];
@@ -233,12 +236,19 @@ export async function getMenu(id: number) {
   const times = await db.select().from(meals).where(eq(meals.menuId, id)).orderBy(desc(meals.cookedOn), desc(meals.id));
   const mealIds = times.map((t) => t.id);
   const recipeIds = [...new Set([...menu.recipeIds, ...times.flatMap((t) => t.recipeIds)])];
-  const [found, logs, ratings] = await Promise.all([
+  const [found, cooking, logs, ratings] = await Promise.all([
     recipeIds.length
       ? db
           .select({ id: recipes.id, title: recipes.title, servings: recipes.servings, prepMin: recipes.prepMin, cookMin: recipes.cookMin })
           .from(recipes)
           .where(and(eq(recipes.groupId, groupId), inArray(recipes.id, recipeIds)))
+      : [],
+    // Only the menu's own recipes are cooked from here, so only they carry ingredients and steps.
+    menu.recipeIds.length
+      ? db
+          .select({ id: recipes.id, ingredients: recipes.ingredients, steps: recipes.steps })
+          .from(recipes)
+          .where(and(eq(recipes.groupId, groupId), inArray(recipes.id, menu.recipeIds)))
       : [],
     mealIds.length
       ? db
@@ -258,14 +268,19 @@ export async function getMenu(id: number) {
       : [],
   ]);
   const byId = new Map(found.map((r) => [r.id, r]));
-  const dishes = (ids: number[]) => ids.flatMap((r) => byId.get(r) ?? []);
+  const dishes = (ids: number[], sizes: Record<string, MenuSize>) => ids.flatMap((r) => byId.get(r) ?? []).map((d) => ({ ...d, amount: menuAmount(servingsOf(d.servings), sizes[d.id]) }));
+  const content = new Map(cooking.map((r) => [r.id, r]));
   return {
     ...menu,
-    dishes: dishes(menu.recipeIds),
+    dishes: dishes(menu.recipeIds, menu.sizes).map((d) => ({
+      ...d,
+      ingredients: content.get(d.id)?.ingredients ?? [],
+      steps: content.get(d.id)?.steps ?? [],
+    })),
     meals: times.map((t) => ({
       ...t,
       name: menu.name,
-      dishes: dishes(t.recipeIds),
+      dishes: dishes(t.recipeIds, t.sizes),
       logs: logs.filter((l) => l.mealId === t.id),
       ratings: ratings.filter((r) => r.mealId === t.id),
     })),

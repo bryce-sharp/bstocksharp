@@ -7,12 +7,15 @@ import Container from "@mui/material/Container";
 import Typography from "@mui/material/Typography";
 import AddIcon from "@mui/icons-material/Add";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import StarBorderIcon from "@mui/icons-material/StarBorder";
 import Link from "@/components/shared/AppLink";
 import type { MealDetail, MenuDetail, RecipeChoice } from "@/lib/queries/recipes";
-import { formatMinutes, recipeHref, shortDay, totalMinutes } from "@/lib/recipes";
+import { formatMinutes, linkedTitles, recipeHref, shortDay, totalMinutes } from "@/lib/recipes";
+import { formatAmount, servingsOf, sizeLabel, type UnitSystem } from "@/lib/recipe-units";
 import BackLink from "./BackLink";
 import type { Cook } from "./CookLogDialog";
+import CookMode, { type CookDish } from "./CookMode";
 import { MealDialog, MenuDialog, RateMealDialog } from "./MenuDialogs";
 import { panelSx } from "./RecipeCard";
 import Stars from "./Stars";
@@ -32,7 +35,13 @@ export function madeLine(timesMade: number, lastMade: string | null, today: stri
 
 /** One time the menu was made: everyone's stars for the whole meal, then each recipe's stars that time. */
 function MealTime({ meal, menu, today, canRate, onRate, onEdit }: { meal: MealDetail; menu: MenuDetail; today: string; canRate: boolean; onRate: () => void; onEdit: () => void }) {
-  const same = meal.dishes.length === menu.dishes.length && meal.dishes.every((d, i) => d.id === menu.dishes[i]!.id);
+  const same = meal.dishes.length === menu.dishes.length && meal.dishes.every((d, i) => d.id === menu.dishes[i]!.id && d.amount === menu.dishes[i]!.amount);
+  // A recipe's size shows only where this time differs from the menu, or from the recipe's own when it is off the menu.
+  const made = (d: MealDetail["dishes"][number]) => {
+    const servings = servingsOf(d.servings);
+    const usual = menu.dishes.find((m) => m.id === d.id)?.amount ?? servings ?? 1;
+    return d.amount === usual ? d.title : `${d.title}, ${sizeLabel(d.amount, servings)}`;
+  };
   return (
     <Box component="li" sx={{ py: 2, borderTop: `1px solid ${color.rule}` }}>
       <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1 }}>
@@ -48,7 +57,7 @@ function MealTime({ meal, menu, today, canRate, onRate, onEdit }: { meal: MealDe
       </Box>
       {!same && (
         <Typography variant="body2" sx={{ color: color.muted }}>
-          Made with {meal.dishes.map((d) => d.title).join(" · ") || "recipes since deleted"}
+          Made with {meal.dishes.map(made).join(" · ") || "recipes since deleted"}
         </Typography>
       )}
       {meal.notes && <Typography sx={{ whiteSpace: "pre-line", mt: 0.5 }}>{meal.notes}</Typography>}
@@ -101,9 +110,50 @@ function MealTime({ meal, menu, today, canRate, onRate, onEdit }: { meal: MealDe
 
 type Open = { kind: "menu" } | { kind: "made" } | { kind: "edit"; meal: MealDetail } | { kind: "rate"; meal: MealDetail } | null;
 
-/** A menu: its recipes, ready to open, then each time it was made with how it went. */
-export default function MenuView({ menu, recipeChoices, cooks, defaultCook, today }: { menu: MenuDetail; recipeChoices: RecipeChoice[]; cooks: Cook[]; defaultCook: number | null; today: string }) {
+type MenuDish = MenuDetail["dishes"][number];
+
+/** How many times the recipe's own size the menu makes. */
+const factorOf = (d: MenuDish) => d.amount / (servingsOf(d.servings) ?? 1);
+
+/** "Serves 12, 2× the recipe", or "2 batches"; nothing for one batch of a recipe without servings. */
+function sizeFact(d: MenuDish): string | null {
+  const servings = servingsOf(d.servings);
+  if (!servings) return d.amount === 1 ? null : sizeLabel(d.amount, null);
+  return d.amount === servings ? `Serves ${servings}` : `Serves ${d.amount}, ${formatAmount(factorOf(d))}× the recipe`;
+}
+
+/** Each of the menu's recipes as cook mode takes it, at the menu's size for it. */
+function cookDishes(menu: MenuDetail, recipeChoices: RecipeChoice[]): CookDish[] {
+  return menu.dishes.map((d) => ({
+    id: d.id,
+    title: d.title,
+    ingredients: d.ingredients,
+    steps: d.steps,
+    factor: factorOf(d),
+    amountLabel: sizeLabel(d.amount, servingsOf(d.servings)),
+    linked: linkedTitles(d.ingredients, recipeChoices),
+  }));
+}
+
+/** A menu: its recipes, ready to open or cook together, then each time it was made with how it went. */
+export default function MenuView({
+  menu,
+  recipeChoices,
+  cooks,
+  defaultCook,
+  today,
+  units,
+}: {
+  menu: MenuDetail;
+  recipeChoices: RecipeChoice[];
+  cooks: Cook[];
+  defaultCook: number | null;
+  today: string;
+  /** The active person's units, for cook mode. */
+  units: UnitSystem;
+}) {
   const [open, setOpen] = React.useState<Open>(null);
+  const [cooking, setCooking] = React.useState(false);
   const canRate = cooks.some((c) => c.canLog);
   const close = () => setOpen(null);
   return (
@@ -119,12 +169,15 @@ export default function MenuView({ menu, recipeChoices, cooks, defaultCook, toda
               {menu.dishes.length === 1 ? "1 recipe" : `${menu.dishes.length} recipes`} · {madeLine(menu.meals.length, menu.meals[0]?.cookedOn ?? null, today)}
             </Typography>
           </Box>
-          <Box sx={{ display: "flex", gap: 1 }}>
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+            <Button variant="contained" startIcon={<PlayArrowIcon />} onClick={() => setCooking(true)} disabled={!menu.dishes.some((d) => d.steps.length)}>
+              Start cooking
+            </Button>
+            <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setOpen({ kind: "made" })} disabled={!canRate || menu.dishes.length === 0}>
+              We made it
+            </Button>
             <Button variant="outlined" startIcon={<EditOutlinedIcon />} onClick={() => setOpen({ kind: "menu" })}>
               Edit
-            </Button>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpen({ kind: "made" })} disabled={!canRate || menu.dishes.length === 0}>
-              We made it
             </Button>
           </Box>
         </Box>
@@ -140,14 +193,14 @@ export default function MenuView({ menu, recipeChoices, cooks, defaultCook, toda
             <Box component="ol" sx={{ listStyle: "none", m: 0, p: 0 }}>
               {menu.dishes.map((d, i) => {
                 const minutes = totalMinutes(d);
-                const facts = [d.servings ? `Serves ${d.servings}` : null, minutes ? formatMinutes(minutes) : null].filter(Boolean).join(" · ");
+                const facts = [sizeFact(d), minutes ? formatMinutes(minutes) : null].filter(Boolean).join(" · ");
                 return (
                   <Box component="li" key={d.id} sx={{ display: "flex", alignItems: "baseline", gap: 1.5, py: 1, borderTop: i ? `1px solid ${color.rule}` : "none" }}>
                     <Box component="span" aria-hidden sx={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontWeight: 600, color: color.accent, minWidth: 18 }}>
                       {i + 1}
                     </Box>
                     <Box sx={{ minWidth: 0 }}>
-                      <Box component={Link} href={recipeHref(d.id, { from: { kind: "menu", id: menu.id } })} sx={{ fontWeight: 700, fontSize: 16, textDecoration: "underline", textUnderlineOffset: 3, textDecorationColor: color.rule }}>
+                      <Box component={Link} href={recipeHref(d.id, { scale: factorOf(d), from: { kind: "menu", id: menu.id } })} sx={{ fontWeight: 700, fontSize: 16, textDecoration: "underline", textUnderlineOffset: 3, textDecorationColor: color.rule }}>
                         {d.title}
                       </Box>
                       {facts && (
@@ -187,6 +240,18 @@ export default function MenuView({ menu, recipeChoices, cooks, defaultCook, toda
       {open?.kind === "made" && <MealDialog open onClose={close} menu={menu} recipeChoices={recipeChoices} cooks={cooks} defaultCook={defaultCook} today={today} />}
       {open?.kind === "edit" && <MealDialog open onClose={close} menu={menu} meal={open.meal} recipeChoices={recipeChoices} cooks={cooks} defaultCook={defaultCook} today={today} />}
       {open?.kind === "rate" && <RateMealDialog open onClose={close} meal={open.meal} cooks={cooks} defaultCook={defaultCook} />}
+      {cooking && (
+        <CookMode
+          title={menu.name}
+          dishes={cookDishes(menu, recipeChoices)}
+          units={units}
+          onClose={() => setCooking(false)}
+          onDone={() => {
+            setCooking(false);
+            if (canRate) setOpen({ kind: "made" });
+          }}
+        />
+      )}
     </Container>
   );
 }

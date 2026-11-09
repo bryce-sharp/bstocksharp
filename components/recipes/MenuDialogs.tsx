@@ -14,8 +14,10 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { createMenu, deleteMeal, deleteMenu, logMeal, rateMeal, updateMeal, updateMenu, type MealInput, type MealRatingsInput, type MenuInput } from "@/app/actions/recipes";
 import type { MealDetail, MenuDetail, RecipeChoice } from "@/lib/queries/recipes";
+import { servingsOf } from "@/lib/recipe-units";
 import type { Cook } from "./CookLogDialog";
 import { skinScope, skinSx } from "./RecipesSkin";
+import SizeStepper from "./SizeStepper";
 import StarInput from "./StarInput";
 import TagChip from "./TagChip";
 import { useSave } from "./useSave";
@@ -51,7 +53,7 @@ function useMealStars(meal: MealDetail | undefined, cooks: Cook[], defaultCook: 
 type MealStarsState = ReturnType<typeof useMealStars>;
 
 /** Whose stars, the meal's stars and notes, then each recipe's stars; recipe stars are optional and stay the recipe's own. */
-function MealStarsFields({ stars, dishes }: { stars: MealStarsState; dishes: RecipeChoice[] }) {
+function MealStarsFields({ stars, dishes }: { stars: MealStarsState; dishes: { id: number; title: string }[] }) {
   const { loggable, profileId, choose, saved, setSaved } = stars;
   return (
     <Stack spacing={2}>
@@ -145,16 +147,49 @@ function RecipePicker({ choices, value, onChange, label, placeholder }: { choice
   );
 }
 
-const choicesOf = (dishes: { id: number; title: string }[]): RecipeChoice[] => dishes.map((d) => ({ id: d.id, title: d.title }));
+const choicesOf = (dishes: RecipeChoice[]): RecipeChoice[] => dishes.map((d) => ({ id: d.id, title: d.title, servings: d.servings }));
+
+type Amounts = Record<number, number>;
+
+/** Each picked recipe's size, filled from the dishes' saved amounts. */
+function useAmounts(dishes: { id: number; amount: number }[]) {
+  const [amounts, setAmounts] = React.useState<Amounts>(() => Object.fromEntries(dishes.map((d) => [d.id, d.amount])));
+  const sizesOf = (picked: RecipeChoice[]): Amounts => Object.fromEntries(picked.flatMap((d) => (amounts[d.id] !== undefined ? [[d.id, amounts[d.id]!]] : [])));
+  return { amounts, setAmounts, sizesOf };
+}
+
+/** A size stepper for each picked recipe; a recipe just added starts at its own size. */
+function SizesField({ dishes, amounts, onChange }: { dishes: RecipeChoice[]; amounts: Amounts; onChange: React.Dispatch<React.SetStateAction<Amounts>> }) {
+  if (!dishes.length) return null;
+  return (
+    <Box>
+      <Typography component="legend" variant="body2" sx={{ color: color.muted, mb: 0.5 }}>
+        How much of each
+      </Typography>
+      <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0, display: "grid", gap: 0.75 }}>
+        {dishes.map((d) => {
+          const servings = servingsOf(d.servings);
+          return (
+            <Box component="li" key={d.id} sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", columnGap: 2, rowGap: 0.5 }}>
+              <Typography sx={{ fontWeight: 600, flex: "1 1 160px", minWidth: 0 }}>{d.title}</Typography>
+              <SizeStepper amount={amounts[d.id] ?? servings ?? 1} servings={servings} name={d.title} onChange={(a) => onChange((m) => ({ ...m, [d.id]: a }))} />
+            </Box>
+          );
+        })}
+      </Box>
+    </Box>
+  );
+}
 
 /** Make a menu, or change its name, notes and recipes; the times it was made keep theirs. */
 export function MenuDialog({ open, onClose, menu, recipeChoices }: { open: boolean; onClose: () => void; menu?: MenuDetail; recipeChoices: RecipeChoice[] }) {
   const [name, setName] = React.useState(menu?.name ?? "");
   const [notes, setNotes] = React.useState(menu?.notes ?? "");
   const [dishes, setDishes] = React.useState<RecipeChoice[]>(menu ? choicesOf(menu.dishes) : []);
+  const { amounts, setAmounts, sizesOf } = useAmounts(menu?.dishes ?? []);
   const { error, busy, run } = useSave(onClose);
   const save = () => {
-    const input: MenuInput = { name, notes, recipeIds: dishes.map((d) => d.id) };
+    const input: MenuInput = { name, notes, recipeIds: dishes.map((d) => d.id), sizes: sizesOf(dishes) };
     run(() => (menu ? updateMenu(menu.id, input) : createMenu(input)));
   };
   const remove = () => {
@@ -188,6 +223,7 @@ export function MenuDialog({ open, onClose, menu, recipeChoices }: { open: boole
       <Stack spacing={2.25} sx={{ pt: 0.5 }}>
         <TextField label="Menu" value={name} onChange={(e) => setName(e.target.value)} placeholder="Burger night" autoFocus={!menu} />
         <RecipePicker choices={recipeChoices} value={dishes} onChange={setDishes} label="Recipes" placeholder="Which recipes go together?" />
+        <SizesField dishes={dishes} amounts={amounts} onChange={setAmounts} />
         <TextField label="About the menu" multiline minRows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="When it works, what to make ahead" />
         {error && <Alert severity="error">{error}</Alert>}
       </Stack>
@@ -218,11 +254,12 @@ export function MealDialog({
   const [cookedOn, setCookedOn] = React.useState(meal?.cookedOn ?? today);
   const [notes, setNotes] = React.useState(meal?.notes ?? "");
   const [dishes, setDishes] = React.useState<RecipeChoice[]>(choicesOf(meal?.dishes ?? menu.dishes));
+  const { amounts, setAmounts, sizesOf } = useAmounts(meal?.dishes ?? menu.dishes);
   const stars = useMealStars(undefined, cooks, defaultCook);
   const { error, busy, run } = useSave(onClose);
 
   const save = () => {
-    const input: MealInput = { cookedOn, notes, recipeIds: dishes.map((d) => d.id) };
+    const input: MealInput = { cookedOn, notes, recipeIds: dishes.map((d) => d.id), sizes: sizesOf(dishes) };
     run(() => (meal ? updateMeal(meal.id, input) : logMeal(menu.id, input, stars.input(input.recipeIds))));
   };
   const remove = () => {
@@ -257,6 +294,7 @@ export function MealDialog({
         <TextField label="When" type="date" value={cookedOn} onChange={(e) => setCookedOn(e.target.value)} autoFocus={!meal} slotProps={{ inputLabel: { shrink: true }, htmlInput: { max: today } }} sx={{ maxWidth: 240 }} />
         <RecipePicker choices={recipeChoices} value={dishes} onChange={setDishes} label="Recipes made" placeholder="Which recipes did you make?" />
         {dropped.length > 0 && <Alert severity="warning">Removing {dropped.map((d) => d.title).join(", ")} also removes the stars given to it this time.</Alert>}
+        <SizesField dishes={dishes} amounts={amounts} onChange={setAmounts} />
         <TextField label="About this time" multiline minRows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="The occasion, who came" />
         {!meal && (
           <Box sx={{ pt: 1, borderTop: `1px solid ${color.rule}` }}>

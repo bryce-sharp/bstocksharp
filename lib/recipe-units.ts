@@ -61,6 +61,44 @@ export function formatAmount(n: number): string {
   return cookAmount(n)[1];
 }
 
+/** A recipe's servings, or null when it has none; a stored 0 counts as none. */
+export function servingsOf(servings: number | null): number | null {
+  return servings && servings > 0 ? servings : null;
+}
+
+/** How a recipe's size moves: by whole servings up to 20 times the recipe, or by half batches up to 20. */
+export function sizeSteps(servings: number | null): { step: number; max: number } {
+  return servings ? { step: 1, max: servings * 20 } : { step: 0.5, max: 20 };
+}
+
+/** A recipe's size kept on a menu or a time it was made, in the recipe's own measure: servings when it has them, else batches. */
+export type MenuSize = { servings: number } | { batches: number };
+
+/** How much of a recipe a menu makes: its kept size while that still fits how the recipe is measured, else the recipe's own. */
+export function menuAmount(servings: number | null, size: MenuSize | undefined): number {
+  if (servings) return size && "servings" in size ? size.servings : servings;
+  return size && "batches" in size ? size.batches : 1;
+}
+
+/** The size a menu keeps for an amount picked on the recipe's steps; null is the recipe's own size. */
+export function keptSize(servings: number | null, amount: unknown): MenuSize | null {
+  const { step, max } = sizeSteps(servings);
+  const onStep = typeof amount === "number" && amount >= step && amount <= max && Math.abs(amount / step - Math.round(amount / step)) < 1e-9;
+  if (!onStep) throw new Error("Pick each recipe's size with its + and − buttons.");
+  if (amount === (servings ?? 1)) return null;
+  return servings ? { servings: amount } : { batches: amount };
+}
+
+/** A kept size as a cook says it, whatever the recipe is measured in now. */
+export function keptLabel(size: MenuSize): string {
+  return "servings" in size ? sizeLabel(size.servings, size.servings) : sizeLabel(size.batches, null);
+}
+
+/** A recipe's size as a cook says it: "4 servings", or "1 1/2 batches" for a recipe without servings. */
+export function sizeLabel(amount: number, servings: number | null): string {
+  return servings ? `${amount} ${amount === 1 ? "serving" : "servings"}` : `${formatAmount(amount)} ${amount === 1 ? "batch" : "batches"}`;
+}
+
 /** A metric amount rounded the way a scale or jug reads; liters and kilograms keep two places. */
 function metricAmount(n: number, large: boolean): string {
   const step = large ? (n < 10 ? 0.05 : 0.5) : n < 10 ? 0.5 : n < 50 ? 1 : n < 250 ? 5 : 10;

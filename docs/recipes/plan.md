@@ -2,7 +2,7 @@
 
 Status: plan agreed 2026-11-03; the look (Sage & Butter) chosen 2026-11-03; PR 1 (the section, recipes,
 favorites) and PR 2 (the cook log and ratings) built 2026-11-03 (#88); PR 3 (cook mode, #89) and PR 4 (import)
-built 2026-11-04; PR 5 (units), PR 6 (step links), PR 8 (recipes inside recipes), PR 9 (meals) and PR 10 (At a glance) built 2026-11-04; PR 11 (menus) built 2026-11-04. The dev mockup is retired now that every screen of it is real; the looks lab `/recipes/looks`
+built 2026-11-04; PR 5 (units), PR 6 (step links), PR 8 (recipes inside recipes), PR 9 (meals) and PR 10 (At a glance) built 2026-11-04; PR 11 (menus) built 2026-11-04; PR 12 (cooking a menu) built 2026-11-06. The dev mockup is retired now that every screen of it is real; the looks lab `/recipes/looks`
 stays as the reference for the table view.
 
 Decided: a Recipes section of this site, shared by the household; anyone in the household edits any recipe, and
@@ -158,8 +158,20 @@ quiet pattern, soft colors, friendly type that stays easy to read.
   changing the menu never rewrites history. Deleting a menu deletes its times, their stars and entries.
   `scripts/migrate-menus.mjs` gave every PR 9 meal a menu (meals with the same name and recipes share one); its
   `--finish` step, run after the deploy, requires a menu on every meal and drops `meals.name`.
-- A menu's play button (PR 12) opens a **multi-recipe cook mode**: every recipe's steps in tabs, one shared timer
-  tray, and one read-through for the whole meal.
+- As built (PR 12, 2026-11-06): Start cooking on a menu's page opens the same cook mode as one recipe, given the
+  menu's recipes: one read-through with each recipe's ingredients and steps under its name, then a tab per recipe
+  that keeps its own step, and one timer tray whose timers name their recipe and jump back to it. A recipe's last
+  step offers "On to" the next one not yet finished and ticks its tab; the last one left offers Done cooking, which
+  opens We made it. Amounts show in the person's units.
+- Also PR 12: a menu keeps a size for each recipe, like a workout item's overrides. Edit sets it with the same − and +
+  as a recipe page, and `menus.sizes` keeps only sizes that differ from the recipe's own, in the recipe's measure
+  (servings, or batches for a recipe without servings). A kept size that no longer fits the recipe, because it
+  gained or lost servings, falls back to the recipe's own. The menu page shows "Serves 48, 2× the recipe", and both
+  its recipe links and cook mode use that size. A time it was made keeps its own `meals.sizes` the same way: We made
+  it starts from the menu's sizes, the time shows only sizes that differ from the menu's, and the recipe's cook log
+  shows the size made. A 2× button beside every size stepper doubles it. `scripts/migrate-menu-sizes.mjs` adds both
+  columns (additive; run on live before merging). Not yet: a play button on the Menus list, and an order that
+  interleaves recipes.
 
 ### Import from a link
 - Reads the page's standard recipe data (schema.org Recipe, JSON-LD), then shows it for review before saving.
@@ -226,7 +238,7 @@ reads it merges.
 - **Phase 3: the fancy parts**
   - [x] PR 10: At a glance table view.
   - [x] PR 11: menus: groups of recipes, made or not; PR 9's meals become the times a menu was made.
-  - [ ] PR 12: multi-recipe cook mode.
+  - [x] PR 12: multi-recipe cook mode.
   - [ ] PR 13: photos (Vercel Blob uploads; the `attachments` table exists) on recipes and log entries.
 - **Later:** grocery list from a recipe or menu.
 

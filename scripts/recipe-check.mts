@@ -6,8 +6,8 @@
 //   npm run recipes:check -- --live
 
 import { recipeFromHtml, recipeFromPageText, recipeFromText, isoMinutes, textMinutes, yieldServings, tidyLine, withoutIngredientEcho } from "../lib/recipe-import.ts";
-import { parseOrigin, recipeHref, splitPasted, webUrl } from "../lib/recipes.ts";
-import { batchesOf, formatAmount, showIngredient, showShare, showTemperatures, withAmount } from "../lib/recipe-units.ts";
+import { linkedTitles, nextDish, parseOrigin, recipeHref, splitPasted, webUrl } from "../lib/recipes.ts";
+import { batchesOf, formatAmount, keptSize, menuAmount, showIngredient, showShare, showTemperatures, sizeLabel, withAmount } from "../lib/recipe-units.ts";
 import { ingredientLines, toIngredients, toSteps } from "../components/recipes/lines.ts";
 import { lineForUse, shortName, sharesOf, suggestUses } from "../lib/recipe-links.ts";
 import { summarizeRatings, type RatingLog } from "../lib/recipe-ratings.ts";
@@ -137,6 +137,12 @@ eq("links survive the form", toIngredients(ingredientLines(withLink), withLink),
 eq("an unlinked line drops its link", toIngredients(ingredientLines(withLink).map(({ recipeId: _r, ...l }) => l), withLink), [{ id: "a1", text: "1 batch Fry sauce" }, { id: "a2", text: "1 bun" }]);
 eq("a recipe link carries its size and where it came from", [recipeHref(7), recipeHref(7, { scale: 2, from: { kind: "recipe", id: 3 } }), recipeHref(7, { from: { kind: "menu", id: 5 } })], ["/recipes/7", "/recipes/7?scale=2&from=recipe-3", "/recipes/7?from=menu-5"]);
 eq("only a menu or recipe origin is read", ["menu-5", "recipe-3", "menu-", "x-5", "/evil", undefined, ["menu-5", "recipe-3"]].map(parseOrigin), [{ kind: "menu", id: 5 }, { kind: "recipe", id: 3 }, null, null, null, null, null]);
+eq("cooking a menu moves on to the next unfinished recipe, wrapping around", [nextDish(3, 0, new Set()), nextDish(3, 2, new Set()), nextDish(3, 0, new Set([1])), nextDish(3, 1, new Set([0, 2])), nextDish(1, 0, new Set())], [1, 0, 2, null, null]);
+eq("only linked recipes that still exist get titles", linkedTitles([{ id: "a", text: "1 crust", recipeId: 4 }, { id: "b", text: "1 egg" }, { id: "c", text: "sauce", recipeId: 9 }], [{ id: 4, title: "Pie crust" }, { id: 5, title: "Gravy" }]), { 4: "Pie crust" });
+eq("a size reads in servings or batches", [sizeLabel(1, 4), sizeLabel(6, 4), sizeLabel(1, null), sizeLabel(1.5, null)], ["1 serving", "6 servings", "1 batch", "1 1/2 batches"]);
+eq("a menu keeps only a size that differs from the recipe's own", [keptSize(6, 12), keptSize(6, 6), keptSize(null, 1.5), keptSize(null, 1)], [{ servings: 12 }, null, { batches: 1.5 }, null]);
+eq("a menu size off the recipe's steps is refused", [[6, 2.5], [6, 0], [6, 121], [null, 0.3], [null, 21], [6, "12"]].map(([sv, a]) => { try { keptSize(sv as number | null, a); return "kept"; } catch { return "refused"; } }), ["refused", "refused", "refused", "refused", "refused", "refused"]);
+eq("a kept size that no longer fits how the recipe is measured falls back to the recipe's own", [menuAmount(6, { servings: 12 }), menuAmount(6, undefined), menuAmount(null, { batches: 2 }), menuAmount(null, { servings: 12 }), menuAmount(4, { batches: 2 })], [12, 6, 2, 1, 4]);
 
 // ── Ratings ───────────────────────────────────────────────────────────────────
 const L = (profileId: number, cookedOn: string, rating: number | null, counted = true, recipeVersion = 1): RatingLog => ({ profileId, cookedOn, rating, counted, recipeVersion });

@@ -13,7 +13,7 @@ import { findRecipeBySource, getMeal, getMenu, getRecipe, getRecipeLog } from "@
 import { logEvent } from "@/lib/events";
 import { SafeFetchError, safeFetchText } from "@/lib/safe-fetch";
 import { recipeFromHtml, recipeFromPageText, type RecipeDraft } from "@/lib/recipe-import";
-import { isUnitSystem, type UnitSystem } from "@/lib/recipe-units";
+import { isUnitSystem, keptSize, servingsOf, type MenuSize, type UnitSystem } from "@/lib/recipe-units";
 import { RECIPE_LIMITS, cleanTags, type RecipeIngredient, type RecipeStep, type RecipeUse, webUrl } from "@/lib/recipes";
 
 // Anyone in the household edits any recipe (docs/recipes/plan.md); favorites are each person's own.
@@ -320,36 +320,51 @@ export async function deleteCookLog(logId: number): Promise<RecipeSaveResult> {
 
 // ── Menus ─────────────────────────────────────────────────────────────────────
 
-/** What the menu form sends: its name, notes and recipes in order. */
-export type MenuInput = { name: string; notes: string; recipeIds: number[] };
+/** What the menu form sends: its name, notes, recipes in order, and each recipe's size in its servings or batches. */
+export type MenuInput = { name: string; notes: string; recipeIds: number[]; sizes: Record<number, number> };
 
-/** What the made-it form sends: the day, notes about that time, and the recipes actually made. */
-export type MealInput = { cookedOn: string; notes: string; recipeIds: number[] };
+/** What the made-it form sends: the day, notes about that time, the recipes actually made and how much of each. */
+export type MealInput = { cookedOn: string; notes: string; recipeIds: number[]; sizes: Record<number, number> };
 
 /** One person's stars for a time the menu was made: the whole meal, and each recipe in it. */
 export type MealRatingsInput = { profileId: number; rating: number | null; notes: string; dishes: { recipeId: number; rating: number | null }[] };
 
-/** A list of our recipes, in order, without repeats. */
-async function parseRecipeIds(raw: unknown): Promise<number[]> {
+/** A list of our recipes, in order, without repeats, with their servings. */
+async function parseRecipes(raw: unknown): Promise<{ id: number; servings: number | null }[]> {
   if (!Array.isArray(raw) || !raw.every((id) => Number.isInteger(id))) throw new Error("Pick the recipes.");
   const recipeIds = [...new Set(raw as number[])];
   if (!recipeIds.length) throw new Error("Pick at least one recipe.");
   if (recipeIds.length > RECIPE_LIMITS.dishes) throw new Error(`A menu can have up to ${RECIPE_LIMITS.dishes} recipes.`);
-  const found = await db.select({ id: recipes.id }).from(recipes).where(and(eq(recipes.groupId, await requireGroupId()), inArray(recipes.id, recipeIds)));
+  const found = await db.select({ id: recipes.id, servings: recipes.servings }).from(recipes).where(and(eq(recipes.groupId, await requireGroupId()), inArray(recipes.id, recipeIds)));
   if (found.length !== recipeIds.length) throw new Error("One of those recipes is gone.");
-  return recipeIds;
+  const byId = new Map(found.map((r) => [r.id, r]));
+  return recipeIds.map((id) => byId.get(id)!);
+}
+
+/** The sizes to keep for the recipes on a menu or a time it was made; a recipe at its own size keeps none. */
+function parseSizes(raw: unknown, picked: { id: number; servings: number | null }[]): Record<string, MenuSize> {
+  const sizes: Record<string, MenuSize> = {};
+  if (!isRecord(raw)) return sizes;
+  for (const r of picked) {
+    if (raw[r.id] === undefined) continue;
+    const size = keptSize(servingsOf(r.servings), raw[r.id]);
+    if (size) sizes[r.id] = size;
+  }
+  return sizes;
 }
 
 async function parseMenu(input: unknown) {
   if (!isRecord(input)) throw new Error("Nothing to save.");
   const name = text(input.name, RECIPE_LIMITS.title);
   if (!name) throw new Error("Give the menu a name.");
-  return { name, notes: text(input.notes, RECIPE_LIMITS.text), recipeIds: await parseRecipeIds(input.recipeIds) };
+  const picked = await parseRecipes(input.recipeIds);
+  return { name, notes: text(input.notes, RECIPE_LIMITS.text), recipeIds: picked.map((r) => r.id), sizes: parseSizes(input.sizes, picked) };
 }
 
 async function parseMeal(input: unknown) {
   if (!isRecord(input)) throw new Error("Nothing to save.");
-  return { cookedOn: day(input.cookedOn), notes: text(input.notes, RECIPE_LIMITS.text), recipeIds: await parseRecipeIds(input.recipeIds) };
+  const picked = await parseRecipes(input.recipeIds);
+  return { cookedOn: day(input.cookedOn), notes: text(input.notes, RECIPE_LIMITS.text), recipeIds: picked.map((r) => r.id), sizes: parseSizes(input.sizes, picked) };
 }
 
 function refreshMenu(id: number, recipeIds: number[]) {

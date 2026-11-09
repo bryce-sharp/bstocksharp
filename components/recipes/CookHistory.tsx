@@ -7,6 +7,7 @@ import Typography from "@mui/material/Typography";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import Link from "@/components/shared/AppLink";
 import type { RecipeLogEntry } from "@/lib/queries/recipes";
+import { keptLabel } from "@/lib/recipe-units";
 import { shortDay } from "@/lib/recipes";
 import Stars from "./Stars";
 import { color } from "./tokens";
@@ -38,7 +39,7 @@ export default function CookHistory({
                   <Typography sx={{ fontWeight: 700, fontSize: 14.5 }}>{l.person}</Typography>
                   <Typography variant="body2" sx={{ color: color.muted }}>
                     {shortDay(l.cookedOn, today)}
-                    {l.servings ? ` · ${l.servings} servings` : ""}
+                    {l.servings ? ` · ${l.servings} servings` : l.mealSize ? ` · ${keptLabel(l.mealSize)}` : ""}
                   </Typography>
                   {l.rating !== null && (
                     <Box sx={{ opacity: l.counted ? 1 : 0.45 }}>
