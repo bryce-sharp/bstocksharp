@@ -19,7 +19,7 @@ export default async function RecipePage({ params, searchParams }: Props) {
   // A linked recipe opens at the size the outer one needs ("?scale=2" for 2 batches).
   const query = await searchParams;
   const asked = Number(query?.scale);
-  const scale = Number.isFinite(asked) && asked >= 0.1 && asked <= 20 ? asked : 1;
+  const scale = Number.isFinite(asked) && asked > 0 && asked <= 20 ? asked : 1;
   const person = await getActiveProfile();
   const [recipe, canFavorite, logs, cooks, today, back] = await Promise.all([
     getRecipe(id, person?.id ?? null),
