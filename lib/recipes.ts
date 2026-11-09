@@ -116,3 +116,18 @@ export function parseOrigin(value: unknown): RecipeOrigin | null {
   const m = typeof value === "string" ? value.match(/^(menu|recipe)-(\d{1,9})$/) : null;
   return m ? { kind: m[1] as RecipeOrigin["kind"], id: Number(m[2]) } : null;
 }
+
+/** Titles of the recipes these ingredient lines link to; a deleted one is left out, so its line stays text. */
+export function linkedTitles(ingredients: RecipeIngredient[], choices: { id: number; title: string }[]): Record<number, string> {
+  const ids = new Set(ingredients.flatMap((i) => (i.recipeId !== undefined ? [i.recipeId] : [])));
+  return Object.fromEntries(choices.filter((c) => ids.has(c.id)).map((c) => [c.id, c.title]));
+}
+
+/** In cook mode for several recipes, the next one not yet finished after `from`, wrapping around; null when none is left. */
+export function nextDish(count: number, from: number, finished: ReadonlySet<number>): number | null {
+  for (let k = 1; k < count; k++) {
+    const d = (from + k) % count;
+    if (!finished.has(d)) return d;
+  }
+  return null;
+}

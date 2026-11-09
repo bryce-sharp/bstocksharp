@@ -25,7 +25,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type { RecipeIngredient, RecipeStep } from "@/lib/recipes";
-import type { UnitSystem } from "@/lib/recipe-units";
+import type { MenuSize, UnitSystem } from "@/lib/recipe-units";
 
 const createdAt = () =>
   timestamp("created_at", { withTimezone: true }).defaultNow().notNull();
@@ -1391,6 +1391,8 @@ export const menus = pgTable(
     name: varchar("name", { length: 160 }).notNull(),
     notes: text("notes"),
     recipeIds: jsonb("recipe_ids").$type<number[]>().notNull().default([]),
+    // Each recipe's size on this menu by recipe id, kept only where it differs from the recipe's own.
+    sizes: jsonb("sizes").$type<Record<string, MenuSize>>().notNull().default({}),
     createdByProfileId: integer("created_by_profile_id").references(() => profiles.id, { onDelete: "set null" }),
     createdAt: createdAt(),
   },
@@ -1409,6 +1411,8 @@ export const meals = pgTable(
     cookedOn: date("cooked_on").notNull(),
     notes: text("notes"),
     recipeIds: jsonb("recipe_ids").$type<number[]>().notNull().default([]),
+    // Each recipe's size that time by recipe id, kept only where it differs from the recipe's own.
+    sizes: jsonb("sizes").$type<Record<string, MenuSize>>().notNull().default({}),
     createdByProfileId: integer("created_by_profile_id").references(() => profiles.id, { onDelete: "set null" }),
     createdAt: createdAt(),
   },

@@ -4,7 +4,7 @@ import RecipeView from "@/components/recipes/RecipeView";
 import { canEditProfile } from "@/lib/auth";
 import { getActiveProfile } from "@/lib/profile";
 import { backTo, getRecipe, listCooks, listRecipeChoices, listRecipeLogs, recipeToday } from "@/lib/queries/recipes";
-import { parseOrigin } from "@/lib/recipes";
+import { linkedTitles, parseOrigin } from "@/lib/recipes";
 import { summarizeRatings } from "@/lib/recipe-ratings";
 
 type Props = { params: Promise<{ id: string }>; searchParams?: Promise<{ scale?: string | string[]; from?: string | string[] }> };
@@ -30,8 +30,7 @@ export default async function RecipePage({ params, searchParams }: Props) {
     backTo(parseOrigin(query?.from)),
   ]);
   if (!recipe) notFound();
-  const linkedIds = new Set(recipe.ingredients.flatMap((i) => (i.recipeId !== undefined ? [i.recipeId] : [])));
-  const linked = linkedIds.size ? Object.fromEntries((await listRecipeChoices()).filter((c) => linkedIds.has(c.id)).map((c) => [c.id, c.title])) : {};
+  const linked = recipe.ingredients.some((i) => i.recipeId !== undefined) ? linkedTitles(recipe.ingredients, await listRecipeChoices()) : {};
   return (
     <RecipeView
       key={`${recipe.id}-${person?.id ?? 0}-${scale}`}

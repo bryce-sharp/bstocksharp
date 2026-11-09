@@ -5,22 +5,19 @@ import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import ButtonBase from "@mui/material/ButtonBase";
 import Container from "@mui/material/Container";
-import IconButton from "@mui/material/IconButton";
 import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
-import AddIcon from "@mui/icons-material/Add";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import RestaurantIcon from "@mui/icons-material/Restaurant";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
-import RemoveIcon from "@mui/icons-material/Remove";
 import Link from "@/components/shared/AppLink";
 import type { Recipe } from "@/lib/db/schema";
 import type { RecipeLogEntry } from "@/lib/queries/recipes";
 import type { RatingSummary } from "@/lib/recipe-ratings";
 import { formatMinutes, shortDay, totalMinutes, type RecipeIngredient } from "@/lib/recipes";
-import { batchesOf, formatAmount, showIngredient, showShare, showTemperatures, type UnitSystem } from "@/lib/recipe-units";
+import { batchesOf, servingsOf, showIngredient, showShare, showTemperatures, sizeLabel, sizeSteps, type UnitSystem } from "@/lib/recipe-units";
 import { sharesOf, type Share } from "@/lib/recipe-links";
 import { layoutTable } from "@/lib/recipe-table";
 import { setRecipeUnits } from "@/app/actions/recipes";
@@ -34,6 +31,7 @@ import { panelSx } from "./RecipeCard";
 import RatingLine from "./RatingLine";
 import RatingsChart from "./RatingsChart";
 import RecipeLink from "./RecipeLink";
+import SizeStepper from "./SizeStepper";
 import TagChip from "./TagChip";
 import UnitsSwitch from "./UnitsSwitch";
 import { skinScope } from "./RecipesSkin";
@@ -117,10 +115,12 @@ export default function RecipeView({
   const canLog = new Set(cooks.filter((c) => c.canLog).map((c) => c.id));
   const nameOf = new Map(logs.map((l) => [l.profileId, { name: l.person, color: l.color }]));
   // Without servings the recipe scales by batches: 1/2, 1, 1 1/2, 2. A stored 0 counts as unknown.
-  const servings = recipe.servings && recipe.servings > 0 ? recipe.servings : null;
+  const servings = servingsOf(recipe.servings);
   const base = servings ?? 1;
-  const stepBy = servings ? 1 : 0.5;
-  const [amount, setAmount] = React.useState(() => Math.min(base * 20, Math.max(stepBy, Math.round((base * scale) / stepBy) * stepBy)));
+  const [amount, setAmount] = React.useState(() => {
+    const { step, max } = sizeSteps(servings);
+    return Math.min(max, Math.max(step, Math.round((base * scale) / step) * step));
+  });
   const factor = amount / base;
   const [units, setUnits] = React.useState(savedUnits);
   const chooseUnits = (next: UnitSystem) => {
@@ -148,19 +148,7 @@ export default function RecipeView({
     total && recipe.prepMin && recipe.cookMin ? `Total ${formatMinutes(total)}` : null,
   ].filter(Boolean);
 
-  const stepper = (
-    <Box sx={{ display: "inline-flex", alignItems: "center", border: `1px solid ${color.rule}`, borderRadius: 999, bgcolor: color.surface }}>
-      <IconButton size="small" aria-label="Fewer" disabled={amount <= stepBy} onClick={() => setAmount((a) => Math.max(stepBy, a - stepBy))}>
-        <RemoveIcon fontSize="small" />
-      </IconButton>
-      <Typography variant="body2" aria-live="polite" sx={{ minWidth: 92, textAlign: "center", fontWeight: 600 }}>
-        {servings ? `${amount} ${amount === 1 ? "serving" : "servings"}` : `${formatAmount(amount)} ${amount === 1 ? "batch" : "batches"}`}
-      </Typography>
-      <IconButton size="small" aria-label="More" disabled={amount >= base * 20} onClick={() => setAmount((a) => a + stepBy)}>
-        <AddIcon fontSize="small" />
-      </IconButton>
-    </Box>
-  );
+  const stepper = <SizeStepper amount={amount} servings={servings} onChange={setAmount} />;
   const unitsRow = (
     <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, mb: 1 }}>
       <UnitsSwitch value={units} onChange={chooseUnits} />
@@ -425,12 +413,8 @@ export default function RecipeView({
       {cooking && (
         <CookMode
           title={recipe.title}
-          ingredients={recipe.ingredients}
-          steps={recipe.steps}
-          factor={factor}
+          dishes={[{ id: recipe.id, title: recipe.title, ingredients: recipe.ingredients, steps: recipe.steps, factor, amountLabel: sizeLabel(amount, servings), linked }]}
           units={units}
-          linked={linked}
-          amountLabel={servings ? `${amount} ${amount === 1 ? "serving" : "servings"}` : `${formatAmount(amount)} ${amount === 1 ? "batch" : "batches"}`}
           onClose={() => setCooking(false)}
           onDone={() => {
             setCooking(false);
