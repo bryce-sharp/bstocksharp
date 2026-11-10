@@ -12,7 +12,6 @@ import MenuItem from "@mui/material/MenuItem";
 import ListSubheader from "@mui/material/ListSubheader";
 import Button from "@mui/material/Button";
 import Alert from "@mui/material/Alert";
-import Avatar from "@mui/material/Avatar";
 import Chip from "@mui/material/Chip";
 import Divider from "@mui/material/Divider";
 import FormGroup from "@mui/material/FormGroup";
@@ -26,6 +25,7 @@ import SubmitButton from "@/components/shared/SubmitButton";
 import NumberField from "@/components/shared/NumberField";
 import SuggestField from "@/components/shared/SuggestField";
 import TransferAccounts from "./TransferAccounts";
+import MerchantAvatar from "./MerchantAvatar";
 import { deleteTransactionAction, updateTransactionAction } from "@/app/actions/finance-budget";
 import {
   getTransactionDetailAction,
@@ -151,7 +151,6 @@ export default function TransactionDialog({
   );
   const staleLink =
     txn.recurringExpenseId != null && !billChoices.some((b) => b.id === txn.recurringExpenseId);
-  const logo = detail?.bank.find((b) => b.logoUrl)?.logoUrl ?? null;
   const adjusted = txn.amount !== txn.originalAmount;
   const amountText = `${direction === "in" && txn.category !== "transfer" ? "+" : ""}${formatMoney(Math.abs(txn.amount))}`;
 
@@ -294,9 +293,7 @@ export default function TransactionDialog({
 
   const header = (
     <DialogTitle component="div" sx={{ display: "flex", alignItems: "center", gap: 1.5, pr: 2 }}>
-      <Avatar src={logo ?? undefined} alt="" sx={{ width: 40, height: 40, bgcolor: "action.selected", color: "text.primary" }}>
-        {(txn.merchant ?? "?").charAt(0).toUpperCase()}
-      </Avatar>
+      <MerchantAvatar logo={txn.logo ?? null} merchant={txn.merchant} size={40} />
       <Box sx={{ minWidth: 0, flexGrow: 1 }}>
         <Typography variant="h6" noWrap>
           {txn.merchant ?? (txn.needsReview ? "Unreadable alert" : "Transaction")}

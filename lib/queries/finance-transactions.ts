@@ -95,6 +95,17 @@ export function txnWhere(book: BookRef, f: TxnFilters, cursor: string | null = n
   return and(...conds);
 }
 
+/** A bank copy's merchant logo: its own, else its first counterparty's. */
+const bankLogo = sql<string | null>`coalesce(${plaidTransactions.raw}->>'logo_url', ${plaidTransactions.raw}->'counterparties'->0->>'logo_url')`;
+
+/** This book's live bank copies of these ledger rows: the copy that made or claimed each row, or one paid in parts. */
+const bankCopiesOf = (book: BookRef, ids: number[]) =>
+  and(
+    eq(plaidItems.bookId, book.id),
+    isNull(plaidTransactions.removedAt),
+    or(inArray(plaidTransactions.ledgerTransactionId, ids), sql`${plaidTransactions.splitLedgerIds} && ${sql.param(ids)}::int[]`),
+  );
+
 /** DB row → the client row shape, shared by every transaction list and edit. */
 export function toTxnRow(t: typeof transactions.$inferSelect): TxnRowData {
   return {
@@ -159,6 +170,14 @@ export async function toBookRows(
           ),
         )
     : [];
+  const logos = await db
+    .select({ ledgerId: plaidTransactions.ledgerTransactionId, splitIds: plaidTransactions.splitLedgerIds, logo: bankLogo })
+    .from(plaidTransactions)
+    .innerJoin(plaidAccounts, eq(plaidTransactions.plaidAccountId, plaidAccounts.id))
+    .innerJoin(plaidItems, eq(plaidAccounts.plaidItemId, plaidItems.id))
+    .where(and(bankCopiesOf(book, ids), sql`${bankLogo} is not null`));
+  const logoOf = new Map<number, string>();
+  for (const l of logos) for (const id of [l.ledgerId, ...(l.splitIds ?? [])]) if (id != null && l.logo) logoOf.set(id, l.logo);
   const bookIds = [...new Set([...rows.map((r) => r.bookId), ...accounts.map((a) => a.bookId)])];
   const names = new Map(
     (await db.select({ id: books.id, name: books.name }).from(books).where(inArray(books.id, bookIds))).map((b) => [
@@ -175,6 +194,7 @@ export async function toBookRows(
     return {
       ...toTxnRow(r),
       ...laneHere(book, r),
+      logo: logoOf.get(r.id) ?? null,
       spendCategory: mine
         ? r.spendCategory
         : (shares.find((s) => s.transactionId === r.id && s.bookId === book.id)?.spendCategory ?? null),
@@ -227,7 +247,6 @@ export type TxnBankCopy = {
   pending: boolean;
   reportedAt: string; // when the bank first reported it (its pending version, if any)
   postedAt: string | null; // when the posted version arrived
-  logoUrl: string | null;
   website: string | null;
 };
 
@@ -271,19 +290,12 @@ export async function getTransactionDetail(book: BookRef, id: number): Promise<T
       pendingTransactionId: plaidTransactions.pendingTransactionId,
       splitLedgerIds: plaidTransactions.splitLedgerIds,
       statementText: sql<string | null>`${raw}->>'original_description'`,
-      logoUrl: sql<string | null>`coalesce(${raw}->>'logo_url', ${raw}->'counterparties'->0->>'logo_url')`,
       website: sql<string | null>`${raw}->>'website'`,
     })
     .from(plaidTransactions)
     .innerJoin(plaidAccounts, eq(plaidTransactions.plaidAccountId, plaidAccounts.id))
     .innerJoin(plaidItems, eq(plaidAccounts.plaidItemId, plaidItems.id))
-    .where(
-      and(
-        eq(plaidItems.bookId, book.id),
-        isNull(plaidTransactions.removedAt),
-        sql`(${plaidTransactions.ledgerTransactionId} = ${id} or ${id} = any(${plaidTransactions.splitLedgerIds}))`,
-      ),
-    );
+    .where(bankCopiesOf(book, [id]));
 
   // A posted copy that replaced a pending one: the pending one is when the bank first saw it.
   const pendingIds = copies.map((c) => c.pendingTransactionId).filter((x): x is string => x != null);
@@ -320,7 +332,6 @@ export async function getTransactionDetail(book: BookRef, id: number): Promise<T
         pending: c.pending,
         reportedAt: (pendingFirst?.createdAt ?? c.createdAt).toISOString(),
         postedAt: c.pending ? null : pendingFirst ? c.createdAt.toISOString() : null,
-        logoUrl: c.logoUrl,
         website: c.website,
       };
     }),

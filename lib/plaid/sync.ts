@@ -1,6 +1,6 @@
 import "server-only";
 import { and, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
-import type { AccountBase, RemovedTransaction, Transaction } from "plaid/legacy";
+import type { Plaid } from "plaid";
 import { db } from "@/lib/db";
 import { eventLog, plaidAccounts, plaidItems, plaidTransactions, type PlaidItem } from "@/lib/db/schema";
 import {
@@ -78,27 +78,27 @@ async function withLease<T>(plaidItemId: number, fn: () => Promise<T>): Promise<
 async function fetchChanges(accessToken: string, cursor: string | null) {
   const plaid = getPlaid();
   for (let attempt = 0; ; attempt++) {
-    const added: Transaction[] = [];
-    const modified: Transaction[] = [];
-    const removed: RemovedTransaction[] = [];
-    let accounts: AccountBase[] = [];
+    const added: Plaid.Transaction[] = [];
+    const modified: Plaid.Transaction[] = [];
+    const removed: Plaid.RemovedTransaction[] = [];
+    let accounts: Plaid.AccountBase[] = [];
     let next = cursor ?? undefined;
     try {
       let hasMore = true;
       while (hasMore) {
         // The bank's own statement text (original_description) is sent only when asked for.
-        const { data } = await plaid.transactionsSync({
+        const page = await plaid.transactions.sync({
           access_token: accessToken,
           cursor: next,
           count: 500,
           options: { include_original_description: true },
         });
-        added.push(...data.added);
-        modified.push(...data.modified);
-        removed.push(...data.removed);
-        accounts = data.accounts;
-        next = data.next_cursor;
-        hasMore = data.has_more;
+        added.push(...page.added);
+        modified.push(...page.modified);
+        removed.push(...page.removed);
+        accounts = page.accounts;
+        next = page.next_cursor;
+        hasMore = page.has_more;
       }
       return { added, modified, removed, accounts, cursor: next ?? null };
     } catch (err) {
@@ -109,7 +109,7 @@ async function fetchChanges(accessToken: string, cursor: string | null) {
 }
 
 /** New accounts appear unmapped; known ones get fresh names and balances. */
-async function saveAccounts(plaidItemId: number, accounts: AccountBase[]) {
+async function saveAccounts(plaidItemId: number, accounts: Plaid.AccountBase[]) {
   for (const a of accounts) {
     const fields = {
       name: a.name,
@@ -129,7 +129,7 @@ async function saveAccounts(plaidItemId: number, accounts: AccountBase[]) {
 /** Upsert added and modified rows (queued for apply), and flag removed ones. */
 async function stageTransactions(
   plaidItemId: number,
-  changes: { added: Transaction[]; modified: Transaction[]; removed: RemovedTransaction[] },
+  changes: { added: Plaid.Transaction[]; modified: Plaid.Transaction[]; removed: Plaid.RemovedTransaction[] },
 ) {
   const accountRows = await db
     .select({ id: plaidAccounts.id, accountId: plaidAccounts.accountId })

@@ -154,7 +154,6 @@ export function SnugArtSheet() {
                 describe={() => ""}
                 onCopy={() => {}}
                 onReveal={() => {}}
-                onShowMine={() => {}}
                 onPlayAgain={() => {}}
                 onClose={() => {}}
                 stats={{ played: 12, perfect: 9, streak: 4, bestStreak: 7 }}
