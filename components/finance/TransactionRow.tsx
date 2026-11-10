@@ -8,6 +8,7 @@ import Chip from "@mui/material/Chip";
 import Stack from "@mui/material/Stack";
 import Box from "@mui/material/Box";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import MerchantAvatar from "./MerchantAvatar";
 import type { SxProps, Theme } from "@mui/material/styles";
 import { formatMoney, formatDate } from "@/lib/format";
 import { flowOf } from "@/lib/finance/cashflow";
@@ -62,6 +63,8 @@ export type TxnRowData = {
   between?: { direction: "in" | "out"; book: string } | null;
   /** The book this row's merchant rule always counts it for ("Always for …"), if any. */
   alwaysFor?: number | null;
+  /** The merchant's logo from the bank feed, when Plaid sent one. */
+  logo?: string | null;
 };
 
 // `flow` groups the pickers: money out vs money in (a reimbursement pays you
@@ -214,7 +217,9 @@ export default function TransactionRow({
             >
               <WarningAmberIcon fontSize="small" color="warning" />
             </Tooltip>
-          ) : null}
+          ) : (
+            <MerchantAvatar logo={txn.logo ?? null} merchant={txn.merchant} size={24} />
+          )}
           <Box sx={{ minWidth: 0 }}>
             <Box
               sx={[
