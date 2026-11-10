@@ -1,5 +1,5 @@
 import "server-only";
-import { Configuration, PlaidApi, PlaidEnvironments } from "plaid/legacy";
+import { PlaidClient, PlaidEnvironment, PlaidError } from "plaid";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PLAID CLIENT — one per server instance, configured from the environment:
@@ -7,8 +7,8 @@ import { Configuration, PlaidApi, PlaidEnvironments } from "plaid/legacy";
 // (PLAID_SANDBOX_SECRET, PLAID_PRODUCTION_SECRET), and PLAID_ENV to pick
 // between them. Anything but PLAID_ENV=production means Sandbox, so a missing
 // value can never touch real accounts. Server-only: the secret must never
-// reach a browser, and SDK errors carry request headers (the secret included),
-// so callers log and return only the extracted code and message below.
+// reach a browser. Callers log and return only the code and message extracted
+// below, never the raw error.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type PlaidEnv = "sandbox" | "production";
@@ -55,31 +55,28 @@ export function plaidConfigured(): boolean {
   return Boolean(process.env.PLAID_CLIENT_KEY && plaidSecret() && process.env.PLAID_TOKEN_KEY);
 }
 
-let client: PlaidApi | null = null;
+let client: PlaidClient | null = null;
 
-export function getPlaid(): PlaidApi {
+export function getPlaid(): PlaidClient {
   if (!plaidConfigured()) {
     throw new Error("Bank sync is not set up (PLAID_CLIENT_KEY, PLAID_ENV and its secret, PLAID_TOKEN_KEY).");
   }
-  client ??= new PlaidApi(
-    new Configuration({
-      basePath: PlaidEnvironments[plaidEnv()],
-      baseOptions: {
-        headers: {
-          "PLAID-CLIENT-ID": process.env.PLAID_CLIENT_KEY,
-          "PLAID-SECRET": plaidSecret(),
-        },
-      },
-    }),
-  );
+  client ??= new PlaidClient({
+    environment: plaidEnv() === "production" ? PlaidEnvironment.Production : PlaidEnvironment.Sandbox,
+    clientId: process.env.PLAID_CLIENT_KEY,
+    secret: plaidSecret(),
+    // Every call gives up after a minute and retries a 408, 429 or 5xx twice; a call that is unsafe to repeat opts out.
+    timeoutInSeconds: 60,
+    maxRetries: 2,
+  });
   return client;
 }
 
 type PlaidErrorBody = { error_code?: unknown; error_message?: unknown; display_message?: unknown };
 
 function errorBody(err: unknown): PlaidErrorBody | null {
-  const data = (err as { response?: { data?: unknown } } | null)?.response?.data;
-  return data && typeof data === "object" ? (data as PlaidErrorBody) : null;
+  const body = err instanceof PlaidError ? err.body : null;
+  return body && typeof body === "object" ? (body as PlaidErrorBody) : null;
 }
 
 /** Plaid's error code from a failed SDK call (e.g. ITEM_LOGIN_REQUIRED), or null. */

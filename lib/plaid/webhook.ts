@@ -21,8 +21,8 @@ const MAX_AGE_SECONDS = 5 * 60;
 const keyCache = new Map<string, CryptoKey>();
 
 async function plaidKey(kid: string): Promise<Jwk | null> {
-  const { data } = await getPlaid().webhookVerificationKeyGet({ key_id: kid });
-  return data.key as Jwk;
+  const { key } = await getPlaid().webhook.getVerificationKey({ key_id: kid });
+  return key as Jwk;
 }
 
 const fromB64url = (s: string) => new Uint8Array(Buffer.from(s, "base64url"));

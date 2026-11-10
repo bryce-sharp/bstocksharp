@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { and, eq, inArray, isNotNull, isNull, ne } from "drizzle-orm";
-import { CountryCode, Products, type AccountBase } from "plaid/legacy";
+import { Plaid } from "plaid";
 import { db } from "@/lib/db";
 import {
   financialAccounts,
@@ -96,7 +96,7 @@ async function usableItem(plaidItemId: number, book: BookRef): Promise<PlaidItem
 
 const money = (n: number | null | undefined) => (n == null ? null : n.toFixed(2));
 
-function balanceFields(a: AccountBase) {
+function balanceFields(a: Plaid.AccountBase) {
   return {
     currentBalance: money(a.balances.current),
     availableBalance: money(a.balances.available),
@@ -121,21 +121,21 @@ export async function createLinkTokenAction(
     accessToken = decryptToken(item.accessTokenEnc);
   }
   try {
-    const { data } = await getPlaid().linkTokenCreate({
+    const { link_token } = await getPlaid().link.createToken({
       client_name: CLIENT_NAME,
       language: "en",
-      country_codes: [CountryCode.Us],
+      country_codes: [Plaid.CountryCode.Us],
       // A stable, non-personal id for this household (Plaid forbids PII here).
       user: { client_user_id: `group-${book.groupId}` },
       ...(accessToken
         ? { access_token: accessToken, update: { account_selection_enabled: true } }
         : {
-            products: [Products.Transactions],
+            products: [Plaid.Products.Transactions],
             transactions: { days_requested: HISTORY_DAYS },
           }),
       ...(process.env.PLAID_WEBHOOK_URL ? { webhook: process.env.PLAID_WEBHOOK_URL } : {}),
     });
-    return { linkToken: data.link_token };
+    return { linkToken: link_token };
   } catch (err) {
     console.error("plaid link token failed", plaidErrorCode(err));
     return { error: plaidErrorMessage(err, "Could not start Plaid. Try again.") };
@@ -159,15 +159,16 @@ export async function connectBankAction(
   let itemRowId: number;
   let accessToken: string;
   try {
-    const { data } = await plaid.itemPublicTokenExchange({ public_token: publicToken });
-    accessToken = data.access_token;
+    // A public token works once, so a retry after a lost success would fail and strand the new access token.
+    const exchanged = await plaid.item.exchangePublicToken({ public_token: publicToken }, { maxRetries: 0 });
+    accessToken = exchanged.access_token;
     const tz = await getGroupTimezone(book.groupId);
     const [row] = await db
       .insert(plaidItems)
       .values({
         groupId: book.groupId,
         bookId: book.id,
-        itemId: data.item_id,
+        itemId: exchanged.item_id,
         environment: plaidEnv(),
         accessTokenEnc: encryptToken(accessToken),
         institutionName: "Bank",
@@ -181,13 +182,13 @@ export async function connectBankAction(
   }
 
   try {
-    const { data } = await plaid.accountsGet({ access_token: accessToken });
+    const data = await plaid.accounts.get({ access_token: accessToken });
     const institutionId = data.item.institution_id ?? null;
     let institutionName = data.item.institution_name ?? null;
     if (!institutionName && institutionId) {
-      const { data: inst } = await plaid.institutionsGetById({
+      const inst = await plaid.institutions.getById({
         institution_id: institutionId,
-        country_codes: [CountryCode.Us],
+        country_codes: [Plaid.CountryCode.Us],
       });
       institutionName = inst.institution.name;
     }
@@ -405,7 +406,7 @@ export async function disconnectBankAction(
   const elsewhere = otherEnvironmentNote(item.environment);
   if (elsewhere) throw new Error(elsewhere);
   try {
-    await getPlaid().itemRemove({ access_token: decryptToken(item.accessTokenEnc) });
+    await getPlaid().item.remove({ access_token: decryptToken(item.accessTokenEnc) });
   } catch (err) {
     const code = plaidErrorCode(err);
     // Already gone at Plaid: nothing left to revoke, so drop the local copy.
