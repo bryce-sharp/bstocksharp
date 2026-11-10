@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { formatDuration } from "../daily";
 import { loadSnugDayCrowd, loadSnugMonthCrowd } from "@/app/actions/snug";
-import { MIN_CROWD, type DayCrowd, type MonthCrowd } from "./crowd";
+import type { DayCrowd, MonthCrowd } from "./crowd";
 import { BINDING } from "./quilt";
 import { INK, SCRIPT, hintsUsed, plural, type RunSummary } from "./parts";
 import { TIMES_OF_DAY, allTimeStats, monthStats, type TimedDay } from "./stats";
@@ -76,27 +76,18 @@ function useCrowd<T>(load: () => Promise<T>, key: string): T | null | "error" {
   return state?.key === key ? state.value : null;
 }
 
-const notEnough = (players: number) => `Not enough players yet: ${plural(players, "player")} so far. Stats show from ${MIN_CROWD} players.`;
-
-/** How everyone did in a month. */
+/** How everyone did in a month; shown only once enough people have played (`MIN_CROWD`). */
 export function MonthCrowdView({ monthKey }: { monthKey: string }) {
   const crowd = useCrowd<MonthCrowd>(() => loadSnugMonthCrowd(monthKey), monthKey);
+  if (crowd === null || crowd === "error" || !crowd.enough) return null;
   return (
-    <Section title="Everyone this month" note={crowd && crowd !== "error" ? plural(crowd.players, "player") : undefined}>
-      {crowd === null ? (
-        <div style={{ textAlign: "center", fontSize: 13, opacity: 0.6 }}>Counting…</div>
-      ) : crowd === "error" ? (
-        <div style={{ textAlign: "center", fontSize: 13, opacity: 0.6 }}>Could not load everyone&apos;s numbers.</div>
-      ) : !crowd.enough ? (
-        <div style={{ textAlign: "center", fontSize: 13, opacity: 0.75 }}>{notEnough(crowd.players)}</div>
-      ) : (
-        <Row>
-          <Figure label="Days played" value={crowd.medianDays ?? "–"} sub="typical player" />
-          {crowd.medianMs !== null && <Figure label="Typical time" value={time(crowd.medianMs)} sub={`average ${time(crowd.meanMs)}`} />}
-          {crowd.completed !== null && <Figure label="Quilts done" value={crowd.completed} />}
-          {crowd.perfectMonths !== null && <Figure label="Perfect months" value={crowd.perfectMonths} />}
-        </Row>
-      )}
+    <Section title="Everyone this month" note={plural(crowd.players, "player")}>
+      <Row>
+        <Figure label="Days played" value={crowd.medianDays ?? "–"} sub="typical player" />
+        {crowd.medianMs !== null && <Figure label="Typical time" value={time(crowd.medianMs)} sub={`average ${time(crowd.meanMs)}`} />}
+        {crowd.completed !== null && <Figure label="Quilts done" value={crowd.completed} />}
+        {crowd.perfectMonths !== null && <Figure label="Perfect months" value={crowd.perfectMonths} />}
+      </Row>
     </Section>
   );
 }
@@ -106,7 +97,7 @@ export function DayCrowdLine({ dateKey, run, scored }: { dateKey: string; run: R
   const mine = { gaps: run.gaps, hints: hintsUsed(run), timeMs: run.timeMs };
   const crowd = useCrowd<DayCrowd>(() => loadSnugDayCrowd(dateKey, scored ? mine : undefined), `${dateKey}|${scored}|${mine.gaps}|${mine.hints}|${mine.timeMs}`);
   if (crowd === null || crowd === "error") return null;
-  if (!crowd.enough) return <div style={{ fontSize: 12.5, marginTop: 10, opacity: 0.7 }}>{notEnough(crowd.players)}</div>;
+  if (!crowd.enough) return null;
   return (
     <div style={{ fontSize: 13, marginTop: 10, lineHeight: 1.45 }}>
       {crowd.beat !== null && (

@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { addDays, formatDuration, formatLongDate, formatShortDate, loadAttempt, puzzleNumber, saveAttempt, todayKey } from "../daily";
 import { generatePuzzle, type Puzzle } from "./generator";
 import { loadPuzzle } from "./puzzles";
@@ -15,6 +15,7 @@ import { canvasFile, canvasFonts, drawResultPicture, quiltGrid } from "./share";
 import { SNUG_FONTS } from "./fonts";
 import { flushRemote, saveProgressRemote, saveRunRemote, syncSnug } from "./sync";
 import { sfx } from "./sounds";
+import { OPEN_MS, SETTLE_MS, SWITCH_MS, UNSEW_MS, Sewing, boardSewStyle, pieceSewStyle, type SewDir } from "./sewing";
 import { Basket } from "./basket";
 import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
 import { BoardSvg, Btn, FONT, HowToPlay, INK, KnitDefs, PanelStitches, PatchSvg, QuiltBackdrop, QuiltLabel, RUST_THREAD, ResultCard, SCRIPT, Stat, hintsUsed, panelStyle, plural, type Attempt, type MoreGamesLink, type PieceState, type RunSummary, type Spot } from "./parts";
@@ -69,7 +70,7 @@ interface Slot {
 }
 
 /** Packs square basket slots (sizes in cells) into centered rows `widthCells` wide. */
-function packTray(sizes: number[], widthCells: number): { slots: Slot[]; w: number; h: number } {
+export function packTray(sizes: number[], widthCells: number): { slots: Slot[]; w: number; h: number } {
   const slots: Slot[] = [];
   let row: number[] = [];
   let y = 0;
@@ -239,19 +240,30 @@ export function Snug({ shareUrl, profileId }: { shareUrl?: string; profileId?: n
   );
   // Signed out on this site (not framed elsewhere): offer an account so quilts follow the player.
   const saveHref = profileId === undefined && window.self === window.top ? "/login?from=/games/snug" : undefined;
+  // The day on screen stays up while the next one loads, so switching days never flashes a loading panel.
+  const shownDay = synced ? loaded : null;
+  // The first board opens slowly; every board after it is a switch.
+  const [opened, setOpened] = useState(false);
+  const markOpened = useCallback(() => setOpened(true), []);
+  const pending = !!shownDay && shownDay.dateKey !== dateKey;
   return (
     <div className={SNUG_FONTS}>
-      {synced && loaded?.dateKey === dateKey ? (
-        <SnugDay
-          key={dateKey}
-          dateKey={dateKey}
-          puzzle={loaded.puzzle}
-          today={today}
-          onPickDate={setDateKey}
-          shareUrl={shareUrl ?? SHARE_URL}
-          moreGames={moreGames}
-          saveHref={saveHref}
-        />
+      {shownDay && failed !== dateKey ? (
+        // Dims only when a load is slow enough to notice; a day already in the browser swaps before it starts.
+        <div aria-busy={pending} style={{ opacity: pending ? 0.7 : 1, transition: pending ? "opacity 200ms ease 150ms" : "none" }}>
+          <SnugDay
+            key={shownDay.dateKey}
+            dateKey={shownDay.dateKey}
+            puzzle={shownDay.puzzle}
+            today={today}
+            onPickDate={setDateKey}
+            opening={opened ? "switch" : "open"}
+            onOpened={markOpened}
+            shareUrl={shareUrl ?? SHARE_URL}
+            moreGames={moreGames}
+            saveHref={saveHref}
+          />
+        </div>
       ) : failed === dateKey ? (
         <div style={{ ...panelStyle, minHeight: "60vh", display: "grid", placeItems: "center", alignContent: "center", gap: 14, textAlign: "center" }}>
           <div style={{ fontFamily: SCRIPT, fontSize: 30, color: BINDING }}>This quilt would not load</div>
@@ -285,6 +297,8 @@ function SnugDay({
   moreGames,
   saveHref,
   lab,
+  opening = "open",
+  onOpened,
 }: {
   dateKey: string;
   puzzle: Puzzle;
@@ -295,6 +309,10 @@ function SnugDay({
   saveHref?: string;
   /** The sound lab's test quilt: nothing is saved, and `quickHelp` unlocks the spare and unlimited hints at once. */
   lab?: { quickHelp: boolean };
+  /** How this board sews itself in: slowly when the game opens, quicker when switching days. */
+  opening?: "open" | "switch";
+  /** Called once this board's opening is over or skipped, or when the player leaves for another day. */
+  onOpened?: () => void;
 }) {
   // Scoring follows the date this quilt was opened on, so a game running past midnight stays scored.
   const [openedOn] = useState(today);
@@ -365,6 +383,37 @@ function SnugDay({
   const [width, setWidth] = useState(0);
   const [viewH, setViewH] = useState(visibleHeight);
   const coarsePointer = useMemo(() => window.matchMedia("(pointer: coarse)").matches, []);
+  // The board sews itself in when it opens, and pulls its stitches back out before another day takes its place;
+  // a tap skips either, and neither plays for anyone who has reduced motion turned on.
+  const still = useMemo(() => !!lab || window.matchMedia("(prefers-reduced-motion: reduce)").matches, [lab]);
+  const [sew, setSew] = useState<{ dir: SewDir; ms: number; next?: string } | null>(() => (still ? null : { dir: "in", ms: opening === "open" ? OPEN_MS : SWITCH_MS }));
+  const settle = useRef(0);
+  useEffect(() => () => window.clearTimeout(settle.current), []);
+  const pickDate = (key: string) => {
+    if (still || key === dateKey || sew?.dir === "out") {
+      onPickDate(key);
+      return;
+    }
+    window.clearTimeout(settle.current);
+    onOpened?.();
+    setSew({ dir: "out", ms: UNSEW_MS, next: key });
+  };
+  const sewDone = () => {
+    if (sew?.dir === "out") {
+      if (sew.next) onPickDate(sew.next);
+      return;
+    }
+    onOpened?.();
+    settle.current = window.setTimeout(() => setSew(null), SETTLE_MS);
+  };
+  const skipSew = () => {
+    window.clearTimeout(settle.current);
+    if (sew?.dir === "out" && sew.next) onPickDate(sew.next);
+    else {
+      onOpened?.();
+      setSew(null);
+    }
+  };
   /** The play area's distance from the top of the page, including any site header above the game. */
   const [topY, setTopY] = useState(200);
   const dragRef = useRef<Drag | null>(null);
@@ -384,7 +433,8 @@ function SnugDay({
   const playRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  // Measured before the first paint, so a new day never shows a frame laid out at the wrong size.
+  useLayoutEffect(() => {
     const el = playRef.current;
     if (!el) return;
     const measure = () => {
@@ -392,6 +442,7 @@ function SnugDay({
       setWidth(r.width);
       setTopY(r.top + window.scrollY);
     };
+    measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     // The header grows when fonts load, which moves the play area down.
@@ -1092,7 +1143,7 @@ function SnugDay({
       <div aria-live="polite" style={visuallyHidden}>
         {said}
       </div>
-      {revealMonth && !showHowTo && <MonthReveal monthKey={revealMonth} onClose={closeReveal} onStitch={onPickDate} />}
+      {revealMonth && !showHowTo && <MonthReveal monthKey={revealMonth} onClose={closeReveal} onStitch={pickDate} />}
       {completed && !revealMonth && <MonthReveal monthKey={completed.slice(0, 7)} completedDay={completed} onClose={closeCompleted} />}
       {showCalendar && (
         <QuiltCalendar
@@ -1106,7 +1157,7 @@ function SnugDay({
           }}
           onPick={(key) => {
             setShowCalendar(false);
-            onPickDate(key);
+            pickDate(key);
           }}
         />
       )}
@@ -1122,7 +1173,7 @@ function SnugDay({
             </div>
           ) : (
             <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: compact ? 12.5 : 14, marginTop: compact ? 0 : 4, whiteSpace: "nowrap" }}>
-              <DayArrow label="Previous quilt" disabled={dateKey <= LAUNCH_DATE} onClick={() => onPickDate(addDays(dateKey, -1))}>
+              <DayArrow label="Previous quilt" disabled={dateKey <= LAUNCH_DATE} onClick={() => pickDate(addDays(dateKey, -1))}>
                 &lsaquo;
               </DayArrow>
               <button
@@ -1137,11 +1188,11 @@ function SnugDay({
                 </span>
                 <CalendarMonthOutlinedIcon sx={{ fontSize: compact ? 14 : 15, color: RUST_THREAD }} />
               </button>
-              <DayArrow label="Next quilt" disabled={dateKey >= today} onClick={() => onPickDate(addDays(dateKey, 1))}>
+              <DayArrow label="Next quilt" disabled={dateKey >= today} onClick={() => pickDate(addDays(dateKey, 1))}>
                 &rsaquo;
               </DayArrow>
               {isArchive && (
-                <DayArrow label="Back to today" disabled={false} onClick={() => onPickDate(today)}>
+                <DayArrow label="Back to today" disabled={false} onClick={() => pickDate(today)}>
                   &raquo;
                 </DayArrow>
               )}
@@ -1153,7 +1204,7 @@ function SnugDay({
                 {compact ? "?" : "How to play"}
               </Btn>
               {newQuilt && (
-                <Btn small primary onClick={tap(() => onPickDate(today))}>
+                <Btn small primary onClick={tap(() => pickDate(today))}>
                   New quilt
                 </Btn>
               )}
@@ -1176,7 +1227,7 @@ function SnugDay({
               <div style={{ gridColumn: "1 / -1" }}>{dateNav}</div>
             </header>
           ) : (
-            <header style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: 12 }}>
+            <header style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
               <div>
                 {title}
                 {dateNav}
@@ -1191,7 +1242,15 @@ function SnugDay({
         <div style={{ height: compact ? 10 : 16 }} />
         </div>
 
-        <div ref={playRef} style={{ position: "relative", width: "100%", height: width ? layout.height : 420, touchAction: "none" }}>
+        <div
+          ref={playRef}
+          onPointerDownCapture={(e) => {
+            if (!sew) return;
+            e.stopPropagation();
+            skipSew();
+          }}
+          style={{ position: "relative", width: "100%", height: width ? layout.height : 420, touchAction: "none" }}
+        >
           {width > 0 && (
             <>
               <Basket style={{ left: tray.x - 8, top: tray.y - 8, width: tray.w + 16, height: tray.h + 16 }} />
@@ -1202,11 +1261,26 @@ function SnugDay({
                 rows={puzzle.rows}
                 cell={cell}
                 pad={BOARD_PAD}
-                style={{ position: "absolute", left: board.x - BOARD_PAD * cell, top: board.y - BOARD_PAD * cell }}
+                style={{ position: "absolute", left: board.x - BOARD_PAD * cell, top: board.y - BOARD_PAD * cell, ...(sew && boardSewStyle(sew.dir, sew.ms)) }}
                 ghost={ghost && ghostPiece ? { cells: shift(ghostPiece.cells, ghost), color: ghostPiece.color } : null}
                 holes={phase === "done" && !revealing ? puzzle.board.filter(([x, y]) => !filled.has(cellKey(x, y))) : []}
                 perfect={perfect}
+                sewing={sew ?? undefined}
               />
+              {sew && (
+                <Sewing
+                  key={sew.dir}
+                  puzzle={puzzle}
+                  cell={cell}
+                  pad={BOARD_PAD}
+                  left={board.x - BOARD_PAD * cell}
+                  top={board.y - BOARD_PAD * cell}
+                  dir={sew.dir}
+                  ms={sew.ms}
+                  onDone={sewDone}
+                  perfect={perfect}
+                />
+              )}
 
               {phase === "playing" &&
                 pieces.map((p, index) => {
@@ -1265,7 +1339,7 @@ function SnugDay({
                           .join(" ") || "none",
                     }}
                   >
-                    <div className={lifting ? "snug-spare-lift" : undefined}>
+                    <div className={lifting ? "snug-spare-lift" : undefined} style={sew ? pieceSewStyle(sew.dir, index) : undefined}>
                       <PatchSvg
                         piece={p}
                         cell={cell}
@@ -1361,7 +1435,6 @@ function SnugDay({
                   describe={describe}
                   onCopy={copyShare}
                   onReveal={reveal}
-                  onShowMine={showMine}
                   onPlayAgain={playAgain}
                   onClose={tap(() => setShowCard(false))}
                   center={layout.side ? { x: clamp(tray.x + tray.w / 2, cardHalf, width - cardHalf), y: tray.y + tray.h / 2 } : undefined}
@@ -1467,7 +1540,7 @@ function SnugDay({
             )
           ) : (
             <>
-              {!compact && <span style={{ fontSize: 14, opacity: 0.8 }}>{revealing ? "Showing one perfect fill." : "Showing your quilt."}</span>}
+              {!compact && revealing && <span style={{ fontSize: 14, opacity: 0.8 }}>Showing one perfect fill.</span>}
               <span style={{ flex: 1 }} />
               {revealing ? (
                 <Btn small={compact} onClick={tap(showMine)}>
@@ -1486,9 +1559,12 @@ function SnugDay({
                   {compact ? "Result" : "View result"}
                 </Btn>
               )}
-              <Btn small={compact} primary onClick={tap(playAgain)}>
-                {compact ? "Play again" : "Play again (unscored)"}
-              </Btn>
+              {/* The result card has its own Play again, so this one waits until the card is closed. */}
+              {!showCard && (
+                <Btn small={compact} primary onClick={tap(playAgain)}>
+                  {compact ? "Play again" : "Play again (unscored)"}
+                </Btn>
+              )}
             </>
           )}
         </div>

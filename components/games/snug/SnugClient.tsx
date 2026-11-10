@@ -18,3 +18,4 @@ export const SnugArt = dynamic(() => import("./ArtSheet").then((m) => m.SnugArtS
 export const SnugLab = dynamic(() => import("./MonthLab").then((m) => m.MonthLab), { ssr: false, loading: Loading });
 export const SnugSoundLab = dynamic(() => import("./SoundLab").then((m) => m.SoundLab), { ssr: false, loading: Loading });
 export const SnugRevealLab = dynamic(() => import("./RevealLab").then((m) => m.RevealLab), { ssr: false, loading: Loading });
+export const SnugOpeningLab = dynamic(() => import("./OpeningLab").then((m) => m.OpeningLab), { ssr: false, loading: Loading });

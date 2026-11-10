@@ -252,7 +252,6 @@ export function ResultCard(props: {
   describe: (r: RunSummary) => string;
   onCopy: () => void;
   onReveal: () => void;
-  onShowMine: () => void;
   onPlayAgain: () => void;
   onClose: () => void;
   /** Card center in the play area, in px; defaults to the middle. */
@@ -346,9 +345,6 @@ export function ResultCard(props: {
             Show a perfect fill
           </Btn>
         )}
-        <Btn small={sheet} onClick={props.onShowMine}>
-          Look at my quilt
-        </Btn>
         <Btn small={sheet} primary onClick={props.onPlayAgain}>
           Play again (unscored)
         </Btn>
@@ -413,6 +409,11 @@ export function QuiltBackdrop({ dateKey }: { dateKey: string }) {
         ".snug-breathe": { animation: "snugBreathe 2.4s ease-in-out infinite" },
         "@keyframes snugPopIn": { "0%": { transform: "scale(.92)", opacity: 0 }, "100%": { transform: "scale(1)", opacity: 1 } },
         "@keyframes snugFadeIn": { "0%": { opacity: 0 }, "100%": { opacity: 1 } },
+        "@keyframes snugFadeOut": { to: { opacity: 0 } },
+        // A board's opening: the binding and linen settle down, then its patches drop in while the yarn sews the edge.
+        "@keyframes snugLay": { from: { opacity: 0, transform: "scale(1.04)" } },
+        "@keyframes snugDrop": { "0%": { transform: "translateY(-40px)", opacity: 0 }, "60%": { transform: "translateY(4px)", opacity: 1 }, "100%": { transform: "none" } },
+        "@keyframes snugUnpick": { to: { transform: "translateY(-18px) rotate(8deg) scale(.9)", opacity: 0 } },
         "@keyframes snugPopTop": {
           "0%": { transform: "translate(-50%,4%) scale(.92)", opacity: 0 },
           "100%": { transform: "translate(-50%,0) scale(1)", opacity: 1 },
@@ -458,6 +459,17 @@ export function QuiltBackdrop({ dateKey }: { dateKey: string }) {
   );
 }
 
+/** How far outside the board's edge its binding stitches run, in board units. */
+export const BINDING_INSET = -1.75;
+
+/** The board's binding stitches. The opening sews in these same stitches, so it hands off to the board seamlessly. */
+export function bindingStitches(board: Cell[], cols: number, rows: number) {
+  return stitchLoops(insetCellLoops(board, U, BINDING_INSET), makeRng(`binding:${cols}x${rows}:${board.length}`), { stitch: 2.4, gap: 1.4, wobble: 0.22, hole: 0.32 });
+}
+
+/** The thread a board's binding is stitched in: gold once it was filled perfectly. */
+export const bindingThread = (perfect: boolean) => (perfect ? GOLD_THREAD : THREAD);
+
 /** The linen quilt top with its stitched binding, an optional drop preview, and hole marks. */
 export function BoardSvg({
   board,
@@ -469,6 +481,7 @@ export function BoardSvg({
   ghost = null,
   holes = [],
   perfect = false,
+  sewing,
 }: {
   board: Cell[];
   cols: number;
@@ -479,6 +492,8 @@ export function BoardSvg({
   ghost?: { cells: Cell[]; color: number } | null;
   holes?: Cell[];
   perfect?: boolean;
+  /** While the binding is being sewn in or out, the sewing draws its stitches and the basting fades in or out. */
+  sewing?: { dir: "in" | "out"; ms: number };
 }) {
   const path = useMemo(() => outlinePath(board, U), [board]);
   // Loose basting stitches marking each cell of the quilt top.
@@ -488,10 +503,7 @@ export function BoardSvg({
       .map(([x, y]) => stitchLoops(insetCellLoops([[x, y]], U, 0.7), rng, { stitch: 1.1, gap: 0.75, wobble: 0.1, hole: 0 }).thread)
       .join("");
   }, [board, cols, rows]);
-  const binding = useMemo(
-    () => stitchLoops(insetCellLoops(board, U, -1.75), makeRng(`binding:${cols}x${rows}:${board.length}`), { stitch: 2.4, gap: 1.4, wobble: 0.22, hole: 0.32 }),
-    [board, cols, rows],
-  );
+  const binding = useMemo(() => bindingStitches(board, cols, rows), [board, cols, rows]);
   const padU = pad * U;
   return (
     <svg
@@ -504,8 +516,16 @@ export function BoardSvg({
 
       <path d={path} fill="none" stroke={BINDING} strokeWidth={2.2} strokeLinejoin="round" />
       <path d={path} fill="url(#snug-linen)" />
-      <Stitching paths={binding} width={1} color={perfect ? GOLD_THREAD : THREAD} className={perfect ? "snug-gold" : undefined} />
-      <path d={basting} fill="none" stroke="#bf9e76" strokeWidth={0.42} strokeLinecap="round" opacity={0.85} />
+      {!sewing && <Stitching paths={binding} width={1} color={bindingThread(perfect)} className={perfect ? "snug-gold" : undefined} />}
+      <path
+        d={basting}
+        fill="none"
+        stroke="#bf9e76"
+        strokeWidth={0.42}
+        strokeLinecap="round"
+        opacity={0.85}
+        style={sewing && { animation: sewing.dir === "in" ? `snugFadeIn 400ms ease ${sewing.ms * 0.85}ms both` : "snugFadeOut 250ms ease forwards" }}
+      />
       {ghost && (
         <path
           d={outlinePath(ghost.cells, U)}

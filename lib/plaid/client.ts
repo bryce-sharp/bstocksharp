@@ -65,7 +65,7 @@ export function getPlaid(): PlaidClient {
     environment: plaidEnv() === "production" ? PlaidEnvironment.Production : PlaidEnvironment.Sandbox,
     clientId: process.env.PLAID_CLIENT_KEY,
     secret: plaidSecret(),
-    // Every call gives up after a minute and retries a 408, 429 or 5xx twice; a call that is unsafe to repeat opts out.
+    // Each attempt gives up after a minute, and a 408, 429 or 5xx is retried twice; a call that is unsafe to repeat opts out.
     timeoutInSeconds: 60,
     maxRetries: 2,
   });

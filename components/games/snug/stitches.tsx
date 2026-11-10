@@ -1,6 +1,7 @@
 // Hand-sewn running stitches: uneven twisted-yarn stitches with needle holes, along cell outlines or around HTML boxes.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { makeRng, type Rng } from "../daily";
 import { outlineLoops, type Cell } from "./pieces";
 
@@ -159,12 +160,15 @@ export function StitchBorder({
 }) {
   const ref = useRef<HTMLSpanElement>(null);
   const [size, setSize] = useState<[number, number] | null>(null);
-  useEffect(() => {
+  // Measured before the first paint, so a new panel never shows a frame without its stitches.
+  useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
+    setSize([el.offsetWidth, el.offsetHeight]);
+    // Redrawn before the browser paints the new size, so the stitches never lag their box by a frame.
     const ro = new ResizeObserver(([entry]) => {
       const { width: w, height: h } = entry!.contentRect;
-      setSize((s) => (s && Math.abs(s[0] - w) < 0.5 && Math.abs(s[1] - h) < 0.5 ? s : [w, h]));
+      flushSync(() => setSize((s) => (s && Math.abs(s[0] - w) < 0.5 && Math.abs(s[1] - h) < 0.5 ? s : [w, h])));
     });
     ro.observe(el);
     return () => ro.disconnect();
