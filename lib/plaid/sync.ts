@@ -1,6 +1,6 @@
 import "server-only";
 import { and, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
-import type { AccountBase, RemovedTransaction, Transaction } from "plaid";
+import type { AccountBase, RemovedTransaction, Transaction } from "plaid/legacy";
 import { db } from "@/lib/db";
 import { eventLog, plaidAccounts, plaidItems, plaidTransactions, type PlaidItem } from "@/lib/db/schema";
 import {
