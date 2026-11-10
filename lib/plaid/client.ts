@@ -1,5 +1,5 @@
 import "server-only";
-import { Configuration, PlaidApi, PlaidEnvironments } from "plaid";
+import { Configuration, PlaidApi, PlaidEnvironments } from "plaid/legacy";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PLAID CLIENT — one per server instance, configured from the environment:

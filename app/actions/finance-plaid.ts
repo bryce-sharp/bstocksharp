@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { and, eq, inArray, isNotNull, isNull, ne } from "drizzle-orm";
-import { CountryCode, Products, type AccountBase } from "plaid";
+import { CountryCode, Products, type AccountBase } from "plaid/legacy";
 import { db } from "@/lib/db";
 import {
   financialAccounts,
