@@ -376,8 +376,6 @@ function SnugDay({
   const [completed, setCompleted] = useState<string | null>(null);
   const closeCompleted = useCallback(() => setCompleted(null), []);
   const modalOpen = showHowTo || showCalendar || !!revealMonth || !!completed;
-  const modalRef = useRef(modalOpen);
-  modalRef.current = modalOpen;
   // Ticks the visible clock; the value itself is read from `clock`.
   const [, setNow] = useState(() => Date.now());
   const [width, setWidth] = useState(0);
@@ -386,11 +384,25 @@ function SnugDay({
   // The board sews itself in when it opens, and pulls its stitches back out before another day takes its place;
   // a tap skips either, and neither plays for anyone who has reduced motion turned on.
   const still = useMemo(() => !!lab || window.matchMedia("(prefers-reduced-motion: reduce)").matches, [lab]);
-  const [sew, setSew] = useState<{ dir: SewDir; ms: number; next?: string } | null>(() => (still ? null : { dir: "in", ms: opening === "open" ? OPEN_MS : SWITCH_MS }));
+  // Leaving: `next` is the day to go to (the latest pick wins) and `left` is set once it has been asked for.
+  const [sew, setSew] = useState<{ dir: SewDir; ms: number; next?: string; left?: boolean } | null>(() =>
+    still ? null : { dir: "in", ms: opening === "open" ? OPEN_MS : SWITCH_MS },
+  );
   const settle = useRef(0);
   useEffect(() => () => window.clearTimeout(settle.current), []);
+  const leave = (next: string) => {
+    setSew({ dir: "out", ms: UNSEW_MS, next, left: true });
+    onPickDate(next);
+  };
   const pickDate = (key: string) => {
-    if (still || key === dateKey || sew?.dir === "out") {
+    if (sew?.dir === "out") {
+      if (sew.left) onPickDate(key);
+      // Picking this day again while its stitches come out keeps it, and the board comes back.
+      else if (key === dateKey) setSew(null);
+      else setSew({ ...sew, next: key });
+      return;
+    }
+    if (still || key === dateKey) {
       onPickDate(key);
       return;
     }
@@ -400,7 +412,7 @@ function SnugDay({
   };
   const sewDone = () => {
     if (sew?.dir === "out") {
-      if (sew.next) onPickDate(sew.next);
+      if (sew.next && !sew.left) leave(sew.next);
       return;
     }
     onOpened?.();
@@ -408,12 +420,17 @@ function SnugDay({
   };
   const skipSew = () => {
     window.clearTimeout(settle.current);
-    if (sew?.dir === "out" && sew.next) onPickDate(sew.next);
-    else {
+    if (sew?.dir === "out") {
+      if (sew.next && !sew.left) leave(sew.next);
+    } else {
       onOpened?.();
       setSew(null);
     }
   };
+  // The clock and the keyboard wait while a modal is open or the board is sewing in or out, so neither costs time.
+  const held = modalOpen || !!sew;
+  const heldRef = useRef(held);
+  heldRef.current = held;
   /** The play area's distance from the top of the page, including any site header above the game. */
   const [topY, setTopY] = useState(200);
   const dragRef = useRef<Drag | null>(null);
@@ -763,7 +780,7 @@ function SnugDay({
   useEffect(() => {
     const ARROWS: Record<string, [number, number]> = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arrowdown: [0, 1] };
     const onKey = (e: KeyboardEvent) => {
-      if (phase !== "playing" || paused || modalRef.current) return;
+      if (phase !== "playing" || paused || heldRef.current) return;
       const key = e.key.toLowerCase();
       if ((e.metaKey || e.ctrlKey) && key === "z" && !e.shiftKey) {
         if (dragRef.current) return;
@@ -873,7 +890,7 @@ function SnugDay({
         persist();
         flushRemote();
         if (live.current.scored && live.current.phase === "playing" && clock.current.started) setPaused(true);
-      } else if (!live.current.scored && !modalRef.current) runClock();
+      } else if (!live.current.scored && !heldRef.current) runClock();
     };
     const onPageHide = () => {
       stopClock();
@@ -890,17 +907,18 @@ function SnugDay({
     };
   }, [persist, runClock, stopClock]);
 
-  // Reading the rules or the calendar never costs time; on mount this also resumes a restored practice game.
+  // Reading the rules or the calendar, or watching the board sew in or out, never costs time; once the opening is over
+  // this also resumes a restored practice game.
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
   useEffect(() => {
-    if (modalOpen) {
+    if (held) {
       stopClock();
       persist();
     } else if (!pausedRef.current) {
       runClock();
     }
-  }, [modalOpen, persist, runClock, stopClock]);
+  }, [held, persist, runClock, stopClock]);
 
   const resume = () => {
     sfx("pause");
