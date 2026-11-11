@@ -70,6 +70,9 @@ Plaid's sign matches the ledger (positive = money out).
   up to the bank amount to the cent (within a day of each other, entered by hand or
   sharing the merchant) are claimed together (`plaid_transactions.split_ledger_ids`).
   Syncs never change the parts' amounts; deleting one part keeps the others covered.
+  The row popup's **Split** does the same for a row already in the ledger (2 or 3 parts,
+  `lib/queries/finance-split.ts`): the row keeps the first part, and the bank payment that
+  claimed it covers the new parts too.
 - **Deposits described as payroll or direct deposit** are income even when Plaid's category
   disagrees, so a mislabeled paycheck never becomes a large refund.
 - **Transfers between connected accounts** keep one ledger row (from, into); the

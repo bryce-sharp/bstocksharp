@@ -13,6 +13,7 @@ export default function NumberField({
   prefix,
   decimalScale = 0,
   allowNegative = false,
+  onValueChange,
 }: {
   name: string;
   label: string;
@@ -20,6 +21,8 @@ export default function NumberField({
   prefix?: string;
   decimalScale?: number;
   allowNegative?: boolean;
+  /** Called with the raw value on every change, for forms that total as you type. */
+  onValueChange?: (raw: string) => void;
 }) {
   const [raw, setRaw] = React.useState<string>(
     defaultValue != null && defaultValue !== "" ? String(defaultValue) : "",
@@ -36,7 +39,10 @@ export default function NumberField({
         decimalScale={decimalScale}
         allowNegative={allowNegative}
         fullWidth
-        onValueChange={(values) => setRaw(values.value)}
+        onValueChange={(values) => {
+          setRaw(values.value);
+          onValueChange?.(values.value);
+        }}
       />
       {/* Raw, unformatted value (no commas/prefix) for the form + DB. */}
       <input type="hidden" name={name} value={raw} readOnly />

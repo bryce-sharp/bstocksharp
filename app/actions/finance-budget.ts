@@ -18,6 +18,8 @@ import { parseMoney, parseStr, parseInt as parseBoundedInt, todayISO } from "@/l
 import { categorizeMerchant } from "@/lib/finance/sms";
 import { asTransfer, merchantRulesFor, resolveSpendCategory, transferRulesFor } from "@/lib/finance/ingest";
 import { toBookRows } from "@/lib/queries/finance-transactions";
+import { splitTransactionForBook } from "@/lib/queries/finance-split";
+import type { SplitPart } from "@/lib/finance/split";
 import { shareFromRules } from "@/lib/queries/finance-categories";
 import { moneyDirection, signedAmount } from "@/lib/finance/cashflow";
 import { releaseBankLinks } from "@/lib/plaid/apply";
@@ -245,6 +247,23 @@ export async function updateTransactionAction(
   revalidatePath(BUDGET);
   revalidatePath(EXPLORER);
   return (await toBookRows(book, [saved]))[0];
+}
+
+/**
+ * Split a purchase into parts that add up to it (groceries and clothes from one
+ * run, or a fund covering part of a price). Returns the saved rows, the
+ * original first, so a paged list can swap them in place.
+ */
+export async function splitTransactionAction(id: number, parts: SplitPart[]): Promise<TxnRowData[]> {
+  await requireApp("finance");
+  await requireEditor();
+  const { book } = await scopedTxn(id);
+  const ids = await splitTransactionForBook(book, id, parts);
+  const saved = await db.select().from(transactions).where(inArray(transactions.id, ids));
+  saved.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+  revalidatePath(BUDGET);
+  revalidatePath(EXPLORER);
+  return toBookRows(book, saved);
 }
 
 /** Quick-add a transaction the bank didn't text (gas), or income (paycheck,

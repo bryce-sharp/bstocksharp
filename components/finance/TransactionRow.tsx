@@ -24,7 +24,12 @@ export function onPhone(styles: StyleObject) {
 const phoneCell = (area: string, extra?: StyleObject) =>
   onPhone({ display: "block", gridArea: area, border: 0, p: 0, ...extra });
 
-export type TxnFund = { id: number; name: string };
+export type TxnFund = {
+  id: number;
+  name: string;
+  /** What the fund holds in the month shown, where the page knows it (the budget). */
+  balance?: number;
+};
 export type TxnBill = {
   id: number;
   name: string;
