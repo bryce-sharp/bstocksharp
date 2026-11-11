@@ -2,14 +2,14 @@ import "server-only";
 import { and, asc, eq, getTableColumns, gte, inArray, isNotNull, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { financialAccounts, plaidAccounts, plaidItems, plaidTransactions, transactionShares, transactions } from "@/lib/db/schema";
-import { asTransfer, merchantRulesFor, transferRulesFor } from "@/lib/finance/ingest";
+import { asTransfer, extraBillChargeNote, merchantRulesFor, transferRulesFor } from "@/lib/finance/ingest";
 import { categorizeMerchant, type MerchantRule } from "@/lib/finance/sms";
 import { spendCategoryFor } from "@/lib/finance/categorize";
 import { shareFromRules, spendRulesFor } from "@/lib/queries/finance-categories";
 import { getGroupTimezone } from "@/lib/queries/group";
 import { type BookRef } from "@/lib/books";
 import { pickMatch, pickSplit } from "@/lib/finance/match";
-import { bankDate, bankKind, ledgerAmount, type BankKind } from "@/lib/plaid/map";
+import { bankDate, bankKind, fromPaymentApp, ledgerAmount, type BankKind } from "@/lib/plaid/map";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // APPLY — the bank's staged rows (plaid_transactions with applied_at null)
@@ -48,6 +48,8 @@ const shiftDays = (iso: string, n: number) =>
   new Date(Date.parse(iso) + n * DAY).toISOString().slice(0, 10);
 
 const DROPPED_NOTE = "The bank dropped this charge. Delete it if it never went through.";
+const PAYMENT_APP_NOTE =
+  "Money in from a payment app. Keep it as income (and pick a fund if it is one person's), or re-file it as a reimbursement.";
 
 export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
   const stats: ApplyStats = { inserted: 0, claimed: 0, updated: 0, removed: 0, skipped: 0, review: 0 };
@@ -242,6 +244,8 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
     recurringExpenseId: number | null;
     spendCategory: string | null;
     needsReview: boolean;
+    /** Why a row in review needs a look. */
+    note?: string | null;
     /** A transfer between books lives in the book the money left. */
     bookId?: number;
   }): Promise<number> {
@@ -262,6 +266,7 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
         spendCategory: values.spendCategory,
         source: "plaid",
         needsReview: values.needsReview,
+        note: values.note ?? null,
         bankStatus: values.r.pending ? "pending" : "posted",
       })
       .returning({ id: transactions.id, merchant: transactions.merchant });
@@ -309,7 +314,15 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
         : (spellings(r)
             .map((s) => spendCategoryFor(category, s, billCategory, spendRules))
             .find((tag) => tag !== null) ?? null);
-    return insertRow({ r, date, accountId, transferAccountId, amount, category, recurringExpenseId, spendCategory, needsReview: false });
+    // Money from a payment app may be someone's pay or a payback, and an extra charge
+    // on a paid bill may not be the bill: both wait for the household.
+    let note: string | null = null;
+    if (kind === "income" && fromPaymentApp(r.pfcDetailed)) note = PAYMENT_APP_NOTE;
+    else if (category === "fixed") note = await extraBillChargeNote(book, recurringExpenseId, Number(amount), date);
+    return insertRow({
+      r, date, accountId, transferAccountId, amount, category, recurringExpenseId, spendCategory,
+      needsReview: note !== null, note,
+    });
   }
 
   /**

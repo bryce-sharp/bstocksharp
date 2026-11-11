@@ -302,8 +302,9 @@ export default async function BudgetPage({
         <Alert severity="info" variant="outlined" sx={{ mb: 3 }}>
           Budget adjusted {formatMonth(month)} by{" "}
           {d(disc.estimateAdjustmentC) >= 0 ? "+" : "−"}$
-          {Math.abs(d(disc.estimateAdjustmentC)).toFixed(2)} — a variable bill
-          posted differently than its estimate.
+          {Math.abs(d(disc.estimateAdjustmentC)).toFixed(2)} —{" "}
+          {c.fixed.rows.filter((r) => r.deltaC).map((r) => r.name).join(", ")} came in
+          different from the plan.
         </Alert>
       ) : null}
 
@@ -366,8 +367,9 @@ export default async function BudgetPage({
           <Box sx={{ mt: 2 }}>
             <Typography variant="caption" sx={{ color: "text.secondary" }}>
               Tip: the ⚠ rows need a look (an unreadable alert, a one-sided
-              transfer, or a charge the bank dropped). Open the ⋮ menu (or tap the
-              row on a phone) to set their details.
+              transfer, a charge the bank dropped, an extra charge on a bill already
+              paid, or money in from a payment app). Open the ⋮ menu (or tap the row
+              on a phone) to set their details.
             </Typography>
           </Box>
         ) : null}

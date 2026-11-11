@@ -6,7 +6,7 @@ import { dateInTz } from "@/lib/finance/parse";
 
 /**
  * skip: a card payment (the charges already reached the ledger one by one).
- * income: money in that Plaid calls income (payroll, interest).
+ * income: money in that Plaid calls income (payroll, interest), or that came from a payment app.
  * transfer: money moving between accounts.
  * refund: any other money in. spend: any other money out.
  */
@@ -33,6 +33,11 @@ const CARD_PAYMENT = /\b(payment|pymt|autopay)\b/i;
 // Categories Plaid gives the card's side of a payment (Chase's arrives as a loan disbursement).
 const PAYMENT_IN = new Set(["TRANSFER_IN", "LOAN_PAYMENTS", "LOAN_DISBURSEMENTS"]);
 
+/** Plaid's word that the money moved through Venmo, Cash App, or a similar app. */
+export function fromPaymentApp(pfcDetailed: string | null): boolean {
+  return (pfcDetailed ?? "").includes("FROM_APPS");
+}
+
 export function bankKind(t: BankKindFacts): BankKind {
   const primary = t.pfcPrimary ?? "";
   const detailed = t.pfcDetailed ?? "";
@@ -46,8 +51,10 @@ export function bankKind(t: BankKindFacts): BankKind {
   if (t.amount < 0 && (primary === "INCOME" || detailed === "TRANSFER_IN_DEPOSIT" || PAYROLL.test(t.name ?? ""))) {
     return "income";
   }
-  // Money sent through Venmo or Cash App is spent: a wallet is never a transfer.
-  if (primary === "TRANSFER_OUT" && detailed.includes("FROM_APPS")) return "spend";
+  // Money sent through Venmo or Cash App is spent, and money cashed out of one is
+  // income (or a payback the household re-files): a wallet is never a transfer.
+  if (primary === "TRANSFER_OUT" && fromPaymentApp(detailed)) return "spend";
+  if (primary === "TRANSFER_IN" && fromPaymentApp(detailed) && t.amount < 0) return "income";
   if (primary === "TRANSFER_IN" || primary === "TRANSFER_OUT") return "transfer";
   return t.amount < 0 ? "refund" : "spend";
 }

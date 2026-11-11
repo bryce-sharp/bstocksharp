@@ -54,13 +54,18 @@ Plaid's sign matches the ledger (positive = money out).
   `TRANSFER_IN`, `LOAN_PAYMENTS`, or, for Chase's "Payment Thank You", `LOAN_DISBURSEMENTS`, or
   whose text says payment, `PYMT`, or `AUTOPAY`. `finance-check.mjs` flags any that slip in.
 - **Venmo and Cash App payments** (`TRANSFER_OUT_*_FROM_APPS`) are spending, matching the
-  wallet rule; money received through those apps lands in Needs review.
+  wallet rule. Money cashed out of those apps (`TRANSFER_IN_*_FROM_APPS`) lands as income
+  in Needs review, since it may be someone's pay (put it in their fund) or a payback.
 - **Deposited checks and cash** (`TRANSFER_IN_DEPOSIT`) are income.
 - **Bills that share a merchant** (tithing and fast offerings at one church, two
   subscriptions from one store) are told apart by amount: an equally specific pattern
   match goes to the bill whose expected amount is closest. At equal amounts (two people's
   identical plans), the bill whose Atlas due month is nearest the charge's date wins. This
   applies to card alerts and hand entries too.
+- **Extra charges on a paid bill:** a charge on a monthly bill that already has money
+  this month, and that takes the month past the bill's amount, lands in Needs review
+  with a note, so an extra donation or a double charge never quietly cuts the budget.
+  A bill's first charge of the month never does. Card alerts and the structured feed do the same.
 - **Payments recorded in parts:** when no single row matches, two or three rows that add
   up to the bank amount to the cent (within a day of each other, entered by hand or
   sharing the merchant) are claimed together (`plaid_transactions.split_ledger_ids`).
