@@ -1,6 +1,6 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { and, desc, eq, gte, isNull, lte, or } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { transactions, recurringExpenses, financialAccounts } from "@/lib/db/schema";
 import { parseAlertText, categorizeMerchant, type MerchantRule } from "@/lib/finance/sms";
@@ -134,6 +134,49 @@ function billCategoryOf(
 }
 
 /**
+ * Why a new charge on a monthly bill needs a look, or null. A second charge that
+ * takes the month past the bill's amount (an extra donation, a double charge)
+ * would quietly cut the budget, so it waits in review instead. A bill's first
+ * charge of the month never does, whatever its size.
+ */
+export async function extraBillChargeNote(
+  book: BookRef,
+  recurringExpenseId: number | null,
+  amount: number,
+  postedOn: string,
+): Promise<string | null> {
+  if (recurringExpenseId == null) return null;
+  const [bill] = await db
+    .select({
+      name: recurringExpenses.name,
+      amount: recurringExpenses.amount,
+      paymentsPerYear: recurringExpenses.paymentsPerYear,
+    })
+    .from(recurringExpenses)
+    .where(and(eq(recurringExpenses.id, recurringExpenseId), eq(recurringExpenses.bookId, book.id)))
+    .limit(1);
+  if (!bill || bill.paymentsPerYear !== 12) return null;
+
+  const [{ paid }] = await db
+    .select({ paid: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.bookId, book.id),
+        eq(transactions.recurringExpenseId, recurringExpenseId),
+        eq(transactions.category, "fixed"),
+        eq(transactions.needsReview, false),
+        sql`to_char(${transactions.postedOn}, 'YYYY-MM') = ${postedOn.slice(0, 7)}`,
+      ),
+    );
+  const paidC = Math.round(Number(paid) * 100);
+  const billC = Math.round(Number(bill.amount) * 100);
+  if (paidC <= 0 || paidC + Math.round(amount * 100) <= billC) return null;
+  const money = (c: number) => `$${(c / 100).toFixed(2)}`;
+  return `${bill.name} already has ${money(paidC)} of its ${money(billC)} this month. Keep this on the bill, or file it elsewhere.`;
+}
+
+/**
  * Turn one raw alert into a stored transaction.
  *  - Parseable → categorized against the effective recurring rules.
  *  - Unparseable → a needs-review row (amount 0, rawText kept) — NEVER dropped.
@@ -207,6 +250,10 @@ export async function ingestAlert(
         billCategoryOf(recurringExpenseId, rules),
         await spendRulesFor(book),
       );
+  const note =
+    category === "fixed"
+      ? await extraBillChargeNote(book, recurringExpenseId, Number(parsed.amount), postedOn)
+      : null;
 
   const [row] = await db
     .insert(transactions)
@@ -225,12 +272,13 @@ export async function ingestAlert(
       source: "sms",
       rawText: body,
       rawHash,
-      needsReview: false,
+      needsReview: note !== null,
+      note,
     })
     .returning({ id: transactions.id });
   await shareFromRules(book, { id: row.id, merchant: parsed.merchant, category, spendCategory });
 
-  return { ok: true, id: row.id, deduped: false, needsReview: false, category };
+  return { ok: true, id: row.id, deduped: false, needsReview: note !== null, category };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -327,12 +375,14 @@ export async function ingestStructured(
     rules = await merchantRulesFor(book, postedOn);
     ({ category, recurringExpenseId } = categorizeMerchant(merchant, rules, Number(amount), postedOn));
   }
-  const needsReview = merchant === null;
   const transfer = asTransfer(merchant, amount, accountId, await transferRulesFor(book));
   if (transfer) {
     category = "transfer";
     recurringExpenseId = null;
   }
+  const extra =
+    category === "fixed" ? await extraBillChargeNote(book, recurringExpenseId, Number(amount), postedOn) : null;
+  const needsReview = merchant === null || extra !== null;
 
   // An explicit API category wins; otherwise derive it (bill inherit / rules).
   // Transfers are never tagged.
@@ -364,7 +414,7 @@ export async function ingestStructured(
       rawText,
       rawHash,
       needsReview,
-      note,
+      note: note ?? extra,
     })
     .returning({ id: transactions.id });
   await shareFromRules(book, { id: row.id, merchant, category, spendCategory });
