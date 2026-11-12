@@ -414,6 +414,10 @@ export function QuiltBackdrop({ dateKey }: { dateKey: string }) {
         "@keyframes snugLay": { from: { opacity: 0, transform: "scale(1.04)" } },
         "@keyframes snugDrop": { "0%": { transform: "translateY(-40px)", opacity: 0 }, "60%": { transform: "translateY(4px)", opacity: 1 }, "100%": { transform: "none" } },
         "@keyframes snugUnpick": { to: { transform: "translateY(-18px) rotate(8deg) scale(.9)", opacity: 0 } },
+        // A finish: each patch puffs up and settles, a hole's cross-stitch pops in, and the empty basket folds away.
+        "@keyframes snugPuff": { "40%": { transform: "scale(1.07)" }, "100%": { transform: "scale(1)" } },
+        "@keyframes snugStitchPop": { "0%": { transform: "scale(0)", opacity: 0 }, "70%": { transform: "scale(1.3)", opacity: 1 }, "100%": { transform: "scale(1)" } },
+        "@keyframes snugFoldAway": { to: { transform: "scale(.92)", opacity: 0 } },
         "@keyframes snugPopTop": {
           "0%": { transform: "translate(-50%,4%) scale(.92)", opacity: 0 },
           "100%": { transform: "translate(-50%,0) scale(1)", opacity: 1 },
@@ -482,6 +486,7 @@ export function BoardSvg({
   holes = [],
   perfect = false,
   sewing,
+  holesStagger,
 }: {
   board: Cell[];
   cols: number;
@@ -492,8 +497,10 @@ export function BoardSvg({
   ghost?: { cells: Cell[]; color: number } | null;
   holes?: Cell[];
   perfect?: boolean;
-  /** While the binding is being sewn in or out, the sewing draws its stitches and the basting fades in or out. */
-  sewing?: { dir: "in" | "out"; ms: number };
+  /** While the binding is sewn in or out, or pulled taut at a finish, that animation draws its stitches. */
+  sewing?: { dir: "in" | "out" | "win"; ms: number };
+  /** Hole marks pop in one at a time: the first after `start` ms, then one every `every` ms, in the order given. */
+  holesStagger?: { start: number; every: number };
 }) {
   const path = useMemo(() => outlinePath(board, U), [board]);
   // Loose basting stitches marking each cell of the quilt top.
@@ -524,7 +531,7 @@ export function BoardSvg({
         strokeWidth={0.42}
         strokeLinecap="round"
         opacity={0.85}
-        style={sewing && { animation: sewing.dir === "in" ? `snugFadeIn 400ms ease ${sewing.ms * 0.85}ms both` : "snugFadeOut 250ms ease forwards" }}
+        style={sewing && sewing.dir !== "win" ? { animation: sewing.dir === "in" ? `snugFadeIn 400ms ease ${sewing.ms * 0.85}ms both` : "snugFadeOut 250ms ease forwards" } : undefined}
       />
       {ghost && (
         <path
@@ -536,13 +543,23 @@ export function BoardSvg({
           strokeDasharray="2 1.4"
         />
       )}
-      {holes.map(([x, y]) => {
+      {holes.map(([x, y], i) => {
         // A small cross-stitch: two short stitches, the top one laid over the bottom, with needle holes at the ends.
         const [a, b] = [3.7, 6.3];
         const under = `M${x * U + a} ${y * U + a}L${x * U + b} ${y * U + b}`;
         const over = `M${x * U + b} ${y * U + a}L${x * U + a} ${y * U + b}`;
         return (
-          <g key={`hole-${x},${y}`} strokeLinecap="round">
+          <g
+            key={`hole-${x},${y}`}
+            strokeLinecap="round"
+            style={
+              holesStagger && {
+                animation: `snugStitchPop 280ms cubic-bezier(.3, 1.5, .5, 1) ${holesStagger.start + i * holesStagger.every}ms both`,
+                transformBox: "fill-box",
+                transformOrigin: "center",
+              }
+            }
+          >
             <path d={under + over} stroke="rgba(60,25,12,.22)" strokeWidth={1} transform="translate(0 .35)" />
             <path d={under} stroke="#a8322a" strokeWidth={0.75} />
             <path d={over} stroke={RED_THREAD} strokeWidth={0.75} />

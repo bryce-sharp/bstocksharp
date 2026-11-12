@@ -99,6 +99,8 @@ function bindingGeometry(puzzle: Puzzle) {
     stitches: laps,
     point: (s: number) => onLoop(s + origin),
     heading: (s: number) => headingOn(s + origin),
+    /** How far around the lap a point (in board units) sits, from the top-left stitch. */
+    locate: (p: P) => wrap(project(p) - origin),
     step: total / laps.length,
     start: laps[0]!.s0,
     end: laps[laps.length - 1]!.s1,
@@ -261,6 +263,132 @@ export function Sewing({
           <path d="M0.35 -0.22L1.25 -0.6M0.5 0L1.45 0.04M0.35 0.22L1.2 0.55" stroke={thread} strokeWidth={0.16} strokeLinecap="round" />
           <circle r={0.6} fill={thread} stroke="#d9cdb4" strokeWidth={0.1} />
         </g>
+      )}
+    </svg>
+  );
+}
+
+/** A finish's pull: a wave runs around the lap and pulls each stitch taut (gold on a perfect board), as slowly as the game's opening. */
+export const WIN_PULL_MS = OPEN_MS;
+/** How long a finish waits for the basket to start folding away before the pull begins. */
+export const WIN_DELAY_MS = 300;
+
+/**
+ * When, in ms after the pull starts, the wave reaches each placed patch, so the patches can puff up in the same
+ * order. Patches still in the basket get no delay.
+ */
+export function pullDelays(puzzle: Puzzle, pieces: { cells: readonly (readonly [number, number])[]; at: { x: number; y: number } | null }[], pullMs = WIN_PULL_MS) {
+  const g = bindingGeometry(puzzle);
+  const span = g.end - g.start || 1;
+  return pieces.map((p) => {
+    if (!p.at) return null;
+    const cx = p.cells.reduce((n, [x]) => n + x, 0) / p.cells.length + 0.5;
+    const cy = p.cells.reduce((n, [, y]) => n + y, 0) / p.cells.length + 0.5;
+    return clamp01((g.locate([(p.at.x + cx) * U, (p.at.y + cy) * U]) - g.start) / span) * pullMs;
+  });
+}
+
+/**
+ * A finish over a `BoardSvg` given `sewing` with `dir: "win"`: after `delay` ms, a wave runs around the lap and each
+ * stitch bows loose, then snaps taut in the board's final thread (gold when perfect), with a glint leading the wave on
+ * a perfect board. `freeze` (0 to 1) holds one moment.
+ */
+export function Finishing({
+  puzzle,
+  cell,
+  pad,
+  left,
+  top,
+  perfect,
+  delay,
+  pullMs = WIN_PULL_MS,
+  onDone,
+  freeze,
+}: {
+  puzzle: Puzzle;
+  cell: number;
+  pad: number;
+  left: number;
+  top: number;
+  perfect: boolean;
+  delay: number;
+  pullMs?: number;
+  onDone: () => void;
+  freeze?: number;
+}) {
+  const g = useMemo(() => bindingGeometry(puzzle), [puzzle]);
+  const total = delay + pullMs;
+  const [elapsed, setElapsed] = useState(0);
+  const done = useRef(onDone);
+  useEffect(() => {
+    done.current = onDone;
+  });
+  useEffect(() => {
+    if (freeze !== undefined) return;
+    let raf = 0;
+    const t0 = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(total, now - t0);
+      setElapsed(t);
+      if (t < total) raf = requestAnimationFrame(tick);
+      else done.current();
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [total, freeze]);
+  const t = freeze !== undefined ? freeze * total : elapsed;
+  const final = bindingThread(perfect);
+  // The wave runs a little past the last stitch, so the last ones finish snapping taut.
+  const reach = 2 * g.step;
+  const wave = g.start + (g.end + reach - g.start) * easeInOut(clamp01((t - delay) / pullMs));
+  const padU = pad * U;
+  return (
+    <svg
+      width={(puzzle.cols + 2 * pad) * cell}
+      height={(puzzle.rows + 2 * pad) * cell}
+      viewBox={`${-padU} ${-padU} ${puzzle.cols * U + 2 * padU} ${puzzle.rows * U + 2 * padU}`}
+      style={{ position: "absolute", left, top, overflow: "visible", pointerEvents: "none", zIndex: 20 }}
+      aria-hidden
+    >
+      <defs>
+        <radialGradient id="snug-glint">
+          <stop offset="0" stopColor="#fff8d6" stopOpacity={0.95} />
+          <stop offset="0.45" stopColor="#f6c445" stopOpacity={0.55} />
+          <stop offset="1" stopColor="#f6c445" stopOpacity={0} />
+        </radialGradient>
+      </defs>
+      {g.stitches.map((st, k) => {
+        // Each stitch bows loose as the wave reaches it, then snaps taut in its final thread.
+        const local = clamp01((wave - st.s0) / reach);
+        const bow = Math.sin(Math.PI * local) * 1.6;
+        const color = local >= 0.55 ? final : bindingThread(false);
+        const straight = st.pts.length === 2;
+        const a = st.pts[0]!;
+        const b = st.pts[st.pts.length - 1]!;
+        const d =
+          straight && bow > 0.01
+            ? `M${fmt(a[0])} ${fmt(a[1])}Q${fmt((a[0] + b[0]) / 2 + st.out[0] * bow)} ${fmt((a[1] + b[1]) / 2 + st.out[1] * bow)} ${fmt(b[0])} ${fmt(b[1])}`
+            : prefix(st, st.len);
+        const lift = straight ? 0 : bow * 0.5;
+        return (
+          <g key={k} transform={lift ? `translate(${fmt(st.out[0] * lift)} ${fmt(st.out[1] * lift)})` : undefined}>
+            <path d={st.holes[0]} fill="rgba(60,32,20,.45)" />
+            <path d={st.holes[1]} fill="rgba(60,32,20,.45)" />
+            <path
+              d={d}
+              fill="none"
+              stroke="rgba(40,20,10,.35)"
+              strokeWidth={1.3}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              transform={`translate(${fmt(0.18 + bow * 0.35)} ${fmt(0.28 + bow * 0.5)})`}
+            />
+            <path d={d} fill="none" stroke={color} strokeWidth={1} strokeLinecap="round" strokeLinejoin="round" />
+          </g>
+        );
+      })}
+      {perfect && wave > g.start && wave < g.end + reach && (
+        <circle cx={g.point(wave)[0]} cy={g.point(wave)[1]} r={3.2} fill="url(#snug-glint)" />
       )}
     </svg>
   );

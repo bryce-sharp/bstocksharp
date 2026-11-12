@@ -15,7 +15,7 @@ import { canvasFile, canvasFonts, drawResultPicture, quiltGrid } from "./share";
 import { SNUG_FONTS } from "./fonts";
 import { flushRemote, saveProgressRemote, saveRunRemote, syncSnug } from "./sync";
 import { sfx } from "./sounds";
-import { OPEN_MS, SETTLE_MS, SWITCH_MS, UNSEW_MS, Sewing, boardSewStyle, pieceSewStyle, type SewDir } from "./sewing";
+import { Finishing, OPEN_MS, SETTLE_MS, SWITCH_MS, UNSEW_MS, Sewing, WIN_DELAY_MS, WIN_PULL_MS, boardSewStyle, pieceSewStyle, pullDelays, type SewDir } from "./sewing";
 import { Basket } from "./basket";
 import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
 import { BoardSvg, Btn, FONT, HowToPlay, INK, KnitDefs, PanelStitches, PatchSvg, QuiltBackdrop, QuiltLabel, RUST_THREAD, ResultCard, SCRIPT, Stat, hintsUsed, panelStyle, plural, type Attempt, type MoreGamesLink, type PieceState, type RunSummary, type Spot } from "./parts";
@@ -29,14 +29,25 @@ const FOOTER_H = 100;
 const BOARD_PAD = 0.45;
 /** Side-by-side is kept whenever pieces stay at least this many pixels per square. */
 const SIDE_MIN_CELL = 30;
+/** The basket's patches under the board (phones), as a share of a board square, before any room left over is shared out. */
+const STACK_TRAY_SCALE = 0.45;
+/** The largest the basket's patches grow on a phone, as a share of a board square, when room is left under the game. */
+const STACK_TRAY_MAX_SCALE = 0.6;
+/** The smallest a basket patch's square gets on a phone, in px, so the board can take a bigger square size. */
+const TRAY_MIN_PX = 14;
+/** How many frames after it appears the game keeps measuring where it sits, while the page above settles. */
+const SETTLE_FRAMES = 30;
 
 /**
  * Room for iPhone Safari's toolbar when it floats over the page; the panel's edge and the maker's label may sit
  * under it, so this is only the part of it above them.
  */
 const IPHONE_TOOLBAR_H = 44;
-/** As a home-screen app the page runs under the home indicator, which crowds the bottom edge. */
-const IPHONE_HOME_STRIP_H = 34;
+/**
+ * As a home-screen app the page runs under the 34px home indicator strip. Like Safari's toolbar, the panel's edge and
+ * the maker's label may sit in it, so only the part above them is kept clear; the buttons stay well above it.
+ */
+const IPHONE_HOME_STRIP_H = 14;
 
 /** A height in CSS units, measured in pixels. */
 function cssHeight(height: string): number {
@@ -383,7 +394,7 @@ function SnugDay({
   const coarsePointer = useMemo(() => window.matchMedia("(pointer: coarse)").matches, []);
   // The board sews itself in when it opens, and pulls its stitches back out before another day takes its place;
   // a tap skips either, and neither plays for anyone who has reduced motion turned on.
-  const still = useMemo(() => !!lab || window.matchMedia("(prefers-reduced-motion: reduce)").matches, [lab]);
+  const still = useMemo(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches, []);
   // Leaving: `next` is the day to go to (the latest pick wins) and `left` is set once it has been asked for.
   const [sew, setSew] = useState<{ dir: SewDir; ms: number; next?: string; left?: boolean } | null>(() =>
     still ? null : { dir: "in", ms: opening === "open" ? OPEN_MS : SWITCH_MS },
@@ -427,6 +438,12 @@ function SnugDay({
       setSew(null);
     }
   };
+  // A finish pulls the stitches taut around the edge (gold when perfect) while the patches puff, then shows the card.
+  const [won, setWon] = useState(false);
+  const winDone = useCallback(() => {
+    setWon(false);
+    setShowCard(true);
+  }, []);
   // The clock and the keyboard wait while a modal is open or the board is sewing in or out, so neither costs time.
   const held = modalOpen || !!sew;
   const heldRef = useRef(held);
@@ -471,6 +488,13 @@ function SnugDay({
       settle = window.setTimeout(measure, 150);
     });
     page.observe(document.body);
+    // The page above can still be settling as the game appears (the site header tucks away), and that move changes no
+    // size the observers see, so the first frames are measured too; an unchanged reading re-renders nothing.
+    let frames = 0;
+    let frame = window.requestAnimationFrame(function again() {
+      measure();
+      if (++frames < SETTLE_FRAMES) frame = window.requestAnimationFrame(again);
+    });
     let lastWidth = window.innerWidth;
     const onResize = () => {
       // Phone browsers change the height as the address bar hides and shows while scrolling; re-laying out then
@@ -485,6 +509,7 @@ function SnugDay({
       ro.disconnect();
       page.disconnect();
       window.clearTimeout(settle);
+      window.cancelAnimationFrame(frame);
       window.removeEventListener("resize", onResize);
     };
   }, [coarsePointer]);
@@ -519,11 +544,16 @@ function SnugDay({
       return null;
     };
     const tryStack = (cell: number, height: number) => {
-      const scale = 0.45;
       const trayCells = Math.min(availW / cell, Math.max(bw, 12));
       if (bw * cell > availW) return null;
-      const pack = packTray(longest.map((m) => m * scale + 0.55), trayCells);
-      return (bh + 0.5 + pack.h) * cell <= height ? { scale, trayCells, pack } : null;
+      // The basket's patches shrink before the board does, down to TRAY_MIN_PX a square: a fixed size made the basket
+      // jump a whole row as squares grew, which left phones with a band of unused room under the game.
+      const smallest = Math.min(STACK_TRAY_SCALE, TRAY_MIN_PX / cell);
+      for (let scale = STACK_TRAY_SCALE; scale >= smallest - 1e-6; scale -= 0.025) {
+        const pack = packTray(longest.map((m) => m * scale + 0.55), trayCells);
+        if ((bh + 0.5 + pack.h) * cell <= height) return { scale, trayCells, pack };
+      }
+      return null;
     };
 
     let side = true;
@@ -534,6 +564,16 @@ function SnugDay({
       side = false;
       // Every patch and button in view beats bigger squares: players miss what they have to scroll to.
       for (cell = MAX_CELL; cell >= MIN_CELL && !(pick = tryStack(cell, room)); cell--);
+      if (pick) {
+        // Room still left under the game goes to the basket's patches, so they are easier to pick up.
+        for (let scale = STACK_TRAY_MAX_SCALE; scale > pick.scale + 1e-6; scale -= 0.025) {
+          const pack = packTray(longest.map((m) => m * scale + 0.55), pick.trayCells);
+          if ((bh + 0.5 + pack.h) * cell <= room) {
+            pick = { scale, trayCells: pick.trayCells, pack };
+            break;
+          }
+        }
+      }
       pick ??= tryStack(MIN_CELL, Infinity)!;
     }
     const { scale, trayCells, pack } = pick!;
@@ -955,18 +995,19 @@ function SnugDay({
       scoredRun = run;
     }
     if (!lab) saveRunRemote(dateKey, scoredRun, best);
-    window.setTimeout(() => setShowCard(true), holes === 0 ? 1500 : 250);
+    setWon(true);
+    // With reduced motion the card comes on the old timer; otherwise `Finishing` brings it once the pull is over.
+    if (still) window.setTimeout(winDone, holes === 0 ? 1500 : 250);
     const month = dateKey.slice(0, 7);
     if (!lab && holes === 0 && (before?.gaps ?? 1) > 0 && month < today.slice(0, 7)) {
       void monthComplete(month)
-        .then((done) => done && window.setTimeout(() => setCompleted(dateKey), 1500))
+        .then((done) => done && window.setTimeout(() => setCompleted(dateKey), still ? 1500 : WIN_DELAY_MS + WIN_PULL_MS + 300))
         .catch(() => {});
     }
-  }, [isReplay, isArchive, pieces, dateKey, saved, stopClock, hintIds, holesIn, lab, today]);
+  }, [isReplay, isArchive, pieces, dateKey, saved, stopClock, hintIds, holesIn, lab, today, still, winDone]);
 
   useEffect(() => {
     // Many moves can fill the board (a drop, a hint, a restored game), so finishing watches for it here.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (phase === "playing" && !dragging && gaps === 0) finish();
   }, [phase, dragging, gaps, finish]);
 
@@ -1106,6 +1147,14 @@ function SnugDay({
   const compact = width > 0 && width < 560;
   /** Half the result card's width, so it can be kept inside the panel. */
   const cardHalf = Math.min(420, width - 16) / 2;
+  const finishing = won && !still;
+  // Hole marks pop in top row first while the stitches are pulled taut.
+  const holeCells = puzzle.board.filter(([x, y]) => !filled.has(cellKey(x, y))).sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+  // When the wave of the pull reaches each placed patch, so the patches puff in the same order.
+  const puffAt = useMemo(() => (finishing ? pullDelays(puzzle, pieces) : []), [finishing, puzzle, pieces]);
+  const folded = phase === "done";
+  // Side by side, the card sits where the basket was; once it is closed the quilt slides to the middle of the panel.
+  const slide = folded && layout.side && !won && !showCard ? (width - (puzzle.cols + 2 * BOARD_PAD) * cell) / 2 - (board.x - BOARD_PAD * cell) : 0;
   const sameRun = (a: { gaps: number; timeMs: number } | null, b: { gaps: number; timeMs: number } | null) =>
     !!a && !!b && a.gaps === b.gaps && a.timeMs === b.timeMs;
   const cardNote = [
@@ -1263,15 +1312,28 @@ function SnugDay({
         <div
           ref={playRef}
           onPointerDownCapture={(e) => {
-            if (!sew) return;
+            if (!sew && !(won && !still)) return;
             e.stopPropagation();
-            skipSew();
+            if (sew) skipSew();
+            else winDone();
           }}
           style={{ position: "relative", width: "100%", height: width ? layout.height : 420, touchAction: "none" }}
         >
           {width > 0 && (
             <>
-              <Basket style={{ left: tray.x - 8, top: tray.y - 8, width: tray.w + 16, height: tray.h + 16 }} />
+              {/* The quilt and its basket. Once the day is done the basket folds away, and with the card closed the quilt slides to the middle. */}
+              <div style={{ position: "absolute", inset: 0, transform: slide ? `translateX(${slide}px)` : "none", transition: "transform 520ms cubic-bezier(.3, .8, .3, 1)" }}>
+              <Basket
+                style={{
+                  left: tray.x - 8,
+                  top: tray.y - 8,
+                  width: tray.w + 16,
+                  height: tray.h + 16,
+                  opacity: folded ? 0 : 1,
+                  transform: folded ? "scale(.92)" : undefined,
+                  transition: "opacity 450ms ease, transform 450ms ease",
+                }}
+              />
 
               <BoardSvg
                 board={puzzle.board}
@@ -1281,10 +1343,23 @@ function SnugDay({
                 pad={BOARD_PAD}
                 style={{ position: "absolute", left: board.x - BOARD_PAD * cell, top: board.y - BOARD_PAD * cell, ...(sew && boardSewStyle(sew.dir, sew.ms)) }}
                 ghost={ghost && ghostPiece ? { cells: shift(ghostPiece.cells, ghost), color: ghostPiece.color } : null}
-                holes={phase === "done" && !revealing ? puzzle.board.filter(([x, y]) => !filled.has(cellKey(x, y))) : []}
+                holes={phase === "done" && !revealing ? holeCells : []}
                 perfect={perfect}
-                sewing={sew ?? undefined}
+                sewing={sew ?? (finishing ? { dir: "win", ms: WIN_PULL_MS } : undefined)}
+                holesStagger={finishing ? { start: WIN_DELAY_MS, every: 90 } : undefined}
               />
+              {finishing && (
+                <Finishing
+                  puzzle={puzzle}
+                  cell={cell}
+                  pad={BOARD_PAD}
+                  left={board.x - BOARD_PAD * cell}
+                  top={board.y - BOARD_PAD * cell}
+                  perfect={perfect}
+                  delay={WIN_DELAY_MS}
+                  onDone={winDone}
+                />
+              )}
               {sew && (
                 <Sewing
                   key={sew.dir}
@@ -1343,7 +1418,7 @@ function SnugDay({
                       transformOrigin: "0 0",
                       transform: `translate(${pos.x}px, ${pos.y}px) scale(${pos.s})`,
                       transition: dragged ? "none" : "transform 220ms cubic-bezier(.2,.9,.3,1.15), opacity 900ms ease, filter 900ms ease",
-                      opacity: spare && !p.at && !lifted && !lifting ? 0.6 : 1,
+                      opacity: folded && !p.at ? 0 : spare && !p.at && !lifted && !lifting ? 0.6 : 1,
                       zIndex: lifted ? 50 : p.loose ? 30 : p.at ? 10 : 5,
                       pointerEvents: "none",
                       filter:
@@ -1357,7 +1432,16 @@ function SnugDay({
                           .join(" ") || "none",
                     }}
                   >
-                    <div className={lifting ? "snug-spare-lift" : undefined} style={sew ? pieceSewStyle(sew.dir, index) : undefined}>
+                    <div
+                      className={lifting ? "snug-spare-lift" : undefined}
+                      style={
+                        sew
+                          ? pieceSewStyle(sew.dir, index)
+                          : finishing && p.at
+                            ? { animation: `snugPuff 420ms ease-out ${WIN_DELAY_MS + (puffAt[index] ?? 0)}ms both`, transformOrigin: "center" }
+                            : undefined
+                      }
+                    >
                       <PatchSvg
                         piece={p}
                         cell={cell}
@@ -1407,6 +1491,7 @@ function SnugDay({
                   </Fragment>
                 );
               })}
+              </div>
 
               {paused && phase === "playing" && (
                 <div
@@ -1463,7 +1548,8 @@ function SnugDay({
           )}
         </div>
 
-        <div style={{ display: "flex", flexWrap: "wrap", gap: compact ? 6 : 8, marginTop: 20, alignItems: "center" }}>
+        {/* On phones the panel's padding is narrow, so the row keeps its end buttons off the stitched edge. */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: compact ? 6 : 8, marginTop: 20, alignItems: "center", paddingInline: compact ? 6 : 0 }}>
           {phase === "playing" ? (
             confirming && compact ? (
               // Phones show only the question while it is asked, so it fits on one line.
@@ -1557,7 +1643,8 @@ function SnugDay({
               </>
             )
           ) : (
-            <>
+            // While the finish plays, its buttons keep their room but stay out of sight until the card arrives.
+            <div style={{ display: "contents", visibility: won ? "hidden" : undefined }}>
               {!compact && revealing && <span style={{ fontSize: 14, opacity: 0.8 }}>Showing one perfect fill.</span>}
               <span style={{ flex: 1 }} />
               {revealing ? (
@@ -1566,7 +1653,9 @@ function SnugDay({
                 </Btn>
               ) : (
                 result &&
-                result.gaps > 0 && (
+                result.gaps > 0 &&
+                // The result card offers this too, so the footer's copy waits until the card is closed.
+                !showCard && (
                   <Btn small={compact} onClick={tap(reveal)}>
                     {compact ? "Perfect fill" : "Show a perfect fill"}
                   </Btn>
@@ -1583,7 +1672,7 @@ function SnugDay({
                   {compact ? "Play again" : "Play again (unscored)"}
                 </Btn>
               )}
-            </>
+            </div>
           )}
         </div>
         <QuiltLabel link={moreGames} />
