@@ -2,7 +2,8 @@ import * as React from "react";
 import { redirect } from "next/navigation";
 import AppHeader from "@/components/shared/AppHeader";
 import AccountControl from "@/components/shared/AccountControl";
-import ViewingControl, { VIEWING_APPS } from "@/components/shared/ViewingControl";
+import ViewingMenu from "@/components/shared/ViewingMenu";
+import { loadViewing } from "@/components/shared/ViewingControl";
 import SlidingHeader from "@/components/shared/SlidingHeader";
 import { getMe } from "@/lib/profile";
 import { getApp } from "@/lib/apps";
@@ -21,7 +22,9 @@ export default async function AppShell({
   current: string;
   children: React.ReactNode;
 }) {
-  const [me, apps] = await Promise.all([getMe(), hubApps()]);
+  const [me, apps, viewing] = await Promise.all([getMe(), hubApps(), loadViewing(current)]);
+  // Looking at your own stuff, "Switch person" sits in the account menu; looking at someone else, the header says so.
+  const yours = viewing?.active.you ?? false;
   const app = getApp(current);
   // An app this hub does not have (a games-only sign-up opening /finance) goes home instead.
   if (app && apps.length && !apps.includes(app.slug)) redirect("/");
@@ -37,8 +40,8 @@ export default async function AppShell({
           hiddenApps={me?.hiddenApps ?? []}
           hubApps={apps}
           books={books}
-          appControl={VIEWING_APPS.includes(current) ? <ViewingControl app={current} /> : null}
-          profileControl={<AccountControl />}
+          appControl={viewing && !yours ? <ViewingMenu active={viewing.active} people={viewing.people} /> : null}
+          profileControl={<AccountControl viewing={yours ? viewing : null} />}
         />
       }
     >

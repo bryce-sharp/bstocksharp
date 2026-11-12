@@ -19,13 +19,15 @@ import LightModeIcon from "@mui/icons-material/LightModeOutlined";
 import GroupsIcon from "@mui/icons-material/Groups";
 import ManageAccountsIcon from "@mui/icons-material/ManageAccountsOutlined";
 import LogoutIcon from "@mui/icons-material/Logout";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import PersonAvatar from "@/components/shared/PersonAvatar";
+import { ViewingPicker, type ViewingPick } from "@/components/shared/ViewingMenu";
 import { logoutAction } from "@/app/actions/session";
 import { useMounted } from "@/components/shared/useMounted";
 
 // The top-right menu is always you: the person your login is (or the hub's shared login), plus
-// the app-wide bits. Whose stuff you are looking at is picked inside each app
-// that has per-person data (ViewingMenu), never here.
+// the app-wide bits. In an app with per-person data, while you are looking at your own stuff, it also
+// holds "Switch person"; looking at someone else, the header's Viewing chip (ViewingMenu) says so instead.
 export default function AccountMenu({
   me,
   hubLogin,
@@ -33,6 +35,7 @@ export default function AccountMenu({
   username,
   hubSettings,
   accountSettings,
+  viewing = null,
 }: {
   /** The person this login is; null for the shared login and for a login tied to no one. */
   me: { name: string; color: string | null } | null;
@@ -44,8 +47,11 @@ export default function AccountMenu({
   hubSettings: boolean;
   /** False for the shared login, which the owner manages from Hub settings. */
   accountSettings: boolean;
+  /** Who this app shows and who else could be picked, while that is you; null hides "Switch person". */
+  viewing?: { active: ViewingPick; people: ViewingPick[] } | null;
 }) {
   const [anchor, setAnchor] = React.useState<null | HTMLElement>(null);
+  const [pickerAnchor, setPickerAnchor] = React.useState<null | HTMLElement>(null);
   const [, startTransition] = React.useTransition();
 
   // Color mode. useColorScheme() is undefined until mounted, so guard the toggle.
@@ -86,6 +92,22 @@ export default function AccountMenu({
         ) : null}
         {username ? <Divider /> : null}
 
+        {viewing ? (
+          <MenuItem
+            onClick={() => {
+              // The picker opens where this menu did, so it reads as the next step.
+              setPickerAnchor(anchor);
+              closeMenu();
+            }}
+          >
+            <ListItemIcon>
+              <VisibilityOutlinedIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText primary="Switch person…" secondary="Now viewing you" />
+          </MenuItem>
+        ) : null}
+        {viewing ? <Divider /> : null}
+
         <MenuItem onClick={() => setMode(isDark ? "light" : "dark")} disabled={!mounted}>
           <ListItemIcon>
             {isDark ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
@@ -123,6 +145,7 @@ export default function AccountMenu({
           <ListItemText>Sign out</ListItemText>
         </MenuItem>
       </Menu>
+      {viewing ? <ViewingPicker anchor={pickerAnchor} onClose={() => setPickerAnchor(null)} active={viewing.active} people={viewing.people} /> : null}
     </>
   );
 }
