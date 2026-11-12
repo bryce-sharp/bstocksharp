@@ -113,7 +113,7 @@ export default async function BudgetPage({
     otherBooksForViewer(),
   ]);
 
-  const fundPicks = c.funds.map((f) => ({ id: f.id, name: f.name }));
+  const fundPicks = c.funds.map((f) => ({ id: f.id, name: f.name, balance: d(f.balanceC) }));
   const fundViews = c.funds.map((f) => ({
     id: f.id,
     name: f.name,

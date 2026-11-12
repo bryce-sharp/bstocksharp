@@ -26,6 +26,8 @@ import NumberField from "@/components/shared/NumberField";
 import SuggestField from "@/components/shared/SuggestField";
 import TransferAccounts from "./TransferAccounts";
 import MerchantAvatar from "./MerchantAvatar";
+import SplitDialog, { draftPart, type SplitDraft } from "./SplitDialog";
+import { canSplit } from "@/lib/finance/split";
 import { deleteTransactionAction, updateTransactionAction } from "@/app/actions/finance-budget";
 import {
   getTransactionDetailAction,
@@ -101,6 +103,7 @@ export default function TransactionDialog({
   incomeCategories,
   onSaved,
   onDeleted,
+  onSplit,
   onClose,
   otherBooks = [],
   otherAccounts = [],
@@ -120,6 +123,8 @@ export default function TransactionDialog({
   incomeCategories: string[]; // income tags
   onSaved: (row: TxnRowData) => void;
   onDeleted: (id: number) => void;
+  /** Present ⇒ a purchase can be split; gets the saved parts, the original first. */
+  onSplit?: (rows: TxnRowData[]) => void;
   onClose: () => void;
 }) {
   const fullScreen = useMediaQuery(useTheme().breakpoints.down("sm"));
@@ -131,6 +136,9 @@ export default function TransactionDialog({
   const [sharedWith, setSharedWith] = React.useState(txn.sharedWith ?? []);
   const [always, setAlways] = React.useState(txn.alwaysFor != null);
   const [, startSharing] = React.useTransition();
+  const [fundId, setFundId] = React.useState<number | null>(txn.fundId);
+  // The Split popup's starting parts; undefined = the row as it is, null = closed.
+  const [splitFrom, setSplitFrom] = React.useState<SplitDraft[] | undefined | null>(null);
 
   React.useEffect(() => {
     let live = true;
@@ -153,6 +161,24 @@ export default function TransactionDialog({
     txn.recurringExpenseId != null && !billChoices.some((b) => b.id === txn.recurringExpenseId);
   const adjusted = txn.amount !== txn.originalAmount;
   const amountText = `${direction === "in" && txn.category !== "transfer" ? "+" : ""}${formatMoney(Math.abs(txn.amount))}`;
+  const splittable = onSplit != null && !txn.between && canSplit(txn.category, txn.amount);
+
+  // A fund that cannot cover the whole purchase can cover what it has, the rest
+  // going on the budget. What it has counts this row back in when it already draws it.
+  const pickedFund = category === "fund" ? funds.find((f) => f.id === fundId) : undefined;
+  const fundHas =
+    pickedFund?.balance == null
+      ? null
+      : pickedFund.balance + (txn.category === "fund" && txn.fundId === pickedFund.id ? txn.amount : 0);
+  const coverable = splittable && pickedFund && fundHas != null && fundHas > 0 && fundHas < txn.amount;
+  function coverWithFund() {
+    if (!pickedFund || fundHas == null) return;
+    const tag = flowOf(txn.category) === "out" ? (txn.spendCategory ?? "") : "";
+    setSplitFrom([
+      draftPart({ category: "discretionary", spendCategory: tag }),
+      draftPart({ amount: fundHas.toFixed(2), category: "fund", fundId: pickedFund.id, spendCategory: tag }),
+    ]);
+  }
 
   async function handle(formData: FormData) {
     setError(null);
@@ -415,15 +441,30 @@ export default function TransactionDialog({
                 name="fundId"
                 label="Which fund"
                 select
-                defaultValue={txn.fundId ?? ""}
+                value={fundId ?? ""}
+                onChange={(e) => setFundId(Number(e.target.value) || null)}
                 helperText={funds.length === 0 ? "No funds yet — create one first." : undefined}
               >
                 {funds.map((f) => (
                   <MenuItem key={f.id} value={f.id}>
                     {f.name}
+                    {f.balance != null ? ` · ${formatMoney(f.balance)}` : ""}
                   </MenuItem>
                 ))}
               </TextField>
+            ) : null}
+            {coverable ? (
+              <Alert
+                severity="info"
+                action={
+                  <Button color="inherit" size="small" onClick={coverWithFund}>
+                    Split it
+                  </Button>
+                }
+              >
+                {pickedFund!.name} has {formatMoney(fundHas!)}. Cover that from the fund and put the other{" "}
+                {formatMoney(txn.amount - fundHas!)} on this month&apos;s budget?
+              </Alert>
             ) : null}
             {category === "income" && funds.length > 0 ? (
               <TextField
@@ -524,6 +565,11 @@ export default function TransactionDialog({
           <Button onClick={remove} color="error" disabled={deleting} sx={{ mr: "auto" }}>
             {deleting ? "Deleting…" : "Delete"}
           </Button>
+          {splittable ? (
+            <Button onClick={() => setSplitFrom(undefined)} color="inherit">
+              Split…
+            </Button>
+          ) : null}
           <Button onClick={onClose} color="inherit">
             Cancel
           </Button>
@@ -532,6 +578,20 @@ export default function TransactionDialog({
           </SubmitButton>
         </DialogActions>
       </form>
+      {splitFrom !== null && onSplit ? (
+        <SplitDialog
+          txn={txn}
+          funds={funds}
+          bills={bills}
+          categories={categories}
+          initial={splitFrom}
+          onSplit={(rows) => {
+            onSplit(rows);
+            onClose();
+          }}
+          onClose={() => setSplitFrom(null)}
+        />
+      ) : null}
     </Dialog>
   );
 }

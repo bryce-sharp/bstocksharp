@@ -161,6 +161,11 @@ export default function TransactionsTable({
     setRows((prev) => prev.map((r) => (r.id === row.id ? row : r)));
   }
 
+  // A split purchase becomes its parts, in its place, the original first.
+  function spliceSplit(parts: TxnRowData[]) {
+    setRows((prev) => prev.flatMap((r) => (r.id === parts[0]?.id ? parts : [r])));
+  }
+
   // Optimistic: update the tapped row now (and its merchant-siblings when
   // "apply to all"), then persist. Matches the server sweep so the two agree.
   async function saveCategory(category: string | null, applyToMerchant: boolean) {
@@ -322,6 +327,7 @@ export default function TransactionsTable({
           incomeCategories={incomeCategories}
           onSaved={patchRow}
           onDeleted={(id) => setRows((prev) => prev.filter((r) => r.id !== id))}
+          onSplit={spliceSplit}
           onClose={() => setDetail(null)}
           otherBooks={otherBooks}
           otherAccounts={otherAccounts}
