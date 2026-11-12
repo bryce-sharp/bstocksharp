@@ -2,7 +2,7 @@
 // sews the binding's stitches in one at a time, its newest stitches loose and wavy until they settle taut behind it,
 // while the patches drop in. Leaving a day pulls the stitches back out first. Tried in the opening lab.
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { BINDING_INSET, U, bindingStitches, bindingThread } from "./parts";
 import { insetCellLoops } from "./stitches";
 import type { Puzzle } from "./generator";
@@ -164,6 +164,79 @@ function frame(g: Geometry, u: number, dir: SewDir) {
 }
 
 /**
+ * Progress from 0 to 1 over `ms`, one animation frame at a time, calling `onDone` once at the end. `freeze` (0 to 1)
+ * holds one moment instead, for the lab. Shared by the opening and the finish.
+ */
+function useProgress(ms: number, onDone: () => void, freeze?: number): number {
+  const [u, setU] = useState(0);
+  const done = useRef(onDone);
+  useEffect(() => {
+    done.current = onDone;
+  });
+  useEffect(() => {
+    if (freeze !== undefined) return;
+    let raf = 0;
+    const t0 = performance.now();
+    const tick = (now: number) => {
+      const v = clamp01((now - t0) / ms);
+      setU(v);
+      if (v < 1) raf = requestAnimationFrame(tick);
+      else done.current();
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [ms, freeze]);
+  return freeze ?? u;
+}
+
+/** An svg the size and place of a `BoardSvg` with the same `cell` and `pad`, in board units, for drawing over it. */
+function BoardOverlay({ puzzle, cell, pad, left, top, children }: { puzzle: Puzzle; cell: number; pad: number; left: number; top: number; children: ReactNode }) {
+  const padU = pad * U;
+  return (
+    <svg
+      width={(puzzle.cols + 2 * pad) * cell}
+      height={(puzzle.rows + 2 * pad) * cell}
+      viewBox={`${-padU} ${-padU} ${puzzle.cols * U + 2 * padU} ${puzzle.rows * U + 2 * padU}`}
+      style={{ position: "absolute", left, top, overflow: "visible", pointerEvents: "none", zIndex: 20 }}
+      aria-hidden
+    >
+      {children}
+    </svg>
+  );
+}
+
+/**
+ * One binding stitch, drawn `q` units long. A slack stitch bows by `bow` like loose yarn (one that turns a corner
+ * lifts outward instead), and `lift` raises it off the cloth, pushing its shadow out. Each animation decides these.
+ */
+function StitchShape({ st, q, bow, lift, color }: { st: Stitch; q: number; bow: number; lift: number; color: string }) {
+  const straight = st.pts.length === 2;
+  const a = st.pts[0]!;
+  const b = along(st, q);
+  const d =
+    straight && Math.abs(bow) > 0.01
+      ? `M${fmt(a[0])} ${fmt(a[1])}Q${fmt((a[0] + b[0]) / 2 + st.out[0] * bow)} ${fmt((a[1] + b[1]) / 2 + st.out[1] * bow)} ${fmt(b[0])} ${fmt(b[1])}`
+      : prefix(st, q);
+  const out = straight ? 0 : bow * 0.5;
+  return (
+    <g transform={out ? `translate(${fmt(st.out[0] * out)} ${fmt(st.out[1] * out)})` : undefined}>
+      <path d={st.holes[0]} fill="rgba(60,32,20,.45)" />
+      {q >= st.len && <path d={st.holes[1]} fill="rgba(60,32,20,.45)" />}
+      <path
+        d={d}
+        fill="none"
+        stroke="rgba(40,20,10,.35)"
+        strokeWidth={1.3}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        transform={`translate(${fmt(0.18 + lift * 0.6)} ${fmt(0.28 + lift * 0.9)})`}
+      />
+      <path d={d} fill="none" stroke={color} strokeWidth={1} strokeLinecap="round" strokeLinejoin="round" />
+    </g>
+  );
+}
+
+/**
  * The binding stitches being sewn in or out, over a `BoardSvg` given `sewing` (which hides its own stitches meanwhile).
  * It sits where that board does and has the same size; `freeze` holds one moment, for the lab.
  */
@@ -192,35 +265,10 @@ export function Sewing({
   perfect?: boolean;
 }) {
   const g = useMemo(() => bindingGeometry(puzzle), [puzzle]);
-  const [u, setU] = useState(0);
-  const done = useRef(onDone);
-  useEffect(() => {
-    done.current = onDone;
-  });
-  useEffect(() => {
-    if (freeze !== undefined) return;
-    let raf = 0;
-    const t0 = performance.now();
-    const tick = (now: number) => {
-      const v = clamp01((now - t0) / ms);
-      setU(v);
-      if (v < 1) raf = requestAnimationFrame(tick);
-      else done.current();
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [ms, freeze]);
-  const f = frame(g, freeze ?? u, dir);
-  const padU = pad * U;
+  const f = frame(g, useProgress(ms, onDone, freeze), dir);
   const thread = bindingThread(perfect);
   return (
-    <svg
-      width={(puzzle.cols + 2 * pad) * cell}
-      height={(puzzle.rows + 2 * pad) * cell}
-      viewBox={`${-padU} ${-padU} ${puzzle.cols * U + 2 * padU} ${puzzle.rows * U + 2 * padU}`}
-      style={{ position: "absolute", left, top, overflow: "visible", pointerEvents: "none", zIndex: 20 }}
-      aria-hidden
-    >
+    <BoardOverlay puzzle={puzzle} cell={cell} pad={pad} left={left} top={top}>
       <defs>
         <filter id="snug-sew-soft" x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="0.5" />
@@ -228,33 +276,7 @@ export function Sewing({
       </defs>
       {g.stitches.map((st, k) => {
         const s = f.shown[k]!;
-        if (s.q <= 0) return null;
-        // A slack stitch bows like loose yarn; one that turns a corner lifts outward instead.
-        const straight = st.pts.length === 2;
-        const a = st.pts[0]!;
-        const b = along(st, s.q);
-        const bow = s.bow * (s.q / st.len);
-        const d =
-          straight && bow !== 0
-            ? `M${fmt(a[0])} ${fmt(a[1])}Q${fmt((a[0] + b[0]) / 2 + st.out[0] * bow)} ${fmt((a[1] + b[1]) / 2 + st.out[1] * bow)} ${fmt(b[0])} ${fmt(b[1])}`
-            : prefix(st, s.q);
-        const lift = straight ? 0 : bow * 0.5;
-        return (
-          <g key={k} transform={lift ? `translate(${fmt(st.out[0] * lift)} ${fmt(st.out[1] * lift)})` : undefined}>
-            <path d={st.holes[0]} fill="rgba(60,32,20,.45)" />
-            {s.q >= st.len && <path d={st.holes[1]} fill="rgba(60,32,20,.45)" />}
-            <path
-              d={d}
-              fill="none"
-              stroke="rgba(40,20,10,.35)"
-              strokeWidth={1.3}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              transform={`translate(${fmt(0.18 + s.lift * 0.6)} ${fmt(0.28 + s.lift * 0.9)})`}
-            />
-            <path d={d} fill="none" stroke={thread} strokeWidth={1} strokeLinecap="round" strokeLinejoin="round" />
-          </g>
-        );
+        return s.q > 0 && <StitchShape key={k} st={st} q={s.q} bow={s.bow * (s.q / st.len)} lift={s.lift} color={thread} />;
       })}
       {f.end && (
         // The yarn's free end: a rounded tip with a few loose fibers ahead of it.
@@ -264,7 +286,7 @@ export function Sewing({
           <circle r={0.6} fill={thread} stroke="#d9cdb4" strokeWidth={0.1} />
         </g>
       )}
-    </svg>
+    </BoardOverlay>
   );
 }
 
@@ -318,38 +340,13 @@ export function Finishing({
 }) {
   const g = useMemo(() => bindingGeometry(puzzle), [puzzle]);
   const total = delay + pullMs;
-  const [elapsed, setElapsed] = useState(0);
-  const done = useRef(onDone);
-  useEffect(() => {
-    done.current = onDone;
-  });
-  useEffect(() => {
-    if (freeze !== undefined) return;
-    let raf = 0;
-    const t0 = performance.now();
-    const tick = (now: number) => {
-      const t = Math.min(total, now - t0);
-      setElapsed(t);
-      if (t < total) raf = requestAnimationFrame(tick);
-      else done.current();
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [total, freeze]);
-  const t = freeze !== undefined ? freeze * total : elapsed;
+  const t = useProgress(total, onDone, freeze) * total;
   const final = bindingThread(perfect);
   // The wave runs a little past the last stitch, so the last ones finish snapping taut.
   const reach = 2 * g.step;
   const wave = g.start + (g.end + reach - g.start) * easeInOut(clamp01((t - delay) / pullMs));
-  const padU = pad * U;
   return (
-    <svg
-      width={(puzzle.cols + 2 * pad) * cell}
-      height={(puzzle.rows + 2 * pad) * cell}
-      viewBox={`${-padU} ${-padU} ${puzzle.cols * U + 2 * padU} ${puzzle.rows * U + 2 * padU}`}
-      style={{ position: "absolute", left, top, overflow: "visible", pointerEvents: "none", zIndex: 20 }}
-      aria-hidden
-    >
+    <BoardOverlay puzzle={puzzle} cell={cell} pad={pad} left={left} top={top}>
       <defs>
         <radialGradient id="snug-glint">
           <stop offset="0" stopColor="#fff8d6" stopOpacity={0.95} />
@@ -361,35 +358,11 @@ export function Finishing({
         // Each stitch bows loose as the wave reaches it, then snaps taut in its final thread.
         const local = clamp01((wave - st.s0) / reach);
         const bow = Math.sin(Math.PI * local) * 1.6;
-        const color = local >= 0.55 ? final : bindingThread(false);
-        const straight = st.pts.length === 2;
-        const a = st.pts[0]!;
-        const b = st.pts[st.pts.length - 1]!;
-        const d =
-          straight && bow > 0.01
-            ? `M${fmt(a[0])} ${fmt(a[1])}Q${fmt((a[0] + b[0]) / 2 + st.out[0] * bow)} ${fmt((a[1] + b[1]) / 2 + st.out[1] * bow)} ${fmt(b[0])} ${fmt(b[1])}`
-            : prefix(st, st.len);
-        const lift = straight ? 0 : bow * 0.5;
-        return (
-          <g key={k} transform={lift ? `translate(${fmt(st.out[0] * lift)} ${fmt(st.out[1] * lift)})` : undefined}>
-            <path d={st.holes[0]} fill="rgba(60,32,20,.45)" />
-            <path d={st.holes[1]} fill="rgba(60,32,20,.45)" />
-            <path
-              d={d}
-              fill="none"
-              stroke="rgba(40,20,10,.35)"
-              strokeWidth={1.3}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              transform={`translate(${fmt(0.18 + bow * 0.35)} ${fmt(0.28 + bow * 0.5)})`}
-            />
-            <path d={d} fill="none" stroke={color} strokeWidth={1} strokeLinecap="round" strokeLinejoin="round" />
-          </g>
-        );
+        return <StitchShape key={k} st={st} q={st.len} bow={bow} lift={bow * 0.58} color={local >= 0.55 ? final : bindingThread(false)} />;
       })}
       {perfect && wave > g.start && wave < g.end + reach && (
         <circle cx={g.point(wave)[0]} cy={g.point(wave)[1]} r={3.2} fill="url(#snug-glint)" />
       )}
-    </svg>
+    </BoardOverlay>
   );
 }
