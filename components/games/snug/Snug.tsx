@@ -1643,8 +1643,8 @@ function SnugDay({
               </>
             )
           ) : (
-            // While the finish plays, its buttons keep their room but stay out of sight until the card arrives.
-            <div style={{ display: "contents", visibility: won ? "hidden" : undefined }}>
+            // While the finish plays or the card is open, the buttons keep their room so the panel never changes height.
+            <div style={{ display: "contents", visibility: won || showCard ? "hidden" : undefined }}>
               {!compact && revealing && <span style={{ fontSize: 14, opacity: 0.8 }}>Showing one perfect fill.</span>}
               <span style={{ flex: 1 }} />
               {revealing ? (
@@ -1653,25 +1653,18 @@ function SnugDay({
                 </Btn>
               ) : (
                 result &&
-                result.gaps > 0 &&
-                // The result card offers this too, so the footer's copy waits until the card is closed.
-                !showCard && (
+                result.gaps > 0 && (
                   <Btn small={compact} onClick={tap(reveal)}>
                     {compact ? "Perfect fill" : "Show a perfect fill"}
                   </Btn>
                 )
               )}
-              {!showCard && (
-                <Btn small={compact} onClick={tap(() => setShowCard(true))}>
-                  {compact ? "Result" : "View result"}
-                </Btn>
-              )}
-              {/* The result card has its own Play again, so this one waits until the card is closed. */}
-              {!showCard && (
-                <Btn small={compact} primary onClick={tap(playAgain)}>
-                  {compact ? "Play again" : "Play again (unscored)"}
-                </Btn>
-              )}
+              <Btn small={compact} onClick={tap(() => setShowCard(true))}>
+                {compact ? "Result" : "View result"}
+              </Btn>
+              <Btn small={compact} primary onClick={tap(playAgain)}>
+                {compact ? "Play again" : "Play again (unscored)"}
+              </Btn>
             </div>
           )}
         </div>
