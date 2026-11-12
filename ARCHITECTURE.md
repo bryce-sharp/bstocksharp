@@ -179,8 +179,10 @@ Bryce, Lauren, a kid), not accounts.
   see and change follows you, never what is being viewed.
 - **Viewing** is whose stuff an app shows: the `active_profile` cookie
   (`getActiveProfile()`: `?profile` override, then the cookie, then the first person). Only
-  apps with per-person pages show the picker ([`ViewingControl`](components/shared/ViewingControl.tsx):
-  Weight, Workout, Games, Garage); Finance and the home page ignore it.
+  apps with per-person pages offer the picker ([`loadViewing`](components/shared/ViewingControl.tsx):
+  Weight, Workout, Games, Garage, Recipes); Finance and the home page ignore it. While you view
+  your own stuff, the picker is "Switch person" in the account menu; while you view someone
+  else, a chip edged in their color sits in the header ([`ViewingMenu`](components/shared/ViewingMenu.tsx)).
 - **Hub settings, Access** shows what each login can open: apps, money books, and whose
   stuff is kept from it.
 

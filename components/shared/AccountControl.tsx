@@ -4,9 +4,11 @@ import { getSession } from "@/lib/session";
 import { allHubApps, currentLogin } from "@/lib/hub-apps";
 import { getHubName } from "@/lib/queries/group";
 import AccountMenu from "./AccountMenu";
+import type { Viewing } from "./ViewingControl";
 
-// The top-right menu: always the signed-in login (you, or the hub's shared login).
-export default async function AccountControl() {
+// The top-right menu: always the signed-in login (you, or the hub's shared login). `viewing` is passed only while an
+// app with per-person data is showing your own stuff, so the menu offers "Switch person".
+export default async function AccountControl({ viewing = null }: { viewing?: Viewing | null }) {
   const [me, members, session, apps, login, hubName] = await Promise.all([
     getMe(),
     listGroupMembers(),
@@ -27,6 +29,7 @@ export default async function AccountControl() {
       username={username}
       hubSettings={!hubLogin && !(gamesOnly && members.length <= 1)}
       accountSettings={!hubLogin}
+      viewing={viewing}
     />
   );
 }
