@@ -3,7 +3,8 @@
 //      rows since the cutover that never reached the ledger
 //   2. rows that break the ledger's rules (signs, links, transfers)
 //   3. possible duplicates since the cutover
-//   4. this month: Left-to-Spend, bills, money in and out, tags, and funds
+//   4. this month, for each money book: Left-to-Spend, bills, money in and out,
+//      tags, and funds
 // Run it after a change to the sync or the money rules.
 //
 //   node scripts/finance-check.mjs                    (dev database)
@@ -24,7 +25,7 @@ if (!url) {
 }
 const sql = neon(url);
 
-const { getBudgetMonthForGroup } = await import("../lib/queries/finance-budget.ts");
+const { getBudgetMonthForBook } = await import("../lib/queries/finance-budget.ts");
 const { summarizeCashFlow, cashFlowByCategory, spendByTag } = await import("../lib/queries/finance-cashflow.ts");
 
 const money = (n) => Number(n ?? 0).toFixed(2);
@@ -145,9 +146,16 @@ async function checkGroup(groupId) {
                       AND (p.ledger_transaction_id = t.id OR t.id = ANY(p.split_ledger_ids)))`;
   console.log(verdict(u.n, "every alert and hand entry older than 3 days is confirmed by the bank", "{n} alerts or hand entries older than 3 days are still unconfirmed"));
 
-  // 4. This month.
+  // 4. This month, for each of the household's money books.
   console.log(`\n4. THIS MONTH (${month.slice(0, 7)})`);
-  const view = await getBudgetMonthForGroup(groupId, month, g.today);
+  const books = await sql`SELECT id, name FROM books WHERE group_id = ${groupId} ORDER BY id`;
+  if (!books.length) console.log("no money books");
+  for (const b of books) await checkMonth({ id: b.id, groupId }, b.name, month, g.today);
+}
+
+async function checkMonth(book, name, month, today) {
+  console.log(`\n-- book: ${name}`);
+  const view = await getBudgetMonthForBook(book, month, today);
   const c = view.computation;
   console.table([
     {
@@ -162,12 +170,12 @@ async function checkGroup(groupId) {
       income: dollars(c.incomeC),
     },
   ]);
-  const range = { from: month, to: g.today };
-  const flow = await summarizeCashFlow(groupId, range);
+  const range = { from: month, to: today };
+  const flow = await summarizeCashFlow(book, range);
   console.log(`money in ${money(flow.moneyIn)} · money out ${money(flow.moneyOut)} · net ${money(flow.moneyIn - flow.moneyOut)} · ${flow.count} rows`);
-  const lanes = await cashFlowByCategory(groupId, range);
+  const lanes = await cashFlowByCategory(book, range);
   console.table(lanes.filter((l) => l.moneyIn || l.moneyOut).map((l) => ({ lane: l.category, in: money(l.moneyIn), out: money(l.moneyOut) })));
-  const tags = await spendByTag(groupId, range);
+  const tags = await spendByTag(book, range);
   const tagSum = tags.reduce((sum, t) => sum + t.amount, 0);
   console.log(`top tags: ${tags.slice(0, 6).map((t) => `${t.tag ?? "untagged"} ${money(t.amount)}`).join(" · ")}`);
   console.log(verdict(Math.round((tagSum - flow.moneyOut) * 100) === 0 ? 0 : 1, "the tag breakdown adds up to money out", `the tag breakdown is ${money(tagSum - flow.moneyOut)} off money out`));
