@@ -658,6 +658,26 @@ function CloseButton({ onClick }: { onClick: () => void }) {
   );
 }
 
+/** A volume slider from 0 to 100%, with its label and value. */
+export function Slider({ label, value, onChange, disabled }: { label: string; value: number; onChange: (v: number) => void; disabled?: boolean }) {
+  return (
+    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, opacity: disabled ? 0.45 : 1 }}>
+      {label}
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={1}
+        value={Math.round(value * 100)}
+        disabled={disabled}
+        onChange={(e) => onChange(Number(e.target.value) / 100)}
+        style={{ accentColor: BINDING }}
+      />
+      <span style={{ width: 34, fontVariantNumeric: "tabular-nums" }}>{Math.round(value * 100)}%</span>
+    </label>
+  );
+}
+
 /** A stitched linen card over a dimmed page, closed by its X, Esc, or a tap outside. */
 export function StitchedModal({ label, onClose, width = 480, children }: { label: string; onClose: () => void; width?: number; children: ReactNode }) {
   useEffect(() => {
