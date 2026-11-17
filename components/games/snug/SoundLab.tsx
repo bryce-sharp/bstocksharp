@@ -202,8 +202,8 @@ export function SoundLab() {
         <PanelStitches seed="sound-head" />
         <h1 style={{ fontFamily: SCRIPT, fontSize: 44, margin: 0, color: BINDING }}>Sound lab</h1>
         <p style={{ fontSize: 14, opacity: 0.8, margin: "6px 0 14px", maxWidth: 720 }}>
-          Every effect is made in the browser, and the recorded songs are our own, so nothing is licensed. Play each choice, pick
-          one per moment, then hear your picks together in a pretend turn. Copy your picks to send them back.
+          The browser synthesizes the effects, and we made the recorded songs, so no outside sounds are needed. Play each choice,
+          pick one per moment, then hear your picks together in a pretend turn. Copy your picks to send them back.
         </p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center" }}>
           <Slider label="Effects" value={fxVol} onChange={(v) => volumes(v, musicVol)} />

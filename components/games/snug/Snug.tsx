@@ -207,7 +207,7 @@ export function SnugPlayground({ quickHelp }: { quickHelp: boolean }) {
 
 export function Snug({ shareUrl, profileId }: { shareUrl?: string; profileId?: number }) {
   useFloatingHeader();
-  // Sound waits for a tap or key press, since browsers allow audio only after one, and stops when the game closes.
+  // Audio starts after a tap or key press, because browsers block it before that; closing the game stops the music and effects.
   useEffect(() => {
     const events = ["pointerdown", "pointerup", "keydown"] as const;
     const start = () => {

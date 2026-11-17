@@ -1,6 +1,6 @@
-// Snug's sounds, synthesized with the browser's Web Audio: no files to license, and only the recorded songs to load.
-// Everything is soft and short, through one gentle room so the pieces sit together. The lab (/games/snug/lab/sounds) plays
-// every variant; the game will use the picked ones.
+// Snug's sounds. The browser synthesizes the effects and tunes with Web Audio and gives them a light reverb.
+// Recorded songs already include reverb, so they use a separate music bus. The lab (/games/snug/lab/sounds)
+// plays every effect variant, and the game uses the selected variants.
 
 type Ctx = { ac: AudioContext; fx: GainNode; music: GainNode; musicDry: GainNode; room: ConvolverNode };
 let shared: Ctx | null = null;
@@ -39,7 +39,7 @@ export function audio(): Ctx {
   music.gain.value = 0.35;
   music.connect(out);
   music.connect(room);
-  // Recorded songs carry their own room, so they skip this one.
+  // Recorded songs already include reverb, so they do not go through the game's reverb.
   const musicDry = ac.createGain();
   musicDry.gain.value = 0.35;
   musicDry.connect(out);
@@ -439,7 +439,7 @@ export const TRACKS: Track[] = [
   },
 ];
 
-/** A song recorded to a file that loops with no gap. Bryce wrote them in his aurp music studio, so they are ours to use. */
+/** A recorded song that loops without a gap. Bryce created these songs in the aurp music studio. */
 export type Recording = { id: string; name: string; feel: string; src: string };
 
 export const RECORDINGS: Recording[] = [
@@ -530,7 +530,7 @@ export function retune(tune: Tune) {
   }
 }
 
-/** Loops a recorded song from its start (stopping any other) until stopMusic; the file loads once per page. */
+/** Stops the current music and loops this recording from the start until stopMusic; later plays reuse the decoded audio. */
 export function playRecording(src: string) {
   stopMusic();
   playingSrc = src;
@@ -557,7 +557,8 @@ export function playRecording(src: string) {
       musicNodes.push(bus, source);
     })
     .catch(() => {
-      // Music is optional: a file that fails to load leaves the game quiet.
+      // Music is optional: a file that fails to load leaves the game quiet, and the next settings change tries again.
+      if (run === musicRun) playingSrc = null;
     });
 }
 
@@ -630,7 +631,11 @@ export const DEFAULT_SOUND: SoundSettings = { music: false, effects: true, music
 /** The song the game plays. */
 export const GAME_SONG = RECORDINGS[0]!;
 
+/** The latest settings this page saved, so they win even when storage cannot be written. */
+let current: SoundSettings | null = null;
+
 export function loadSoundSettings(): SoundSettings {
+  if (current) return current;
   try {
     const saved: unknown = JSON.parse(localStorage.getItem(SOUND_KEY) ?? "null");
     if (!saved || typeof saved !== "object") return DEFAULT_SOUND;
@@ -649,6 +654,7 @@ export function loadSoundSettings(): SoundSettings {
 }
 
 export function saveSoundSettings(settings: SoundSettings) {
+  current = settings;
   try {
     localStorage.setItem(SOUND_KEY, JSON.stringify(settings));
   } catch {
