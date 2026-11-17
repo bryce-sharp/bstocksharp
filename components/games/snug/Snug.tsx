@@ -14,10 +14,13 @@ import { GAME, LAUNCH_DATE, clearStaleRecords, loadBest, playerStats, saveBest, 
 import { canvasFile, canvasFonts, drawResultPicture, quiltGrid } from "./share";
 import { SNUG_FONTS } from "./fonts";
 import { flushRemote, saveProgressRemote, saveRunRemote, syncSnug } from "./sync";
-import { sfx } from "./sounds";
+import { applySoundSettings, audioRunning, holdAudio, loadSoundSettings, setGameSounds, sfx, stopMusic } from "./sounds";
+import { SoundCard } from "./soundSettings";
 import { Finishing, OPEN_MS, SETTLE_MS, SWITCH_MS, UNSEW_MS, Sewing, WIN_DELAY_MS, WIN_PULL_MS, boardSewStyle, pieceSewStyle, pullDelays, type SewDir } from "./sewing";
 import { Basket } from "./basket";
 import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
+import VolumeOffOutlinedIcon from "@mui/icons-material/VolumeOffOutlined";
+import VolumeUpOutlinedIcon from "@mui/icons-material/VolumeUpOutlined";
 import { BoardSvg, Btn, FONT, HowToPlay, INK, KnitDefs, PanelStitches, PatchSvg, QuiltBackdrop, QuiltLabel, RUST_THREAD, ResultCard, SCRIPT, Stat, hintsUsed, panelStyle, plural, type Attempt, type MoreGamesLink, type PieceState, type RunSummary, type Spot } from "./parts";
 
 const HOW_TO_SEEN = "snug.howToSeen";
@@ -204,6 +207,23 @@ export function SnugPlayground({ quickHelp }: { quickHelp: boolean }) {
 
 export function Snug({ shareUrl, profileId }: { shareUrl?: string; profileId?: number }) {
   useFloatingHeader();
+  // Audio starts after a tap or key press, because browsers block it before that; closing the game stops the music and effects.
+  useEffect(() => {
+    const events = ["pointerdown", "pointerup", "keydown"] as const;
+    const start = () => {
+      applySoundSettings(loadSoundSettings());
+      if (audioRunning()) events.forEach((e) => window.removeEventListener(e, start, true));
+    };
+    events.forEach((e) => window.addEventListener(e, start, true));
+    const onVisibility = () => holdAudio(document.hidden);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      events.forEach((e) => window.removeEventListener(e, start, true));
+      document.removeEventListener("visibilitychange", onVisibility);
+      stopMusic();
+      setGameSounds(null);
+    };
+  }, []);
   const [today, setToday] = useState(() => todayKey());
   // Runs played on the boards from before the month quilts are cleared before anything reads them.
   const [synced, setSynced] = useState(() => {
@@ -386,7 +406,10 @@ function SnugDay({
   // Finishing a past month's last missing day plays its quilt, now complete.
   const [completed, setCompleted] = useState<string | null>(null);
   const closeCompleted = useCallback(() => setCompleted(null), []);
-  const modalOpen = showHowTo || showCalendar || !!revealMonth || !!completed;
+  const [sound, setSound] = useState(loadSoundSettings);
+  const [showSound, setShowSound] = useState(false);
+  const closeSound = useCallback(() => setShowSound(false), []);
+  const modalOpen = showHowTo || showCalendar || showSound || !!revealMonth || !!completed;
   // Ticks the visible clock; the value itself is read from `clock`.
   const [, setNow] = useState(() => Date.now());
   const [width, setWidth] = useState(0);
@@ -1207,6 +1230,7 @@ function SnugDay({
       <QuiltBackdrop dateKey={dateKey} />
       <KnitDefs />
       {showHowTo && <HowToPlay onClose={tap(closeHowTo)} touch={coarsePointer} spares={puzzle.spares} />}
+      {showSound && <SoundCard settings={sound} onChange={setSound} onClose={closeSound} touch={coarsePointer} />}
       <div aria-live="polite" style={visuallyHidden}>
         {said}
       </div>
@@ -1270,6 +1294,11 @@ function SnugDay({
               <Btn small onClick={tap(() => setShowHowTo(true))} label={compact ? "How to play" : undefined}>
                 {compact ? "?" : "How to play"}
               </Btn>
+              {!lab && (
+                <Btn small tight onClick={tap(() => setShowSound(true))} label="Sound">
+                  {sound.music || sound.effects ? <VolumeUpOutlinedIcon sx={{ fontSize: 18, display: "block" }} /> : <VolumeOffOutlinedIcon sx={{ fontSize: 18, display: "block" }} />}
+                </Btn>
+              )}
               {newQuilt && (
                 <Btn small primary onClick={tap(() => pickDate(today))}>
                   New quilt

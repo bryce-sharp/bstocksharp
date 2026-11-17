@@ -1,8 +1,8 @@
-// Snug's sounds, synthesized with the browser's Web Audio: no files to load or license. Everything is soft
-// and short, through one gentle room so the pieces sit together. The lab (/games/snug/lab/sounds) plays
-// every variant; the game will use the picked ones.
+// Snug's sounds. The browser synthesizes the effects and tunes with Web Audio and gives them a light reverb.
+// Recorded songs already include reverb, so they use a separate music bus. The lab (/games/snug/lab/sounds)
+// plays every effect variant, and the game uses the selected variants.
 
-type Ctx = { ac: AudioContext; fx: GainNode; music: GainNode; room: ConvolverNode };
+type Ctx = { ac: AudioContext; fx: GainNode; music: GainNode; musicDry: GainNode; room: ConvolverNode };
 let shared: Ctx | null = null;
 
 /** The audio graph, made on the first sound (browsers only allow audio after a tap). */
@@ -11,6 +11,9 @@ export function audio(): Ctx {
     if (shared.ac.state === "suspended") void shared.ac.resume();
     return shared;
   }
+  // Mixes with the player's own music or podcast instead of pausing it, where the browser supports this (Safari).
+  const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
+  if (session) session.type = "ambient";
   const ac = new AudioContext();
   const out = ac.createDynamicsCompressor();
   out.threshold.value = -18;
@@ -36,14 +39,19 @@ export function audio(): Ctx {
   music.gain.value = 0.35;
   music.connect(out);
   music.connect(room);
-  shared = { ac, fx, music, room };
+  // Recorded songs already include reverb, so they do not go through the game's reverb.
+  const musicDry = ac.createGain();
+  musicDry.gain.value = 0.35;
+  musicDry.connect(out);
+  shared = { ac, fx, music, musicDry, room };
   return shared;
 }
 
 export function setVolumes(fx: number, music: number) {
-  const { fx: f, music: m, ac } = audio();
+  const { fx: f, music: m, musicDry, ac } = audio();
   f.gain.setTargetAtTime(fx, ac.currentTime, 0.05);
   m.gain.setTargetAtTime(music, ac.currentTime, 0.05);
+  musicDry.gain.setTargetAtTime(music, ac.currentTime, 0.05);
 }
 
 // ── Building blocks ──────────────────────────────────────────────────────────
@@ -431,8 +439,24 @@ export const TRACKS: Track[] = [
   },
 ];
 
+/** A recorded song that loops without a gap. Bryce created these songs in the aurp music studio. */
+export type Recording = { id: string; name: string; feel: string; src: string };
+
+export const RECORDINGS: Recording[] = [
+  {
+    id: "rainOnTheQuilt",
+    name: "Rain on the Quilt",
+    feel: "Vibraphone, keys and soft drums: the tune, a bouncy kalimba middle, then the tune again with the kalimba answering. About 2 minutes a loop.",
+    src: "/games/snug/rain-on-the-quilt.m4a",
+  },
+];
+
 let musicTimer = 0;
 let musicNodes: AudioNode[] = [];
+/** Counts every stop, so a recording that finishes loading after a stop never starts. */
+let musicRun = 0;
+let playingSrc: string | null = null;
+const decoded = new Map<string, Promise<AudioBuffer>>();
 type Live = { melody: (Note | null)[]; low: (Note | null)[]; eighthMs: number; voice: Voice; bus: GainNode };
 let live: Live | null = null;
 let beat = 0;
@@ -468,10 +492,13 @@ export function stopMusic() {
   window.clearInterval(musicTimer);
   musicTimer = 0;
   live = null;
+  musicRun++;
+  playingSrc = null;
   if (!shared) return;
   const { ac } = shared;
   for (const n of musicNodes) {
     if (n instanceof GainNode) n.gain.setTargetAtTime(0, ac.currentTime, 0.4);
+    if (n instanceof AudioBufferSourceNode) n.stop(ac.currentTime + 2);
   }
   const old = musicNodes;
   musicNodes = [];
@@ -501,6 +528,38 @@ export function retune(tune: Tune) {
     window.clearInterval(musicTimer);
     musicTimer = window.setInterval(tick, tune.eighthMs);
   }
+}
+
+/** Stops the current music and loops this recording from the start until stopMusic; later plays reuse the decoded audio. */
+export function playRecording(src: string) {
+  stopMusic();
+  playingSrc = src;
+  const run = musicRun;
+  const { ac, musicDry } = audio();
+  let buffer = decoded.get(src);
+  if (!buffer) {
+    buffer = fetch(src)
+      .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${src}: ${r.status}`))))
+      .then((bytes) => ac.decodeAudioData(bytes));
+    decoded.set(src, buffer);
+    buffer.catch(() => decoded.delete(src));
+  }
+  buffer
+    .then((b) => {
+      if (run !== musicRun) return;
+      const bus = ac.createGain();
+      bus.connect(musicDry);
+      const source = ac.createBufferSource();
+      source.buffer = b;
+      source.loop = true;
+      source.connect(bus);
+      source.start();
+      musicNodes.push(bus, source);
+    })
+    .catch(() => {
+      // Music is optional: a file that fails to load leaves the game quiet, and the next settings change tries again.
+      if (run === musicRun) playingSrc = null;
+    });
 }
 
 export function playMusic(id: string) {
@@ -560,4 +619,75 @@ export function setGameSounds(picks: Record<string, string> | null) {
 export function sfx(moment: string) {
   if (!gamePicks) return;
   MOMENTS.find((m) => m.id === moment)?.variants.find((v) => v.id === gamePicks![moment])?.play();
+}
+
+// ── The player's sound settings ──────────────────────────────────────────────
+
+/** What the player chose, kept on this device: music starts off and the effects start on. */
+export type SoundSettings = { music: boolean; effects: boolean; musicVolume: number; effectsVolume: number };
+
+const SOUND_KEY = "snug.sound";
+export const DEFAULT_SOUND: SoundSettings = { music: false, effects: true, musicVolume: 0.35, effectsVolume: 0.7 };
+/** The song the game plays. */
+export const GAME_SONG = RECORDINGS[0]!;
+
+/** The latest settings this page saved, so they win even when storage cannot be written. */
+let current: SoundSettings | null = null;
+
+export function loadSoundSettings(): SoundSettings {
+  if (current) return current;
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(SOUND_KEY) ?? "null");
+    if (!saved || typeof saved !== "object") return DEFAULT_SOUND;
+    const s = saved as Partial<Record<keyof SoundSettings, unknown>>;
+    const flag = (v: unknown, fallback: boolean) => (typeof v === "boolean" ? v : fallback);
+    const level = (v: unknown, fallback: number) => (typeof v === "number" && v >= 0 && v <= 1 ? v : fallback);
+    return {
+      music: flag(s.music, DEFAULT_SOUND.music),
+      effects: flag(s.effects, DEFAULT_SOUND.effects),
+      musicVolume: level(s.musicVolume, DEFAULT_SOUND.musicVolume),
+      effectsVolume: level(s.effectsVolume, DEFAULT_SOUND.effectsVolume),
+    };
+  } catch {
+    return DEFAULT_SOUND;
+  }
+}
+
+export function saveSoundSettings(settings: SoundSettings) {
+  current = settings;
+  try {
+    localStorage.setItem(SOUND_KEY, JSON.stringify(settings));
+  } catch {
+    // Storage can be blocked; the settings still last while the page is open.
+  }
+}
+
+/** Puts the settings into effect. Call it only from a tap or key press: browsers start audio only then. */
+export function applySoundSettings(settings: SoundSettings) {
+  if (!settings.music && !settings.effects && !shared) {
+    setGameSounds(null);
+    return;
+  }
+  setVolumes(settings.effectsVolume, settings.musicVolume);
+  setGameSounds(settings.effects ? DEFAULT_PICKS : null);
+  if (!settings.music) {
+    if (playingSrc) stopMusic();
+  } else if (playingSrc !== GAME_SONG.src) playRecording(GAME_SONG.src);
+}
+
+let lastSample = 0;
+/** A quick sound at most every 200 ms while a volume slider moves, so the player hears the new level. */
+export function sampleEffects() {
+  if (Date.now() - lastSample < 200) return;
+  lastSample = Date.now();
+  sfx("place");
+}
+
+/** True once the browser lets sound play. */
+export const audioRunning = () => shared?.ac.state === "running";
+
+/** Quiets everything while the page is hidden, and picks up where it was when the page shows again. */
+export function holdAudio(hidden: boolean) {
+  if (!shared) return;
+  void (hidden ? shared.ac.suspend() : shared.ac.resume()).catch(() => {});
 }

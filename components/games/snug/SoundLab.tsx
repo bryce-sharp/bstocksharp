@@ -5,9 +5,9 @@
 
 import { useEffect, useState } from "react";
 import { BINDING } from "./quilt";
-import { Btn, FONT, INK, PanelStitches, QuiltBackdrop, SCRIPT, panelStyle } from "./parts";
+import { Btn, FONT, INK, PanelStitches, QuiltBackdrop, SCRIPT, Slider, panelStyle } from "./parts";
 import { SNUG_FONTS } from "./fonts";
-import { DEFAULT_PICKS, MOMENTS, TRACKS, playTune, playTurn, retune, setGameSounds, setVolumes, stopMusic, type Track, type Tune } from "./sounds";
+import { DEFAULT_PICKS, MOMENTS, RECORDINGS, TRACKS, playRecording, playTune, playTurn, retune, setGameSounds, setVolumes, stopMusic, type Recording, type Track, type Tune } from "./sounds";
 import { TuneEditor } from "./TuneEditor";
 import { SnugPlayground } from "./Snug";
 
@@ -62,24 +62,6 @@ function loadPicks(): Record<string, string> {
   }
 }
 
-function Slider({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
-  return (
-    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14 }}>
-      {label}
-      <input
-        type="range"
-        min={0}
-        max={100}
-        step={1}
-        value={Math.round(value * 100)}
-        onChange={(e) => onChange(Number(e.target.value) / 100)}
-        style={{ accentColor: BINDING }}
-      />
-      <span style={{ width: 34, fontVariantNumeric: "tabular-nums" }}>{Math.round(value * 100)}%</span>
-    </label>
-  );
-}
-
 export function SoundLab() {
   const [picks, setPicks] = useState<Record<string, string>>(loadPicks);
   const [fxVol, setFxVol] = useState(0.7);
@@ -130,6 +112,16 @@ export function SoundLab() {
       setVolumes(fxVol, musicVol);
       playTune(t.tune);
       setTrack(t.id);
+    }
+  };
+  const toggleRecording = (r: Recording) => {
+    if (track === r.id) {
+      stopMusic();
+      setTrack(null);
+    } else {
+      setVolumes(fxVol, musicVol);
+      playRecording(r.src);
+      setTrack(r.id);
     }
   };
   const editTune = (next: Tune) => {
@@ -195,7 +187,7 @@ export function SoundLab() {
       `Low notes: ${t.low}`,
       `Speed: ${Math.round(30000 / t.eighthMs)} quarter notes a minute, ${(t.bar ?? 8) / 2} beats in a bar, ${t.voice ?? "musicbox"}`,
     ];
-    const playing = tracks.find((t) => t.id === track);
+    const playing = [...RECORDINGS, ...tracks].find((t) => t.id === track);
     const music = track === MINE ? "the editor's tune" : (playing?.name ?? "none");
     const saved = tracks.filter((t) => t.edited || t.own).flatMap((t) => describe(t.name, t.tune));
     await navigator.clipboard.writeText([...lines, `Music: ${music}`, ...saved, ...describe("In the editor", draft)].join("\n")).catch(() => {});
@@ -210,8 +202,8 @@ export function SoundLab() {
         <PanelStitches seed="sound-head" />
         <h1 style={{ fontFamily: SCRIPT, fontSize: 44, margin: 0, color: BINDING }}>Sound lab</h1>
         <p style={{ fontSize: 14, opacity: 0.8, margin: "6px 0 14px", maxWidth: 720 }}>
-          Every sound is made in the browser, so nothing is downloaded or licensed. Play each choice, pick one per moment, then
-          hear your picks together in a pretend turn. Copy your picks to send them back.
+          The browser synthesizes the effects, and we made the recorded songs, so no outside sounds are needed. Play each choice,
+          pick one per moment, then hear your picks together in a pretend turn. Copy your picks to send them back.
         </p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center" }}>
           <Slider label="Effects" value={fxVol} onChange={(v) => volumes(v, musicVol)} />
@@ -234,9 +226,24 @@ export function SoundLab() {
         <PanelStitches seed="sound-music" />
         <h2 style={{ fontFamily: SCRIPT, fontSize: 32, margin: "0 0 4px", color: BINDING }}>Music</h2>
         <p style={{ fontSize: 13, opacity: 0.75, margin: "0 0 12px" }}>
-          Background loops, quiet under the effects. Off by default in the game. The same music-box tune with different rhythms.
+          Background loops, quiet under the effects. Off by default in the game. First the recorded songs, then the same music-box
+          tune with different rhythms. Keep one playing and play the test quilt below to hear it with the picked effects.
         </p>
         <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}>
+          {RECORDINGS.map((r) => (
+            <div key={r.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: 10, borderRadius: 12, background: track === r.id ? "rgba(246,196,69,.18)" : "rgba(123,59,46,.05)" }}>
+              <Btn small onClick={() => toggleRecording(r)} label={track === r.id ? `Stop ${r.name}` : `Play ${r.name}`}>
+                {track === r.id ? "■" : "▶"}
+              </Btn>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600 }}>
+                  {r.name}
+                  <span style={{ fontWeight: 400, fontSize: 12, marginLeft: 6, padding: "1px 6px", borderRadius: 999, background: "rgba(123,59,46,.12)" }}>recorded</span>
+                </div>
+                <div style={{ fontSize: 13, opacity: 0.75 }}>{r.feel}</div>
+              </div>
+            </div>
+          ))}
           {tracks.map((t) => (
             <div key={t.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: 10, borderRadius: 12, background: track === t.id ? "rgba(246,196,69,.18)" : "rgba(123,59,46,.05)", border: `1.5px dashed ${source === t.id ? BINDING : "transparent"}` }}>
               <Btn small onClick={() => toggleTrack(t)} label={track === t.id ? `Stop ${t.name}` : `Play ${t.name}`}>
