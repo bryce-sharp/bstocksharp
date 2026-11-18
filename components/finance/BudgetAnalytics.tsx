@@ -9,18 +9,11 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import AppLink from "@/components/shared/AppLink";
-import { formatMoney, formatMonth } from "@/lib/format";
+import { formatMoney } from "@/lib/format";
 import type { MonthReport as MonthReportData } from "@/lib/finance/month-report";
 import MonthReport from "./MonthReport";
 
-// The deep numbers, an INLINE expander inside the Insights card (not its own
-// card). Discretionary-only: what reimbursements handed back and how recent
-// months went against their budgets. Income and off-budget live in All money.
-export type BudgetAnalyticsData = {
-  reimbursed: number;
-  recentMonths: { month: string; spent: number; budget: number; remaining: number }[];
-};
-
+// All money's "More details": an inline expander inside the Insights card, not its own card.
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <Box>
@@ -130,31 +123,6 @@ export function CashFlowDetails({ d }: { d: CashFlowDetailsData }) {
       <Link component={AppLink} href={d.historyHref} variant="body2" sx={{ fontWeight: 600 }} underline="hover">
         Compare months in History →
       </Link>
-    </MoreDetails>
-  );
-}
-
-export default function BudgetAnalytics({ d }: { d: BudgetAnalyticsData }) {
-  return (
-    <MoreDetails>
-      {d.reimbursed > 0 ? (
-        <Section title="Credits">
-          <Row label="Reimbursed back" value={formatMoney(d.reimbursed)} color="success.main" />
-        </Section>
-      ) : null}
-
-      {d.recentMonths.length > 0 ? (
-        <Section title="Recent months">
-          {d.recentMonths.map((m) => (
-            <Row
-              key={m.month}
-              label={formatMonth(m.month)}
-              value={`${formatMoney(m.spent)} / ${formatMoney(m.budget)} · ${m.remaining >= 0 ? "left " : "over "}${formatMoney(Math.abs(m.remaining))}`}
-              color={m.remaining >= 0 ? undefined : "warning.main"}
-            />
-          ))}
-        </Section>
-      ) : null}
     </MoreDetails>
   );
 }

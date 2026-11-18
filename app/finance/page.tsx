@@ -15,7 +15,6 @@ import {
   listMonthTransactionsForSession,
   listBudgetMonths,
   listBillsForMonth,
-  listRecentMonths,
   listMerchantSuggestions,
   getSpendTrend,
   monthReportFrom,
@@ -74,7 +73,7 @@ export default async function BudgetPage({
   const monthRange = { from: month, to: lastDayOfMonth(month) };
   const book = await requireBook();
   const [
-    [view, txns, accounts, monthsWithData, bills, groupProfiles, recentMonths, trend, suggest, categories, editor],
+    [view, txns, accounts, monthsWithData, bills, groupProfiles, trend, suggest, categories, editor],
     [flow, allTrend, tagSpend, lanes, sources, incomeCategories, bankAlerts, stale, priceSuggestions],
   ] = await Promise.all([
     Promise.all([
@@ -84,7 +83,6 @@ export default async function BudgetPage({
       listBudgetMonths(),
       listBillsForMonth(month),
       requireBook().then((b) => listBookMembers(b.id)),
-      listRecentMonths(month, 3),
       getSpendTrend(month),
       listMerchantSuggestions(),
       listSpendCategories(),
@@ -132,7 +130,7 @@ export default async function BudgetPage({
   // Insights top-3s are DISCRETIONARY only — the controllable spend. Rent and
   // tithing dominate raw "biggest purchase," which isn't insight; bills show in
   // the billed breakdown instead.
-  const discSpend = rows.filter((r) => r.category === "discretionary" && r.amount > 0);
+  const discSpend = rows.filter((r) => r.category === "discretionary" && r.amount > 0 && !r.needsReview);
   const topPurchases = [...discSpend]
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 3)
@@ -330,10 +328,6 @@ export default async function BudgetPage({
           untagged: untaggedDisc,
           topPurchases,
           topMerchants,
-          details: {
-            reimbursed: d(disc.reimbursedC),
-            recentMonths,
-          },
           all: {
             moneyIn: flow.moneyIn,
             moneyOut: flow.moneyOut,

@@ -398,39 +398,6 @@ export async function listMonthTransactionsForSession(
   return listMonthTransactions(await requireBook(), month);
 }
 
-export type RecentMonth = {
-  month: string; // YYYY-MM-01
-  spent: number; // discretionary net, dollars
-  budget: number; // discretionary budget, dollars
-  remaining: number;
-};
-
-/**
- * The few months with data just BEFORE `month` (the one being viewed — so a
- * past month shows its own lead-up, not today's), newest first, each computed
- * the same way the page does.
- */
-export async function listRecentMonths(month: string, limit = 3): Promise<RecentMonth[]> {
-  const book = await requireBook();
-  const tz = await getGroupTimezone(book.groupId);
-  const viewed = `${month.slice(0, 7)}-01`;
-  const past = (await listBudgetMonths()).filter((m) => m < viewed);
-  const recent = past.slice(-limit).reverse(); // newest first
-  const dl = (c: number) => Math.round(c) / 100;
-
-  const out: RecentMonth[] = [];
-  for (const m of recent) {
-    const v = await getBudgetMonthForBook(book, m, todayISO(tz));
-    out.push({
-      month: m,
-      spent: dl(v.computation.discretionary.netSpentC),
-      budget: dl(v.computation.discretionary.budgetC),
-      remaining: dl(v.computation.discretionary.remainingC),
-    });
-  }
-  return out;
-}
-
 /** A bill version for the bill-pickers; its dates let a picker offer only the version in effect. */
 export type BillOption = {
   id: number;
@@ -611,6 +578,8 @@ export async function getSpendTrend(
             .where(
               and(
                 inBook(book),
+                // A row in review counts nowhere until it is reviewed, like the budget itself.
+                eq(transactions.needsReview, false),
                 gte(transactions.postedOn, prev),
                 lte(transactions.postedOn, lastDayOfMonth(cur)),
                 or(
