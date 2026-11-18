@@ -8,7 +8,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import * as s from "@/lib/db/schema";
 import { getBudgetMonthForBook } from "@/lib/queries/finance-budget";
-import { getAtlasViewForBook } from "@/lib/queries/finance-atlas";
+import { getAtlasViewForBook, payEndWrites } from "@/lib/queries/finance-atlas";
 import { getNetWorthDashboardForBook } from "@/lib/queries/finance-networth";
 import { buildMonthReport } from "@/lib/finance/month-report";
 
@@ -89,20 +89,37 @@ try {
     assert.equal(july.computation.funds.find((f) => f.id === fund.id)?.balanceC, 100000);
   });
 
-  await check("F14: a deactivated person's pay stays in past months and leaves later ones", async () => {
-    const [person] = await db
-      .insert(s.profiles)
-      .values({ groupId: G, name: "Casey", archivedAt: new Date("2026-11-10T12:00:00Z") })
+  await check("F14: deactivating a person ends their pay with that month, and reactivating never changes the past", async () => {
+    const [person] = await db.insert(s.profiles).values({ groupId: G, name: "Casey" }).returning();
+    const [plan] = await db
+      .insert(s.compensationPlans)
+      .values({ profileId: person.id, bookId: book.id, payFrequency: "semimonthly", grossPerPaycheck: "1000.00", startDate: "2026-01-01" })
       .returning();
-    await db.insert(s.compensationPlans).values({
-      profileId: person.id, bookId: book.id, payFrequency: "semimonthly", grossPerPaycheck: "1000.00", startDate: "2026-01-01",
-    });
-    const june = await getAtlasViewForBook(book, "2026-06", "2026-12-05");
-    const nov = await getAtlasViewForBook(book, "2026-11", "2026-12-05");
-    const dec = await getAtlasViewForBook(book, "2026-12", "2026-12-05");
-    assert.ok(june.totals.monthlyNet > 0, "June keeps the pay");
-    assert.ok(nov.totals.monthlyNet > 0, "the month of deactivation keeps the pay");
-    assert.equal(dec.totals.monthlyNet, 0, "the month after leaves it out");
+    const [raise] = await db
+      .insert(s.compensationPlans)
+      .values({ profileId: person.id, bookId: book.id, payFrequency: "semimonthly", grossPerPaycheck: "1200.00", startDate: "2027-01-01" })
+      .returning();
+    const [deduction] = await db
+      .insert(s.incomeDeductions)
+      .values({ profileId: person.id, bookId: book.id, name: "401k", amountPerPaycheck: "100.00", startDate: "2026-01-01" })
+      .returning();
+    // The same writes deactivateProfile batches with archived_at, on Nov 30 at 7:30 PM in the household's zone.
+    await db.batch([
+      db.update(s.profiles).set({ archivedAt: new Date("2026-12-01T01:30:00Z") }).where(eq(s.profiles.id, person.id)),
+      ...payEndWrites(person.id, "2026-11-30"),
+    ]);
+    const plans = await db.select().from(s.compensationPlans).where(eq(s.compensationPlans.profileId, person.id));
+    assert.deepEqual(plans.map((p) => [p.id, p.endDate]), [[plan.id, "2026-11-30"]], "the open plan ends; the future raise is gone");
+    assert.notEqual(plans[0]?.id, raise.id);
+    const [ended] = await db.select().from(s.incomeDeductions).where(eq(s.incomeDeductions.id, deduction.id));
+    assert.equal(ended.endDate, "2026-11-30");
+    const atlas = async (m: string) => (await getAtlasViewForBook(book, m, "2027-04-10")).totals.monthlyNet;
+    assert.ok((await atlas("2026-06")) > 0, "June keeps the pay");
+    assert.ok((await atlas("2026-11")) > 0, "the month of deactivation keeps the pay");
+    assert.equal(await atlas("2026-12"), 0, "the month after leaves it out");
+    await db.update(s.profiles).set({ archivedAt: null }).where(eq(s.profiles.id, person.id));
+    assert.equal(await atlas("2026-12"), 0, "reactivating does not bring December's pay back");
+    assert.ok((await atlas("2026-06")) > 0);
   });
 
   await check("F15: a partly logged month carries the last balance, marked, and stays due", async () => {
@@ -158,6 +175,85 @@ try {
     const flows = dash.flows[broker.id];
     assert.equal(flows.landedIn.at(-1), 50, "only December's $50 is new money");
     assert.deepEqual(flows.landed.map((l) => l.amount), [50]);
+  });
+
+  // The review checks below each use their own book, so earlier rows never mix in.
+  const newBook = async (name: string) => {
+    const [b] = await db.insert(s.books).values({ groupId: G, name }).returning();
+    const [acct] = await db.insert(s.financialAccounts).values({ groupId: G, bookId: b.id, name: "Checking", kind: "checking" }).returning();
+    return { ref: { id: b.id, groupId: G }, accountId: acct.id };
+  };
+
+  await check("F12 review: a payment filed under a bill that ended before the month still comes out once", async () => {
+    const { ref, accountId } = await newBook("Late payment");
+    const [bill] = await db
+      .insert(s.recurringExpenses)
+      .values({ groupId: G, bookId: ref.id, name: "Water", amount: "100.00", startDate: "2026-01-01", endDate: "2026-10-15" })
+      .returning();
+    await db.insert(s.transactions).values({
+      groupId: G, bookId: ref.id, accountId, postedOn: "2026-11-04", merchant: "WATER CO", amount: "100.00", originalAmount: "100.00",
+      category: "fixed", recurringExpenseId: bill.id, source: "manual",
+    });
+    const nov = await getBudgetMonthForBook(ref, "2026-11-01", "2026-11-20");
+    assert.deepEqual(nov.computation.fixed.rows.map((r) => [r.name, r.expectedC, r.actualC, r.deltaC]), [["Water", 0, 10000, -10000]]);
+    assert.equal(nov.computation.discretionary.budgetC, nov.computation.discretionary.baseBudgetC - 10000);
+  });
+
+  await check("F12 review: an ended annual bill sets nothing aside, and a payment it got still shows", async () => {
+    const { ref, accountId } = await newBook("Annual bills");
+    await db.insert(s.recurringExpenses).values({
+      groupId: G, bookId: ref.id, name: "Insurance", amount: "1200.00", paymentsPerYear: 1, startDate: "2026-01-01", endDate: "2026-11-15",
+    });
+    const [paidBill] = await db
+      .insert(s.recurringExpenses)
+      .values({ groupId: G, bookId: ref.id, name: "Domain", amount: "24.00", paymentsPerYear: 1, startDate: "2026-01-01", endDate: "2026-11-15" })
+      .returning();
+    await db.insert(s.transactions).values({
+      groupId: G, bookId: ref.id, accountId, postedOn: "2026-11-03", merchant: "DOMAINS", amount: "24.00", originalAmount: "24.00",
+      category: "amortized", recurringExpenseId: paidBill.id, source: "manual",
+    });
+    const nov = await getBudgetMonthForBook(ref, "2026-11-01", "2026-11-20");
+    assert.deepEqual(
+      nov.computation.amortized.rows.map((r) => [r.name, r.monthlyC, r.accruedC, r.paidThisMonthC]),
+      [["Domain", 0, 0, 2400]],
+      "the unpaid ended bill is gone; the paid one shows its payment and sets nothing aside",
+    );
+    assert.equal(nov.computation.amortized.reservedMonthlyC, 0);
+    const oct = await getBudgetMonthForBook(ref, "2026-10-01", "2026-11-20");
+    assert.equal(oct.computation.amortized.reservedMonthlyC, 10200, "October still sets aside for both");
+  });
+
+  await check("F17 review: a range that starts on a carried balance keeps the income after it", async () => {
+    const { ref, accountId } = await newBook("Carried start");
+    const [broker] = await db.insert(s.financialAccounts).values({ groupId: G, bookId: ref.id, name: "Brokerage", kind: "brokerage" }).returning();
+    await db.insert(s.accountSnapshots).values([
+      { accountId: broker.id, month: "2025-01-01", balance: "1000.00" },
+      { accountId, month: "2025-12-01", balance: "500.00" },
+      { accountId: broker.id, month: "2026-02-01", balance: "1100.00" },
+      { accountId, month: "2026-02-01", balance: "600.00" },
+    ]);
+    await db.insert(s.transactions).values({
+      groupId: G, bookId: ref.id, accountId: broker.id, postedOn: "2026-01-12", merchant: "Dividend", amount: "100.00",
+      originalAmount: "100.00", category: "income", source: "manual",
+    });
+    const dash = await getNetWorthDashboardForBook(ref, "year", "2026-03-05");
+    assert.deepEqual(dash.months, ["2025-12-01", "2026-02-01"]);
+    assert.equal(dash.carried[broker.id][0], "2025-01-01", "the year view starts on a carried balance");
+    assert.equal(dash.flows[broker.id].landedIn.at(-1), 100, "January's $100 counts");
+  });
+
+  await check("F15 review: an account archived on the last evening of a month stops carrying in that month", async () => {
+    const { ref, accountId } = await newBook("Archive month");
+    const [old] = await db.insert(s.financialAccounts).values({ groupId: G, bookId: ref.id, name: "Old savings", kind: "savings" }).returning();
+    await db.insert(s.accountSnapshots).values([
+      { accountId, month: "2026-09-01", balance: "1000.00" },
+      { accountId: old.id, month: "2026-09-01", balance: "5000.00" },
+      { accountId, month: "2026-10-01", balance: "1200.00" },
+    ]);
+    // Oct 31 at 7:30 PM in America/Chicago (the household's zone) is already November in UTC.
+    await db.update(s.financialAccounts).set({ archivedAt: new Date("2026-11-01T00:30:00Z") }).where(eq(s.financialAccounts.id, old.id));
+    const dash = await getNetWorthDashboardForBook(ref, "all", "2026-11-20");
+    assert.equal(dash.totals[dash.months.indexOf("2026-10-01")], 1200);
   });
 } finally {
   await db.delete(s.groups).where(eq(s.groups.id, G));

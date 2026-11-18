@@ -16,6 +16,9 @@ import { getProfile, listProfiles } from "@/lib/queries/profiles";
 import { APPS } from "@/lib/apps";
 import { currentLogin } from "@/lib/hub-apps";
 import { wouldStrandBook } from "@/lib/books";
+import { payEndWrites } from "@/lib/queries/finance-atlas";
+import { getGroupTimezone } from "@/lib/queries/group";
+import { todayISO } from "@/lib/finance/parse";
 import type { Sharing } from "@/lib/db/schema";
 import { cleanEquipment } from "@/lib/workout";
 
@@ -174,7 +177,8 @@ function parseHiddenApps(raw: FormDataEntryValue | null): string[] {
 
 /**
  * Deactivate (soft-delete): hide from the switcher + stop it being active, but keep
- * ALL their data. Reversible via reactivateProfile. Can't leave zero active
+ * ALL their data. Their Finance pay plans and deductions end with this month.
+ * Reversible via reactivateProfile, which does not restart their pay. Can't leave zero active
  * profiles; if the archived one is currently active, switch to another first.
  */
 export async function deactivateProfile(id: number): Promise<void> {
@@ -194,10 +198,12 @@ export async function deactivateProfile(id: number): Promise<void> {
     if (other) await setActiveProfileCookie(other.id);
   }
 
-  await db
-    .update(profiles)
-    .set({ archivedAt: new Date() })
-    .where(eq(profiles.id, id));
+  // Their pay ends with this month in Finance, in the same save, so history never changes later.
+  const today = todayISO(await getGroupTimezone(await requireGroupId()));
+  await db.batch([
+    db.update(profiles).set({ archivedAt: new Date() }).where(eq(profiles.id, id)),
+    ...payEndWrites(id, today),
+  ]);
 
   revalidatePath("/", "layout");
 }

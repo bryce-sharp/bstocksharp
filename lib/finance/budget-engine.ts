@@ -56,8 +56,9 @@ export type EngineRecurring = {
   /** Most recent matched payment BEFORE this month (sinking-fund accrual). */
   lastActualOn: string | null;
   startDate: string; // fallback accrual anchor when never paid
-  /** In ATLAS's plan for this month (in effect on its as-of day). A bill ended
-   *  (or not yet started) by then plans $0, so its charge still comes out of spending. */
+  /** In ATLAS's plan for this month (in effect on its as-of day). A bill outside the
+   *  plan has an expected amount of $0. Deduct any payment even if the bill has ended
+   *  or has not started. */
   inPlan: boolean;
 };
 
@@ -219,8 +220,11 @@ export function computeBudgetMonth(input: EngineInput): BudgetComputation {
   const estimateAdjustmentC = fixedRows.reduce((s, r) => s + (r.deltaC ?? 0), 0);
 
   // ── Amortized lane: sinking funds ────────────────────────────────────────────
-  const amortizedRows: AmortizedRow[] = amortizedRecurring.map((r) => {
+  // Outside the plan, a bill sets nothing aside and shows only when it was paid.
+  const amortizedRows: AmortizedRow[] = amortizedRecurring.flatMap((r) => {
     const paid = actualByRecurring.get(r.id) ?? null;
+    if (!r.inPlan && paid === null) return [];
+    const monthlyC = r.inPlan ? r.monthlyC : 0;
     // Accrue from the month AFTER the last payment (that payment reset the
     // fund); never paid → from the bill's start month, inclusive.
     const monthsAccrued = r.lastActualOn
@@ -229,9 +233,9 @@ export function computeBudgetMonth(input: EngineInput): BudgetComputation {
     return {
       recurringExpenseId: r.id,
       name: r.name,
-      monthlyC: r.monthlyC,
+      monthlyC,
       targetC: r.perOccurrenceC,
-      accruedC: Math.min(r.perOccurrenceC, r.monthlyC * monthsAccrued),
+      accruedC: Math.min(r.perOccurrenceC, monthlyC * monthsAccrued),
       monthsAccrued,
       dueThisMonth: r.dueThisMonth,
       paidThisMonthC: paid,

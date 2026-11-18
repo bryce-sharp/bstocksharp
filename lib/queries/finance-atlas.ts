@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, or } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   compensationPlans,
@@ -42,6 +42,38 @@ export const PAYCHECKS_PER_YEAR: Record<string, number> = {
 };
 
 type Dated = { startDate: string; endDate: string | null };
+/**
+ * The writes that end a person's pay in every book when they are deactivated. Their
+ * open pay plans and paycheck deductions end with the household's current month, so
+ * past months keep their pay and reactivating them never brings it back. A plan or
+ * deduction that starts after this month never ran, so it is removed.
+ */
+export function payEndWrites(profileId: number, today: string) {
+  const monthEnd = lastDayOfMonth(today);
+  return [
+    db.delete(compensationPlans).where(and(eq(compensationPlans.profileId, profileId), gt(compensationPlans.startDate, monthEnd))),
+    db
+      .update(compensationPlans)
+      .set({ endDate: monthEnd })
+      .where(
+        and(
+          eq(compensationPlans.profileId, profileId),
+          or(isNull(compensationPlans.endDate), gt(compensationPlans.endDate, monthEnd)),
+        ),
+      ),
+    db.delete(incomeDeductions).where(and(eq(incomeDeductions.profileId, profileId), gt(incomeDeductions.startDate, monthEnd))),
+    db
+      .update(incomeDeductions)
+      .set({ endDate: monthEnd })
+      .where(
+        and(
+          eq(incomeDeductions.profileId, profileId),
+          or(isNull(incomeDeductions.endDate), gt(incomeDeductions.endDate, monthEnd)),
+        ),
+      ),
+  ] as const;
+}
+
 /**
  * The day a month's plan reads its config. Point-in-time semantics: past months read
  * as of their last day; the current month reads as of today (a raise landing Aug 15
@@ -226,11 +258,8 @@ export async function getAtlasViewForBook(
     ]);
   // The book's members, plus anyone whose pay still lands in this book.
   const inBook = new Set([...members.map((m) => m.id), ...allPlans.map((p) => p.profileId)]);
-  // A deactivated person's pay still counts through the month they were deactivated,
-  // so past months never change; later months leave them out.
-  const groupProfiles = hubPeople.filter(
-    (p) => inBook.has(p.id) && (p.archivedAt === null || p.archivedAt.toISOString().slice(0, 7) >= month.slice(0, 7)),
-  );
+  // Deactivated people too: deactivating ends their plans (payEndWrites), so plan dates decide every month.
+  const groupProfiles = hubPeople.filter((p) => inBook.has(p.id));
   const accountById = new Map(accounts.map((a) => [a.id, a]));
 
   const earliest = [...allPlans, ...allDeductions, ...allExpenses]

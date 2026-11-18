@@ -83,15 +83,34 @@ export async function getBudgetMonthForBook(
   const discretionaryBudgetC = cents(atlas.totals.discretionLeft);
   const hasIncome = atlas.totals.monthlyNet > 0;
 
-  // Effective recurring bills + their last matched payment BEFORE this month.
+  // The month's bills, plus any bill a payment this month is filed under even if it
+  // ended earlier or starts later (it plans $0; see inPlan). Then each one's last
+  // matched payment BEFORE this month.
+  const paidThisMonth = db
+    .select({ id: transactions.recurringExpenseId })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.bookId, book.id),
+        eq(transactions.needsReview, false),
+        inArray(transactions.category, ["fixed", "amortized"]),
+        gte(transactions.postedOn, start),
+        lte(transactions.postedOn, end),
+      ),
+    );
   const bills = await db
     .select()
     .from(recurringExpenses)
     .where(
       and(
         eq(recurringExpenses.bookId, book.id),
-        lte(recurringExpenses.startDate, end),
-        or(isNull(recurringExpenses.endDate), gte(recurringExpenses.endDate, start)),
+        or(
+          and(
+            lte(recurringExpenses.startDate, end),
+            or(isNull(recurringExpenses.endDate), gte(recurringExpenses.endDate, start)),
+          ),
+          inArray(recurringExpenses.id, paidThisMonth),
+        ),
       ),
     );
 
@@ -286,11 +305,12 @@ function nextDue(month: string, r: AmortizedRow, dueMonths: number[] | undefined
     return formatMonth(`${y + Math.floor((m - 1 + k) / 12)}-${String(n).padStart(2, "0")}-01`);
   };
   const paid = paidThisMonth(r);
+  // Nothing set aside means the bill is outside the plan: it is not due again.
+  if (r.monthlyC <= 0) return null;
   if (dueMonths?.length) {
     for (let k = paid ? 1 : 0; k <= 12; k++) if (dueMonths.includes(((m - 1 + k) % 12) + 1)) return at(k);
     return null;
   }
-  if (r.monthlyC <= 0) return null;
   return `about ${at(Math.round((paid ? r.targetC : r.targetC - r.accruedC) / r.monthlyC))}`;
 }
 

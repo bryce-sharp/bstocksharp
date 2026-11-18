@@ -214,9 +214,14 @@ export default function EditProfileButton({
                               <CircularProgress size={16} color="inherit" />
                             ) : null
                           }
-                          onClick={() =>
-                            runLifecycle(() => deactivateProfile(profileId))
-                          }
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Deactivate ${profileName}? Their Finance pay plans and paycheck deductions end with this month, and reactivating does not restart them.`,
+                              )
+                            )
+                              runLifecycle(() => deactivateProfile(profileId));
+                          }}
                         >
                           Deactivate
                         </Button>

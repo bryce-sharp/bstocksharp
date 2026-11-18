@@ -12,7 +12,7 @@ import {
 } from "@/lib/db/schema";
 import { requireBook, type BookRef } from "@/lib/books";
 import { getGroupTimezone } from "@/lib/queries/group";
-import { lastDayOfMonth, todayISO } from "@/lib/finance/parse";
+import { dateInTz, lastDayOfMonth, todayISO } from "@/lib/finance/parse";
 import {
   CASH_KINDS,
   addMonths,
@@ -83,7 +83,7 @@ export type AccountFlows = {
   /** Aligned to `months`: transferred in / out since the starting point. */
   movedIn: number[];
   movedOut: number[];
-  /** Income that landed in the account after its first logged balance, by tag (null = untagged), biggest first. */
+  /** Income that landed in the account after its first balance in the window, by tag (null = untagged), biggest first. */
   landed: { tag: string | null; amount: number }[];
   /** Aligned to `months`: the same income, cumulative, like movedIn. */
   landedIn: number[];
@@ -100,8 +100,8 @@ export type NetWorthDashboard = {
   months: string[];
   /** 1 when months[0] is a starting point from before the range, else 0. */
   windowStart: number;
-  /** Aligned to `months`; a month an account was not logged carries its last logged
-   *  balance (see `carried`); null = nothing logged yet, or archived by then. */
+  /** Aligned to `months`. If an account has no balance logged for a month, this is its
+   *  last logged balance, marked in `carried`; null = nothing logged yet, or archived by then. */
   balances: Record<number, (number | null)[]>;
   /** Aligned to `months`: the month a carried balance was last logged (YYYY-MM-01), else null. */
   carried: Record<number, (string | null)[]>;
@@ -210,10 +210,12 @@ export async function getNetWorthDashboardForBook(
   const allMonths = [...byMonth.keys()].sort();
   const round2 = (n: number) => Math.round(n * 100) / 100;
 
-  // A month an account was not logged carries its last logged balance into the
-  // totals, marked as carried, until the account is archived: a gap is never $0.
+  // If an account has no balance logged for a month, carry its last logged balance
+  // forward. Mark the carried value and stop carrying it when the account is archived
+  // (in the household's month, not UTC's).
+  const tz = await getGroupTimezone(book.groupId);
   const archivedMonth = new Map(
-    allAccounts.map((a) => [a.id, a.archivedAt ? `${a.archivedAt.toISOString().slice(0, 7)}-01` : null]),
+    allAccounts.map((a) => [a.id, a.archivedAt ? `${dateInTz(a.archivedAt.getTime(), tz).slice(0, 7)}-01` : null]),
   );
   const filled = new Map<string, Map<number, number>>();
   const carriedFrom = new Map<string, Map<number, string>>();
@@ -284,9 +286,10 @@ export async function getNetWorthDashboardForBook(
   }
 
   const contributions = contributionsFor(months, accounts, plans, linked);
-  const firstLoggedIn = new Map<number, string>();
-  for (const m of months) for (const id of byMonth.get(m)?.keys() ?? []) if (!firstLoggedIn.has(id)) firstLoggedIn.set(id, m);
-  const flows = await flowsFor(book, months, accounts, firstLoggedIn);
+  // Each account's first balance in the window, logged or carried: the same baseline Account detail uses.
+  const firstBalanceIn = new Map<number, string>();
+  for (const m of months) for (const id of filled.get(m)?.keys() ?? []) if (!firstBalanceIn.has(id)) firstBalanceIn.set(id, m);
+  const flows = await flowsFor(book, months, accounts, firstBalanceIn);
 
   const last = months.length - 1;
   const stats: NetWorthStats | null =
@@ -345,8 +348,8 @@ async function flowsFor(
   book: BookRef,
   months: string[],
   accounts: FinancialAccount[],
-  /** Each account's first logged month in the window: income before it is already in that balance. */
-  firstLoggedIn: Map<number, string>,
+  /** Each account's first balance in the window: income before it is already in that balance. */
+  firstBalanceIn: Map<number, string>,
 ): Promise<Record<number, AccountFlows>> {
   if (months.length < 2 || accounts.length === 0) return {};
   const ids = accounts.map((a) => a.id);
@@ -392,7 +395,7 @@ async function flowsFor(
         addFrom(get(r.accountId).movedOut, r.postedOn, amount);
       }
     } else if (r.accountId != null && ids.includes(r.accountId)) {
-      const first = firstLoggedIn.get(r.accountId);
+      const first = firstBalanceIn.get(r.accountId);
       if (!first || `${r.postedOn.slice(0, 7)}-01` <= first) continue;
       addFrom(get(r.accountId).landedIn, r.postedOn, amount);
       const byTag = landed.get(r.accountId) ?? new Map<string | null, number>();
