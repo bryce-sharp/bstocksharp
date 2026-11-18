@@ -9,7 +9,7 @@ import {
   type Transaction,
 } from "@/lib/db/schema";
 import { computeBudgetMonth, type AmortizedRow, type EngineTxn, type BudgetComputation } from "@/lib/finance/budget-engine";
-import { getAtlasViewForBook } from "@/lib/queries/finance-atlas";
+import { effectiveAt, getAtlasViewForBook, planAsOf } from "@/lib/queries/finance-atlas";
 import { lastDayOfMonth, todayISO, currentMonthISO } from "@/lib/finance/parse";
 import { requireBook, type BookRef } from "@/lib/books";
 import { getGroupTimezone } from "@/lib/queries/group";
@@ -105,7 +105,8 @@ export async function getBudgetMonthForBook(
     .from(transactions)
     .innerJoin(recurringExpenses, eq(recurringExpenses.id, transactions.recurringExpenseId))
     .where(
-      and(eq(transactions.bookId, book.id), lt(transactions.postedOn, start)),
+      // A row in review counts nowhere until it is reviewed, in its month or later ones.
+      and(eq(transactions.bookId, book.id), eq(transactions.needsReview, false), lt(transactions.postedOn, start)),
     )
     .orderBy(desc(transactions.postedOn));
   const lastPaidBy = new Map<number, string>();
@@ -114,6 +115,7 @@ export async function getBudgetMonthForBook(
     if (!lastPaidBy.has(series)) lastPaidBy.set(series, p.postedOn);
   }
   const viewedMonthNum = Number(month.slice(5, 7));
+  const inPlan = new Set(effectiveAt(bills, planAsOf(start, today)).map((b) => b.id));
 
   const recurring = bills.map((b) => {
     const perOccurrenceC = cents(b.amount);
@@ -129,6 +131,7 @@ export async function getBudgetMonthForBook(
         (b.dueMonths?.includes(viewedMonthNum) ?? false),
       lastActualOn: lastPaidBy.get(b.seriesId ?? b.id) ?? null,
       startDate: b.startDate,
+      inPlan: inPlan.has(b.id),
     };
   });
 
@@ -175,6 +178,7 @@ export async function getBudgetMonthForBook(
         eq(transactions.bookId, book.id),
         inArray(transactions.category, ["fund", "income"]),
         isNotNull(transactions.fundId),
+        eq(transactions.needsReview, false),
         lt(transactions.postedOn, start),
       ),
     );

@@ -211,7 +211,8 @@ Bryce, Lauren, a kid), not accounts.
 person, claim/release. Your own login (your person, password, passkeys) is on
 **`/account`** (account menu → *Your account*). *Deactivate* soft-deletes
 (`profiles.archived_at`) — hidden from the switcher, can't be active, **all data
-kept**; *Reactivate* restores. *Delete forever* is irreversible: it reassigns the
+kept** (Finance still counts their pay through the month they were deactivated, so
+past budgets never change); *Reactivate* restores. *Delete forever* is irreversible: it reassigns the
 person's **shared** cars + authored workouts to a chosen **heir**, then deletes their
 **private** cars (cascading that history) and their weekly schedule. Guards: can't
 deactivate the last active profile or delete without an heir, and

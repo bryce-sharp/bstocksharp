@@ -50,6 +50,8 @@ import { listBookMembers, otherBooksForViewer, requireBook, viewerBook } from "@
 export const metadata = { title: "Budget" };
 
 const d = (c: number) => Math.round(c) / 100;
+const names = (rows: { name: string }[], what: string) =>
+  rows.length ? `${rows.map((r) => r.name).join(", ")} ${what}` : null;
 
 // The Budget tab (F3): this month's transactions + the discretionary pace,
 // computed live from the ledger. Past months render frozen once closed (CP4b).
@@ -302,9 +304,14 @@ export default async function BudgetPage({
         <Alert severity="info" variant="outlined" sx={{ mb: 3 }}>
           Budget adjusted {formatMonth(month)} by{" "}
           {d(disc.estimateAdjustmentC) >= 0 ? "+" : "−"}$
-          {Math.abs(d(disc.estimateAdjustmentC)).toFixed(2)} —{" "}
-          {c.fixed.rows.filter((r) => r.deltaC).map((r) => r.name).join(", ")} came in
-          different from the plan.
+          {Math.abs(d(disc.estimateAdjustmentC)).toFixed(2)}:{" "}
+          {[
+            names(c.fixed.rows.filter((r) => r.deltaC && r.expectedC > 0), "came in different from the plan"),
+            names(c.fixed.rows.filter((r) => r.deltaC && r.expectedC === 0), "was paid this month but is not in the plan"),
+          ]
+            .filter(Boolean)
+            .join("; ")}
+          .
         </Alert>
       ) : null}
 

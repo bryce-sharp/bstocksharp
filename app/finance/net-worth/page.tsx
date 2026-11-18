@@ -119,6 +119,7 @@ export default async function NetWorthPage({
       {editor && dash.dueMonth && snapshotAccounts.length > 0 ? (
         <DueMonthBanner
           month={dash.dueMonth}
+          missing={dash.dueMissing}
           accounts={snapshotAccounts}
           balancesByMonth={dash.balancesByMonth}
           yearOptions={yearOptions}
@@ -152,6 +153,7 @@ export default async function NetWorthPage({
             windowStart={dash.windowStart}
             accounts={windowAccounts}
             balances={dash.balances}
+            carried={dash.carried}
             totals={dash.totals}
             contributions={dash.contributions}
             flows={dash.flows}
@@ -170,6 +172,7 @@ export default async function NetWorthPage({
             windowStart={dash.windowStart}
             accounts={windowAccounts.map((a) => ({ id: a.id, name: a.name }))}
             balances={dash.balances}
+            carried={dash.carried}
             totals={dash.totals}
             missingMonths={dash.missingMonths}
             balancesByMonth={dash.balancesByMonth}

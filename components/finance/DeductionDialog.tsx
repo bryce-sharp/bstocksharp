@@ -257,11 +257,11 @@ export default function DeductionDialog({
                     color="inherit"
                     disabled={pending}
                     onClick={() => {
-                      if (window.confirm(`End ${deduction.name} as of today? Past months keep it.`))
+                      if (window.confirm(`End ${deduction.name} after this month? This month and past months keep it.`))
                         runDanger(endDeductionAction);
                     }}
                   >
-                    End as of today
+                    End after this month
                   </Button>
                   <Button
                     size="small"

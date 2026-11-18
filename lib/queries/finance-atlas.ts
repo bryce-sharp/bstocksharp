@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   compensationPlans,
@@ -42,6 +42,15 @@ export const PAYCHECKS_PER_YEAR: Record<string, number> = {
 };
 
 type Dated = { startDate: string; endDate: string | null };
+/**
+ * The day a month's plan reads its config. Point-in-time semantics: past months read
+ * as of their last day; the current month reads as of today (a raise landing Aug 15
+ * shows from Aug 15). The budget uses the same day, so both count the same bills.
+ */
+export function planAsOf(month: string, today: string): string {
+  return month.slice(0, 7) === today.slice(0, 7) ? today : lastDayOfMonth(`${month.slice(0, 7)}-01`);
+}
+
 export const effectiveAt = <T extends Dated>(rows: T[], asOf: string): T[] =>
   rows.filter((r) => r.startDate <= asOf && (r.endDate === null || r.endDate >= asOf));
 
@@ -171,16 +180,14 @@ export async function getAtlasViewForBook(
       ? `${monthParam.slice(0, 7)}-01`
       : currentMonth;
   const isCurrentMonth = month === currentMonth;
-  // Point-in-time semantics: past months read as of their last day; the
-  // current month reads as of today (a raise landing Aug 15 shows from Aug 15).
-  const asOf = isCurrentMonth ? today : lastDayOfMonth(month);
+  const asOf = planAsOf(month, today);
 
   const [hubPeople, members, allPlans, allDeductions, allExpenses, accounts, goals] =
     await Promise.all([
       db
         .select()
         .from(profiles)
-        .where(and(eq(profiles.groupId, book.groupId), isNull(profiles.archivedAt)))
+        .where(eq(profiles.groupId, book.groupId))
         .orderBy(asc(profiles.sortOrder), asc(profiles.id)),
       listBookMembers(book.id),
       db
@@ -219,7 +226,11 @@ export async function getAtlasViewForBook(
     ]);
   // The book's members, plus anyone whose pay still lands in this book.
   const inBook = new Set([...members.map((m) => m.id), ...allPlans.map((p) => p.profileId)]);
-  const groupProfiles = hubPeople.filter((p) => inBook.has(p.id));
+  // A deactivated person's pay still counts through the month they were deactivated,
+  // so past months never change; later months leave them out.
+  const groupProfiles = hubPeople.filter(
+    (p) => inBook.has(p.id) && (p.archivedAt === null || p.archivedAt.toISOString().slice(0, 7) >= month.slice(0, 7)),
+  );
   const accountById = new Map(accounts.map((a) => [a.id, a]));
 
   const earliest = [...allPlans, ...allDeductions, ...allExpenses]

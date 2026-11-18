@@ -62,6 +62,7 @@ export default function NetWorthOverview({
   windowStart,
   accounts,
   balances,
+  carried,
   totals,
   contributions,
   flows,
@@ -71,6 +72,8 @@ export default function NetWorthOverview({
   windowStart: number;
   accounts: DetailAccount[];
   balances: Record<number, (number | null)[]>;
+  /** The month a carried balance was last logged, aligned to `months`. */
+  carried: Record<number, (string | null)[]>;
   totals: number[];
   contributions: Record<number, AccountContributions>;
   flows: Record<number, AccountFlows>;
@@ -108,10 +111,15 @@ export default function NetWorthOverview({
     const series = balances[a.id] ?? [];
     const s = accountStats(months, series, totals, at);
     const share = shareOf(s.end);
+    const from = carried[a.id]?.[at] ?? null;
     return {
       key: `a${a.id}`,
       label: a.name,
-      sub: [KIND_LABELS[a.kind] ?? a.kind, share != null ? `${share < 1 && s.end ? "<1" : share}%` : null]
+      sub: [
+        KIND_LABELS[a.kind] ?? a.kind,
+        share != null ? `${share < 1 && s.end ? "<1" : share}%` : null,
+        from ? `not logged; from ${formatMonth(from)}` : null,
+      ]
         .filter(Boolean)
         .join(" · "),
       color: colorOf.get(a.id)!,

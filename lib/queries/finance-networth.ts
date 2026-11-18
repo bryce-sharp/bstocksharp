@@ -63,6 +63,8 @@ export type NetWorthStats = {
   /** Checking + savings: the liquid money (the house fund). */
   cashTotal: number;
   cashChange: number | null;
+  /** Accounts the newest month carries from an earlier month, with the month they were last logged. */
+  carried: { name: string; from: string }[];
 };
 
 /** Paycheck money flowing into one account (ATLAS deductions linked to it). */
@@ -81,8 +83,10 @@ export type AccountFlows = {
   /** Aligned to `months`: transferred in / out since the starting point. */
   movedIn: number[];
   movedOut: number[];
-  /** Income that landed in the account, by tag (null = untagged), biggest first. */
+  /** Income that landed in the account after its first logged balance, by tag (null = untagged), biggest first. */
   landed: { tag: string | null; amount: number }[];
+  /** Aligned to `months`: the same income, cumulative, like movedIn. */
+  landedIn: number[];
 };
 
 export type NetWorthDashboard = {
@@ -96,15 +100,20 @@ export type NetWorthDashboard = {
   months: string[];
   /** 1 when months[0] is a starting point from before the range, else 0. */
   windowStart: number;
-  /** Aligned to `months`; null = no snapshot for that account that month. */
+  /** Aligned to `months`; a month an account was not logged carries its last logged
+   *  balance (see `carried`); null = nothing logged yet, or archived by then. */
   balances: Record<number, (number | null)[]>;
+  /** Aligned to `months`: the month a carried balance was last logged (YYYY-MM-01), else null. */
+  carried: Record<number, (string | null)[]>;
   totals: number[];
   /** Checking + savings per month. */
   cash: number[];
   /** Calendar months inside the window that were never logged. */
   missingMonths: string[];
-  /** Last month, once it has closed and is not logged yet (the 1st-of-month ritual). */
+  /** Last month, once it has closed and any account you log has no balance for it yet. */
   dueMonth: string | null;
+  /** The accounts dueMonth still needs, when it is partly logged. */
+  dueMissing: string[];
   /** "YYYY-MM" → { accountId: balance } over ALL history, for the log dialog's prefill. */
   balancesByMonth: Record<string, Record<number, number | null>>;
   /** Average monthly change over the last 6 and 12 months of ALL history. */
@@ -200,8 +209,30 @@ export async function getNetWorthDashboardForBook(
   }
   const allMonths = [...byMonth.keys()].sort();
   const round2 = (n: number) => Math.round(n * 100) / 100;
-  const totalOf = (m: string) =>
-    round2([...(byMonth.get(m)?.values() ?? [])].reduce((s, v) => s + v, 0));
+
+  // A month an account was not logged carries its last logged balance into the
+  // totals, marked as carried, until the account is archived: a gap is never $0.
+  const archivedMonth = new Map(
+    allAccounts.map((a) => [a.id, a.archivedAt ? `${a.archivedAt.toISOString().slice(0, 7)}-01` : null]),
+  );
+  const filled = new Map<string, Map<number, number>>();
+  const carriedFrom = new Map<string, Map<number, string>>();
+  const lastLogged = new Map<number, { month: string; balance: number }>();
+  for (const m of allMonths) {
+    const logged = byMonth.get(m)!;
+    for (const [id, balance] of logged) lastLogged.set(id, { month: m, balance });
+    const row = new Map(logged);
+    const carried = new Map<number, string>();
+    for (const [id, prev] of lastLogged) {
+      const gone = archivedMonth.get(id);
+      if (row.has(id) || (gone && gone <= m)) continue;
+      row.set(id, prev.balance);
+      carried.set(id, prev.month);
+    }
+    filled.set(m, row);
+    carriedFrom.set(m, carried);
+  }
+  const totalOf = (m: string) => round2([...(filled.get(m)?.values() ?? [])].reduce((s, v) => s + v, 0));
 
   const balancesByMonth: Record<string, Record<number, number | null>> = {};
   for (const m of allMonths) {
@@ -209,8 +240,11 @@ export async function getNetWorthDashboardForBook(
   }
 
   const lastClosed = addMonths(`${today.slice(0, 7)}-01`, -1);
+  // Due until every open account you log has a balance for the month that just closed.
+  const logs = allAccounts.filter((a) => !a.archivedAt && a.trackBalance && lastLogged.has(a.id));
+  const dueMissing = logs.filter((a) => !byMonth.get(lastClosed)?.has(a.id)).map((a) => a.name);
   const latestLogged = allMonths.at(-1) ?? null;
-  const dueMonth = !latestLogged || lastClosed > latestLogged ? lastClosed : null;
+  const dueMonth = !latestLogged || lastClosed > latestLogged || dueMissing.length ? lastClosed : null;
   const allTotals = allMonths.map(totalOf);
   const pace = {
     short: paceOver(allMonths, allTotals, 6),
@@ -221,18 +255,20 @@ export async function getNetWorthDashboardForBook(
 
   // Accounts shown: active+tracked, plus anything with data in these months
   // (so an account archived mid-year keeps its history).
-  const hasData = (a: FinancialAccount) => months.some((m) => byMonth.get(m)?.has(a.id));
+  const hasData = (a: FinancialAccount) => months.some((m) => filled.get(m)?.has(a.id));
   const accounts = allAccounts.filter((a) => (!a.archivedAt && a.trackBalance) || hasData(a));
 
   const balances: Record<number, (number | null)[]> = {};
+  const carried: Record<number, (string | null)[]> = {};
   for (const a of accounts) {
-    balances[a.id] = months.map((m) => byMonth.get(m)?.get(a.id) ?? null);
+    balances[a.id] = months.map((m) => filled.get(m)?.get(a.id) ?? null);
+    carried[a.id] = months.map((m) => carriedFrom.get(m)?.get(a.id) ?? null);
   }
   const totals = months.map(totalOf);
   const cashIds = new Set(accounts.filter((a) => CASH_KINDS.includes(a.kind)).map((a) => a.id));
   const cash = months.map((m) => {
     let sum = 0;
-    for (const [id, v] of byMonth.get(m) ?? []) if (cashIds.has(id)) sum += v;
+    for (const [id, v] of filled.get(m) ?? []) if (cashIds.has(id)) sum += v;
     return round2(sum);
   });
 
@@ -248,7 +284,9 @@ export async function getNetWorthDashboardForBook(
   }
 
   const contributions = contributionsFor(months, accounts, plans, linked);
-  const flows = await flowsFor(book, months, accounts);
+  const firstLoggedIn = new Map<number, string>();
+  for (const m of months) for (const id of byMonth.get(m)?.keys() ?? []) if (!firstLoggedIn.has(id)) firstLoggedIn.set(id, m);
+  const flows = await flowsFor(book, months, accounts, firstLoggedIn);
 
   const last = months.length - 1;
   const stats: NetWorthStats | null =
@@ -270,6 +308,10 @@ export async function getNetWorthDashboardForBook(
               : null,
           cashTotal: cash[last],
           cashChange: last > 0 ? round2(cash[last] - cash[0]) : null,
+          carried: accounts.flatMap((a) => {
+            const from = carried[a.id][last];
+            return from ? [{ name: a.name, from }] : [];
+          }),
         }
       : null;
 
@@ -280,10 +322,12 @@ export async function getNetWorthDashboardForBook(
     months,
     windowStart,
     balances,
+    carried,
     totals,
     cash,
     missingMonths,
     dueMonth,
+    dueMissing,
     balancesByMonth,
     pace,
     stats,
@@ -301,6 +345,8 @@ async function flowsFor(
   book: BookRef,
   months: string[],
   accounts: FinancialAccount[],
+  /** Each account's first logged month in the window: income before it is already in that balance. */
+  firstLoggedIn: Map<number, string>,
 ): Promise<Record<number, AccountFlows>> {
   if (months.length < 2 || accounts.length === 0) return {};
   const ids = accounts.map((a) => a.id);
@@ -329,7 +375,7 @@ async function flowsFor(
   const round2 = (n: number) => Math.round(n * 100) / 100;
   const out: Record<number, AccountFlows> = {};
   const get = (id: number) =>
-    (out[id] ??= { movedIn: months.map(() => 0), movedOut: months.map(() => 0), landed: [] });
+    (out[id] ??= { movedIn: months.map(() => 0), movedOut: months.map(() => 0), landed: [], landedIn: months.map(() => 0) });
   const landed = new Map<number, Map<string | null, number>>();
   // A posting counts toward every logged month at or after its own month.
   const addFrom = (series: number[], postedOn: string, amount: number) => {
@@ -346,7 +392,9 @@ async function flowsFor(
         addFrom(get(r.accountId).movedOut, r.postedOn, amount);
       }
     } else if (r.accountId != null && ids.includes(r.accountId)) {
-      get(r.accountId);
+      const first = firstLoggedIn.get(r.accountId);
+      if (!first || `${r.postedOn.slice(0, 7)}-01` <= first) continue;
+      addFrom(get(r.accountId).landedIn, r.postedOn, amount);
       const byTag = landed.get(r.accountId) ?? new Map<string | null, number>();
       byTag.set(r.tag, (byTag.get(r.tag) ?? 0) + amount);
       landed.set(r.accountId, byTag);
@@ -355,6 +403,7 @@ async function flowsFor(
   for (const [id, f] of Object.entries(out)) {
     f.movedIn = f.movedIn.map(round2);
     f.movedOut = f.movedOut.map(round2);
+    f.landedIn = f.landedIn.map(round2);
     f.landed = [...(landed.get(Number(id)) ?? [])]
       .map(([tag, amount]) => ({ tag, amount: round2(amount) }))
       .sort((a, b) => b.amount - a.amount);

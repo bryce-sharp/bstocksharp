@@ -48,6 +48,13 @@ function Tile({
 const deltaColor = (n: number | null) =>
   n == null || n === 0 ? undefined : n > 0 ? "success.main" : "warning.main";
 
+/** Which balances in the newest month were carried from an earlier one. */
+function carriedNote(carried: NetWorthStats["carried"]): string | null {
+  if (!carried.length) return null;
+  if (carried.length === 1) return `${carried[0].name} not logged; using ${formatMonth(carried[0].from)}`;
+  return `${carried.length} accounts not logged; using their last balance`;
+}
+
 export default function NetWorthTiles({
   stats,
   startMonth,
@@ -75,7 +82,7 @@ export default function NetWorthTiles({
       <Tile
         label="Net worth"
         value={<Money value={stats.currentTotal} />}
-        sub={`end of ${formatMonth(stats.currentMonth)}`}
+        sub={[`end of ${formatMonth(stats.currentMonth)}`, carriedNote(stats.carried)].filter(Boolean).join(". ")}
       />
       <Tile
         label={rangeLabel}

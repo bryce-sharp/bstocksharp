@@ -22,6 +22,7 @@ import {
   parseStr,
   todayISO,
   currentMonthISO,
+  lastDayOfMonth,
 } from "@/lib/finance/parse";
 import { requireApp } from "@/lib/hub-apps";
 
@@ -282,9 +283,11 @@ export async function endDeductionAction(
   await requireApp("finance");
   const row = await scopedDeduction(id);
   await requireEditorFor(row.profileId);
+  // This month's paychecks already had it taken out, so it ends with the month.
+  const today = todayISO(await getGroupTimezone((await requireBook()).groupId));
   await db
     .update(incomeDeductions)
-    .set({ endDate: todayISO() })
+    .set({ endDate: lastDayOfMonth(today) })
     .where(eq(incomeDeductions.id, id));
   revalidatePath(ATLAS);
 }
