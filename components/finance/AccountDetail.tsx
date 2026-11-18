@@ -175,6 +175,7 @@ export default function AccountDetail({
               {
                 data: x,
                 scaleType: "time",
+                tickInterval: x,
                 valueFormatter: (d: Date, ctx: { location: string }) =>
                   d.toLocaleDateString("en-US", ctx.location === "tick" ? { month: "short" } : { month: "long", year: "numeric" }),
               },

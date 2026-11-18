@@ -172,7 +172,8 @@ export default function NetWorthOverview({
           {mounted ? (
             <LineChart
               height={240}
-              xAxis={[{ data: x, scaleType: "time", valueFormatter: tickFormat }]}
+              // Ticks only on logged months, so a short range never repeats a month's name.
+              xAxis={[{ data: x, scaleType: "time", valueFormatter: tickFormat, tickInterval: x }]}
               yAxis={[{ min: 0, valueFormatter: (v: number) => formatMoneyCompact(v), width: 56 }]}
               series={[
                 {
