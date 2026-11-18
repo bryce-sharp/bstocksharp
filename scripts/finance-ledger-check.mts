@@ -4,7 +4,7 @@
 //
 //   npm run finance:check
 import assert from "node:assert/strict";
-import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import * as s from "@/lib/db/schema";
 import { applyPlaidItem, releaseBankLinks } from "@/lib/plaid/apply";
@@ -331,6 +331,97 @@ try {
       assert.deepEqual([rows[0].accountId, rows[0].transferAccountId], [checking, creditUnion.id]);
     } finally {
       await db.execute(sql.raw(`drop trigger ${slowTrigger} on transactions`));
+      await db.execute(sql.raw(`drop function ${slowTrigger}()`));
+    }
+  });
+
+  const transfersOf = (amount: string) =>
+    db
+      .select()
+      .from(s.transactions)
+      .where(and(eq(s.transactions.groupId, G), eq(s.transactions.amount, amount), eq(s.transactions.category, "transfer")));
+  const recorded = async (bookId: number, accountId: number, transferAccountId: number, amount: string, postedOn: string) =>
+    (
+      await db
+        .insert(s.transactions)
+        .values({
+          groupId: G, bookId, accountId, transferAccountId, postedOn, merchant: "Transfer", amount, originalAmount: amount,
+          category: "transfer", source: "manual",
+        })
+        .returning()
+    )[0];
+
+  await check("Review 2 P1: two new bank legs complete a transfer already recorded, in the same book or another", async () => {
+    const same = await recorded(A.id, checking, savings, "900.00", "2026-11-20");
+    const out = await raw(pChecking, "900.00", "TRANSFER_OUT", "Online transfer to savings", "2026-11-20");
+    const into = await raw(pSavings, "-900.00", "TRANSFER_IN", "Online transfer from checking", "2026-11-20");
+    await applyPlaidItem(item.id);
+    assert.deepEqual((await transfersOf("900.00")).map((t) => t.id), [same.id], "one transfer, the recorded one");
+    assert.deepEqual([(await rawRow(out.id)).ledgerTransactionId, (await rawRow(into.id)).ledgerTransactionId], [same.id, same.id]);
+
+    // Money left the credit union (the other book), so the recorded transfer lives there.
+    const cross = await recorded(bookB.id, creditUnion.id, checking, "950.00", "2026-11-21");
+    const cuOut = await raw(pCreditUnion, "950.00", "TRANSFER_OUT", "Transfer to checking", "2026-11-21");
+    const chIn = await raw(pChecking, "-950.00", "TRANSFER_IN", "Transfer from credit union", "2026-11-21");
+    await applyPlaidItem(item.id);
+    assert.deepEqual((await transfersOf("950.00")).map((t) => t.id), [cross.id]);
+    assert.deepEqual([(await rawRow(cuOut.id)).ledgerTransactionId, (await rawRow(chIn.id)).ledgerTransactionId], [cross.id, cross.id]);
+  });
+
+  await check("Review 2 P2: a household edit to a one-sided transfer is never overwritten", async () => {
+    // Re-filed as spending.
+    const lone = await raw(pSavings, "-1000.00", "TRANSFER_IN", "Transfer in", "2026-11-22");
+    await applyPlaidItem(item.id);
+    const refiled = (await rawRow(lone.id)).ledgerTransactionId!;
+    await db.update(s.transactions).set({ category: "discretionary", spendCategory: "Gifts" }).where(eq(s.transactions.id, refiled));
+    const later = await raw(pChecking, "1000.00", "TRANSFER_OUT", "Transfer out", "2026-11-22");
+    await applyPlaidItem(item.id);
+    assert.deepEqual([(await ledger(refiled)).category, (await ledger(refiled)).spendCategory], ["discretionary", "Gifts"]);
+    assert.notEqual((await rawRow(later.id)).ledgerTransactionId, refiled);
+
+    // Completed by hand as brokerage → savings.
+    const lone2 = await raw(pSavings, "-1100.00", "TRANSFER_IN", "Transfer in", "2026-11-23");
+    await applyPlaidItem(item.id);
+    const completed = (await rawRow(lone2.id)).ledgerTransactionId!;
+    await db.update(s.transactions).set({ accountId: brokerage, needsReview: false }).where(eq(s.transactions.id, completed));
+    const later2 = await raw(pChecking, "1100.00", "TRANSFER_OUT", "Transfer out", "2026-11-23");
+    await applyPlaidItem(item.id);
+    assert.deepEqual([(await ledger(completed)).accountId, (await ledger(completed)).transferAccountId], [brokerage, savings]);
+    assert.notEqual((await rawRow(later2.id)).ledgerTransactionId, completed);
+  });
+
+  await check("Review 2 P2: a leg skipped as a card payment never pairs later", async () => {
+    const pay = await raw(pChecking, "1300.00", "TRANSFER_OUT", "Payment to card", "2026-11-24");
+    await raw(pCard, "-1300.00", "LOAN_PAYMENTS", "Payment Thank You", "2026-11-24");
+    await applyPlaidItem(item.id);
+    assert.equal((await rawRow(pay.id)).ledgerTransactionId, null);
+    const deposit = await raw(pSavings, "-1300.00", "TRANSFER_IN", "Transfer in", "2026-11-25");
+    await applyPlaidItem(item.id);
+    assert.equal((await rawRow(pay.id)).ledgerTransactionId, null, "the card payment stays skipped");
+    const row = await ledger((await rawRow(deposit.id)).ledgerTransactionId!);
+    assert.deepEqual([row.accountId, row.transferAccountId, row.needsReview], [null, savings, true], "the deposit waits in review");
+  });
+
+  await check("Review 2 P2: bank rows deleted while a sync is saving them stay deleted", async () => {
+    await db.execute(sql.raw(`create function ${slowTrigger}() returns trigger language plpgsql as $$
+      begin perform pg_sleep(1.5); return new; end $$`));
+    await db.execute(sql.raw(`create trigger ${slowTrigger} before insert on transactions
+      for each row when (new.group_id = ${G}) execute function ${slowTrigger}()`));
+    try {
+      const out = await raw(pChecking, "1200.00", "TRANSFER_OUT", "Transfer to savings", "2026-11-26");
+      const into = await raw(pSavings, "-1200.00", "TRANSFER_IN", "Transfer from checking", "2026-11-26");
+      const sync = applyPlaidItem(item.id);
+      // While the sync is saving, another sync saved the pair and the household deleted it.
+      await new Promise((done) => setTimeout(done, 500));
+      await db.update(s.plaidTransactions).set({ dismissedAt: new Date() }).where(inArray(s.plaidTransactions.id, [out.id, into.id]));
+      await sync;
+      assert.equal((await transfersOf("1200.00")).length, 0, "nothing recreated");
+      const [o, i] = [await rawRow(out.id), await rawRow(into.id)];
+      assert.deepEqual([o.ledgerTransactionId, i.ledgerTransactionId], [null, null]);
+      assert.ok(o.dismissedAt && i.dismissedAt);
+    } finally {
+      await db.execute(sql.raw(`drop trigger ${slowTrigger} on transactions`));
+      await db.execute(sql.raw(`drop function ${slowTrigger}()`));
     }
   });
 
@@ -397,6 +488,19 @@ try {
     const lastPrice = await ingestStructured(A, { amount: "200.00", merchant: "COX CABLE", date: "2026-11-20" }, checking);
     assert.ok(lastPrice.ok && !lastPrice.deduped && lastPrice.needsReview);
     assert.match((await ledger(lastPrice.id)).note ?? "", /You ended Cox on Oct 20, 2026/);
+    // A price replacement can start the same day as the version it replaces; the later one is last.
+    const [vz1] = await db
+      .insert(s.recurringExpenses)
+      .values({ groupId: G, bookId: A.id, name: "Verizon", amount: "100.00", merchantPatterns: ["VERIZON"], startDate: "2026-11-01", endDate: "2026-11-01" })
+      .returning();
+    await db.insert(s.recurringExpenses).values({
+      groupId: G, bookId: A.id, name: "Verizon", amount: "200.00", merchantPatterns: ["VERIZON"], startDate: "2026-11-01", endDate: "2026-11-18", seriesId: vz1.id,
+    });
+    const sameDayOld = await ingestStructured(A, { amount: "100.00", merchant: "VERIZON", date: "2026-12-01" }, checking);
+    assert.ok(sameDayOld.ok && !sameDayOld.deduped && !sameDayOld.needsReview, "the replaced same-day price is not the canceled bill");
+    const sameDayLast = await ingestStructured(A, { amount: "200.00", merchant: "VERIZON", date: "2026-12-01" }, checking);
+    assert.ok(sameDayLast.ok && !sameDayLast.deduped && sameDayLast.needsReview);
+    assert.match((await ledger(sameDayLast.id)).note ?? "", /You ended Verizon on Nov 18, 2026/);
   });
 
   // F11: two adjustments at once both count.
