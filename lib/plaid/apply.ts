@@ -234,14 +234,15 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
    * The one rule for whether an existing ledger row can become the transfer `from` →
    * `into`: it is still a transfer, its accounts are empty or already these, and
    * exactly `owners` live bank rows link it (1 for a one-sided bank row, 0 for a row
-   * entered by hand). Pairing checks it when reading, and the claim checks it again
-   * under the row lock, so a household edit made in between always wins.
+   * entered by hand). A null account is one a single bank leg does not know, so any
+   * account fits there. Pairing checks the rule when reading, and the claim checks it
+   * again under the row lock, so a household edit made in between always wins.
    */
-  const fitsPair = (ledgerId: SQL, from: SQL, into: SQL, owners: 0 | 1) => sql`exists (
+  const fitsPair = (ledgerId: SQL, from: SQL | null, into: SQL | null, owners: 0 | 1) => sql`exists (
     select 1 from transactions t
     where t.id = ${ledgerId} and t.category = 'transfer'
-      and (t.account_id is null or t.account_id = ${from})
-      and (t.transfer_account_id is null or t.transfer_account_id = ${into})
+      and ${from === null ? sql`true` : sql`(t.account_id is null or t.account_id = ${from})`}
+      and ${into === null ? sql`true` : sql`(t.transfer_account_id is null or t.transfer_account_id = ${into})`}
       and (select count(*) from plaid_transactions q
            where q.removed_at is null and (q.ledger_transaction_id = t.id or t.id = any(q.split_ledger_ids))) = ${owners})`;
 
@@ -445,7 +446,8 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
         and(
           eq(transactions.bookId, bookId),
           ne(transactions.source, "plaid"),
-          eq(transactions.amount, amount),
+          // The original amount, so a household-adjusted amount still matches.
+          eq(transactions.originalAmount, amount),
           or(eq(transactions.accountId, fromId), eq(transactions.transferAccountId, intoId)),
           gte(transactions.postedOn, shiftDays(date, -7)),
           lte(transactions.postedOn, shiftDays(date, 7)),
@@ -571,6 +573,7 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
       return;
     }
 
+    // A transfer recorded by hand on this leg's side: money out of this account, or money into it.
     const handEntered = pickMatch(
       { date, amount: Number(abs), names: spellings(r) },
       pool
@@ -578,14 +581,26 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
           (c) =>
             !taken.has(c.id) &&
             c.category === "transfer" &&
-            (c.accountId === r.financialAccountId || c.transferAccountId === r.financialAccountId),
+            (amount > 0 ? c.accountId : c.transferAccountId) === r.financialAccountId,
         )
         .map((c) => ({ ...c, originalAmount: Number(c.originalAmount) })),
     );
     if (handEntered) {
+      // Taken first, so a retry after a household edit leaves this leg in review instead.
       taken.add(handEntered.id);
+      const mine = sql`${r.financialAccountId}::int`;
+      const done = await db
+        .batch([
+          db.execute(sql`select 1 from transactions where id = ${handEntered.id} for update`),
+          claim(
+            [r.id],
+            handEntered.id,
+            fitsPair(sql`${handEntered.id}::int`, amount > 0 ? mine : null, amount > 0 ? null : mine, 0),
+          ),
+        ])
+        .catch(lost);
+      if (done === null) return lostRace();
       await refresh(handEntered.id, "transfer", r);
-      await markApplied(r.id, handEntered.id);
       stats.claimed++;
       return;
     }

@@ -340,12 +340,14 @@ try {
       .select()
       .from(s.transactions)
       .where(and(eq(s.transactions.groupId, G), eq(s.transactions.amount, amount), eq(s.transactions.category, "transfer")));
-  const recorded = async (bookId: number, accountId: number, transferAccountId: number, amount: string, postedOn: string) =>
+  const recorded = async (
+    bookId: number, accountId: number, transferAccountId: number, amount: string, postedOn: string, originalAmount = amount,
+  ) =>
     (
       await db
         .insert(s.transactions)
         .values({
-          groupId: G, bookId, accountId, transferAccountId, postedOn, merchant: "Transfer", amount, originalAmount: amount,
+          groupId: G, bookId, accountId, transferAccountId, postedOn, merchant: "Transfer", amount, originalAmount,
           category: "transfer", source: "manual",
         })
         .returning()
@@ -366,6 +368,54 @@ try {
     await applyPlaidItem(item.id);
     assert.deepEqual((await transfersOf("950.00")).map((t) => t.id), [cross.id]);
     assert.deepEqual([(await rawRow(cuOut.id)).ledgerTransactionId, (await rawRow(chIn.id)).ledgerTransactionId], [cross.id, cross.id]);
+  });
+
+  await check("Review 3 P1: a recorded transfer the household adjusted still takes both bank legs", async () => {
+    const adjusted = await recorded(A.id, checking, savings, "1380.00", "2026-11-19", "1400.00");
+    const out = await raw(pChecking, "1400.00", "TRANSFER_OUT", "Online transfer to savings", "2026-11-19");
+    const into = await raw(pSavings, "-1400.00", "TRANSFER_IN", "Online transfer from checking", "2026-11-19");
+    await applyPlaidItem(item.id);
+    assert.deepEqual([(await rawRow(out.id)).ledgerTransactionId, (await rawRow(into.id)).ledgerTransactionId], [adjusted.id, adjusted.id]);
+    assert.equal((await transfersOf("1400.00")).length, 0, "no second transfer");
+    const after = await ledger(adjusted.id);
+    assert.deepEqual([after.amount, after.originalAmount], ["1380.00", "1400.00"], "the adjustment stays");
+  });
+
+  await check("Review 3 P2: one bank leg takes a hand-entered transfer only on its own side", async () => {
+    const manual = await recorded(A.id, checking, savings, "1500.00", "2026-11-27");
+    // Money into Checking is not the transfer that left Checking.
+    const wrongSide = await raw(pChecking, "-1500.00", "TRANSFER_IN", "Transfer in", "2026-11-27");
+    await applyPlaidItem(item.id);
+    const wrongRow = (await rawRow(wrongSide.id)).ledgerTransactionId!;
+    assert.notEqual(wrongRow, manual.id);
+    assert.equal((await ledger(wrongRow)).needsReview, true, "the wrong-side leg waits in review");
+    const rightSide = await raw(pSavings, "-1500.00", "TRANSFER_IN", "Transfer in", "2026-11-27");
+    await applyPlaidItem(item.id);
+    assert.equal((await rawRow(rightSide.id)).ledgerTransactionId, manual.id, "money into Savings takes it");
+  });
+
+  await check("Review 3 P2: a household edit made during the sync keeps a hand-entered transfer", async () => {
+    const manual = await recorded(A.id, checking, savings, "1600.00", "2026-11-29");
+    // An earlier purchase saves slowly, so the household edit lands after the sync read the transfer.
+    await raw(pChecking, "16.00", "GENERAL_MERCHANDISE", "Slow Coffee", "2026-11-28");
+    const into = await raw(pSavings, "-1600.00", "TRANSFER_IN", "Transfer in", "2026-11-29");
+    await db.execute(sql.raw(`create function ${slowTrigger}() returns trigger language plpgsql as $$
+      begin perform pg_sleep(1.5); return new; end $$`));
+    await db.execute(sql.raw(`create trigger ${slowTrigger} before insert on transactions
+      for each row when (new.group_id = ${G}) execute function ${slowTrigger}()`));
+    try {
+      const sync = applyPlaidItem(item.id);
+      await new Promise((done) => setTimeout(done, 500));
+      await db.update(s.transactions).set({ transferAccountId: brokerage }).where(eq(s.transactions.id, manual.id));
+      await sync;
+    } finally {
+      await db.execute(sql.raw(`drop trigger ${slowTrigger} on transactions`));
+      await db.execute(sql.raw(`drop function ${slowTrigger}()`));
+    }
+    const intoRow = (await rawRow(into.id)).ledgerTransactionId!;
+    assert.notEqual(intoRow, manual.id, "the edited transfer is not taken");
+    assert.equal((await ledger(intoRow)).needsReview, true, "the leg waits in review");
+    assert.equal((await ledger(manual.id)).transferAccountId, brokerage, "the household edit stays");
   });
 
   await check("Review 2 P2: a household edit to a one-sided transfer is never overwritten", async () => {

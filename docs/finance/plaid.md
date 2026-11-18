@@ -86,8 +86,10 @@ Plaid's sign matches the ledger (positive = money out).
   or when its one-sided row is still a transfer whose accounts are empty or already these
   two; a leg skipped as a card payment, dismissed, already in a pair, or re-filed by the
   household never pairs. When both legs are new, they complete a transfer the household
-  already recorded (by hand, an alert or a Shortcut) before making a new row. Otherwise
-  the transfer waits in Needs review. A card's payment side skips the transfer as a card
+  already recorded (by hand, an alert or a Shortcut) before making a new row, matched
+  by its original amount so a household adjustment stays. A single leg takes a recorded
+  transfer only on its own side: money out of the account it left, money in to the
+  account it reached. Otherwise the transfer waits in Needs review. A card's payment side skips the transfer as a card
   payment; a refund on the card does not.
 - **A new bank row saves in one batch** with its share and its bank link, so a sync
   that fails part way never adds the same purchase twice on the retry. The batch links
