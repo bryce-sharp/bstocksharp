@@ -62,14 +62,21 @@ export async function shareFromRules(
   row: { id: number; merchant: string | null; category: string; spendCategory: string | null },
   rules?: SpendRule[],
 ): Promise<void> {
+  const share = ruleShare(book, row, rules ?? (await spendRulesFor(book)));
+  if (share) await db.insert(transactionShares).values(share).onConflictDoNothing();
+}
+
+/** The share that shareFromRules writes, for callers that save it in the same batch as the row. */
+export function ruleShare(
+  book: BookRef,
+  row: { id: number; merchant: string | null; category: string; spendCategory: string | null },
+  rules: SpendRule[],
+): typeof transactionShares.$inferInsert | null {
   const flow = flowOf(row.category);
-  if (!flow || !row.merchant) return;
-  const rule = longestMatchingRule(row.merchant, rulesForFlow(rules ?? (await spendRulesFor(book)), flow));
-  if (!rule?.alsoBookId || rule.alsoBookId === book.id) return;
-  await db
-    .insert(transactionShares)
-    .values({ transactionId: row.id, bookId: rule.alsoBookId, spendCategory: row.spendCategory })
-    .onConflictDoNothing();
+  if (!flow || !row.merchant) return null;
+  const rule = longestMatchingRule(row.merchant, rulesForFlow(rules, flow));
+  if (!rule?.alsoBookId || rule.alsoBookId === book.id) return null;
+  return { transactionId: row.id, bookId: rule.alsoBookId, spendCategory: row.spendCategory };
 }
 
 /** Tags in use for one flow — on its transactions and its rules — plus starters. */

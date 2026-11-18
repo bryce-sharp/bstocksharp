@@ -103,9 +103,13 @@ export async function setBookMembersAction(
   const members = await chosenPeople(formData);
   if (!members.length) return { error: "A book needs at least one member." };
   if (await noLoginLeft(members)) return { error: "Keep at least one member who has their own login." };
-  await db.delete(bookMembers).where(eq(bookMembers.bookId, bookId));
-  await db.insert(bookMembers).values(members.map((profileId) => ({ bookId, profileId })));
-  await db.update(books).set({ hubLogin: await hubTicked(formData) }).where(eq(books.id, bookId));
+  const hubLogin = await hubTicked(formData);
+  // One batch, so a failed save never leaves the book with no members.
+  await db.batch([
+    db.delete(bookMembers).where(eq(bookMembers.bookId, bookId)),
+    db.insert(bookMembers).values(members.map((profileId) => ({ bookId, profileId }))),
+    db.update(books).set({ hubLogin }).where(eq(books.id, bookId)),
+  ]);
   refresh();
   return { ok: true };
 }

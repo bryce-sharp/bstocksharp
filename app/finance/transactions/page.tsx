@@ -315,7 +315,7 @@ export default async function HistoryPage({
       </Stack>
 
       <TransactionsTable
-        key={JSON.stringify(listFilters)}
+        key={`${book.id}:${JSON.stringify(listFilters)}`}
         filters={listFilters}
         initialRows={page.rows}
         initialCursor={page.nextCursor}

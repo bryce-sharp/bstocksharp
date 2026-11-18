@@ -1,12 +1,14 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { and, desc, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { transactions, recurringExpenses, financialAccounts } from "@/lib/db/schema";
 import { parseAlertText, categorizeMerchant, type MerchantRule } from "@/lib/finance/sms";
 import { longestMatchingRule, spendCategoryFor } from "@/lib/finance/categorize";
-import { shareFromRules, spendRulesFor } from "@/lib/queries/finance-categories";
+import { ruleShare, spendRulesFor } from "@/lib/queries/finance-categories";
+import { reserveTransactionIds } from "@/lib/queries/finance-transactions";
 import { todayISO, dateInTz } from "@/lib/finance/parse";
+import { formatDate } from "@/lib/format";
 import { getGroupTimezone } from "@/lib/queries/group";
 import { type BookRef } from "@/lib/books";
 
@@ -177,6 +179,96 @@ export async function extraBillChargeNote(
 }
 
 /**
+ * Why a charge that no current bill claims needs a look, or null: it looks like a
+ * bill the household ended in the last year (its words, and within a quarter of
+ * its amount), so the cancel may not have gone through.
+ */
+export async function endedBillChargeNote(
+  book: BookRef,
+  names: string[],
+  amount: number,
+  postedOn: string,
+): Promise<string | null> {
+  if (amount <= 0 || !names.length) return null;
+  const ended = await db
+    .select({
+      id: recurringExpenses.id,
+      name: recurringExpenses.name,
+      amount: recurringExpenses.amount,
+      paymentsPerYear: recurringExpenses.paymentsPerYear,
+      merchantPatterns: recurringExpenses.merchantPatterns,
+      category: recurringExpenses.category,
+      dueMonths: recurringExpenses.dueMonths,
+      endDate: recurringExpenses.endDate,
+    })
+    .from(recurringExpenses)
+    .where(
+      and(
+        eq(recurringExpenses.bookId, book.id),
+        lt(recurringExpenses.endDate, postedOn),
+        sql`${recurringExpenses.endDate} >= ${postedOn}::date - interval '1 year'`,
+        // The whole bill ended: no version of it runs on this day or later.
+        sql`not exists (select 1 from recurring_expenses v
+          where coalesce(v.series_id, v.id) = coalesce(recurring_expenses.series_id, recurring_expenses.id)
+            and (v.end_date is null or v.end_date >= ${postedOn}))`,
+      ),
+    );
+  const rules: MerchantRule[] = ended.map((b) => ({
+    recurringExpenseId: b.id,
+    paymentsPerYear: b.paymentsPerYear,
+    patterns: b.merchantPatterns,
+    category: b.category,
+    amount: Number(b.amount),
+    dueMonths: b.dueMonths,
+  }));
+  for (const name of names) {
+    const { recurringExpenseId } = categorizeMerchant(name, rules, amount, postedOn);
+    const bill = ended.find((b) => b.id === recurringExpenseId);
+    if (bill && Math.abs(amount - Number(bill.amount)) <= Number(bill.amount) * 0.25) {
+      return `You ended ${bill.name} on ${formatDate(bill.endDate)}, but this looks like its charge. Check that the cancel went through.`;
+    }
+  }
+  return null;
+}
+
+/**
+ * Save an alert's row with its rule share, or return the row the same alert already
+ * made for this account in the last 10 minutes. The lock makes two deliveries that
+ * arrive together take turns, so the second one always sees the first.
+ */
+async function saveOnce(
+  book: BookRef,
+  accountId: number | null,
+  alert: string,
+  values: Omit<typeof transactions.$inferInsert, "id" | "groupId" | "bookId" | "rawHash"> & { category: string },
+): Promise<{ ok: true; id: number; deduped: true } | { ok: true; id: number; deduped: false }> {
+  const rawHash = createHash("sha256").update(`${values.source}|${accountId ?? ""}|${alert}`).digest("hex");
+  const [id] = await reserveTransactionIds(1);
+  const since = new Date(Date.now() - DEDUPE_WINDOW_MS).toISOString();
+  const share = ruleShare(
+    book,
+    { id, merchant: values.merchant ?? null, category: values.category, spendCategory: values.spendCategory ?? null },
+    await spendRulesFor(book),
+  );
+  const sameAlert = sql`d.book_id = ${book.id} and d.raw_hash = ${rawHash} and d.created_at >= ${since} and d.id <> ${id}`;
+  const [, , , dropped] = await db.batch([
+    db.execute(sql`select pg_advisory_xact_lock(hashtext(${`ingest:${book.id}:${rawHash}`}))`),
+    db.insert(transactions).values({ ...values, id, groupId: book.groupId, bookId: book.id, rawHash }),
+    db.execute(sql`
+      insert into transaction_shares (transaction_id, book_id, spend_category)
+      select ${id}::int, ${share?.bookId ?? null}::int, ${share?.spendCategory ?? null}::text
+      where ${share?.bookId ?? null}::int is not null`),
+    db.execute<{ earlier: number | null }>(sql`
+      with dropped as (
+        delete from transactions where id = ${id} and exists (select 1 from transactions d where ${sameAlert})
+      )
+      select (select max(d.id) from transactions d where ${sameAlert})::int as earlier`),
+  ]);
+  const earlier = dropped.rows[0]?.earlier;
+  return earlier ? { ok: true, id: earlier, deduped: true } : { ok: true, id, deduped: false };
+}
+
+/**
  * Turn one raw alert into a stored transaction.
  *  - Parseable → categorized against the effective recurring rules.
  *  - Unparseable → a needs-review row (amount 0, rawText kept) — NEVER dropped.
@@ -191,44 +283,22 @@ export async function ingestAlert(
   const body = text.trim().slice(0, MAX_ALERT_CHARS);
   if (!body) return { ok: false, reason: "empty" };
 
-  const rawHash = createHash("sha256").update(body).digest("hex");
-  const since = new Date(Date.now() - DEDUPE_WINDOW_MS);
-  const [dupe] = await db
-    .select({ id: transactions.id })
-    .from(transactions)
-    .where(
-      and(
-        eq(transactions.bookId, book.id),
-        eq(transactions.rawHash, rawHash),
-        gte(transactions.createdAt, since),
-      ),
-    )
-    .orderBy(desc(transactions.id))
-    .limit(1);
-  if (dupe) return { ok: true, id: dupe.id, deduped: true };
-
   const tz = await getGroupTimezone(book.groupId);
   const parsed = parseAlertText(body);
 
   if (!parsed) {
-    const [row] = await db
-      .insert(transactions)
-      .values({
-        groupId: book.groupId,
-        bookId: book.id,
-        accountId,
-        postedOn: todayISO(tz),
-        merchant: null,
-        amount: "0.00",
-        originalAmount: "0.00",
-        category: "discretionary",
-        source: "sms",
-        rawText: body,
-        rawHash,
-        needsReview: true,
-      })
-      .returning({ id: transactions.id });
-    return { ok: true, id: row.id, deduped: false, needsReview: true, category: "review" };
+    const saved = await saveOnce(book, accountId, body, {
+      accountId,
+      postedOn: todayISO(tz),
+      merchant: null,
+      amount: "0.00",
+      originalAmount: "0.00",
+      category: "discretionary",
+      source: "sms",
+      rawText: body,
+      needsReview: true,
+    });
+    return saved.deduped ? saved : { ...saved, needsReview: true, category: "review" };
   }
 
   // Chase clocks its alerts in Eastern; when the alert carried a time we know the
@@ -253,32 +323,26 @@ export async function ingestAlert(
   const note =
     category === "fixed"
       ? await extraBillChargeNote(book, recurringExpenseId, Number(parsed.amount), postedOn)
-      : null;
+      : !transfer && recurringExpenseId === null
+        ? await endedBillChargeNote(book, [parsed.merchant], Number(parsed.amount), postedOn)
+        : null;
 
-  const [row] = await db
-    .insert(transactions)
-    .values({
-      groupId: book.groupId,
-      bookId: book.id,
-      accountId: transfer ? transfer.accountId : accountId,
-      transferAccountId: transfer?.transferAccountId ?? null,
-      postedOn,
-      merchant: parsed.merchant,
-      amount: transfer?.amount ?? parsed.amount,
-      originalAmount: transfer?.amount ?? parsed.amount,
-      category,
-      recurringExpenseId,
-      spendCategory,
-      source: "sms",
-      rawText: body,
-      rawHash,
-      needsReview: note !== null,
-      note,
-    })
-    .returning({ id: transactions.id });
-  await shareFromRules(book, { id: row.id, merchant: parsed.merchant, category, spendCategory });
-
-  return { ok: true, id: row.id, deduped: false, needsReview: note !== null, category };
+  const saved = await saveOnce(book, accountId, body, {
+    accountId: transfer ? transfer.accountId : accountId,
+    transferAccountId: transfer?.transferAccountId ?? null,
+    postedOn,
+    merchant: parsed.merchant,
+    amount: transfer?.amount ?? parsed.amount,
+    originalAmount: transfer?.amount ?? parsed.amount,
+    category,
+    recurringExpenseId,
+    spendCategory,
+    source: "sms",
+    rawText: body,
+    needsReview: note !== null,
+    note,
+  });
+  return saved.deduped ? saved : { ...saved, needsReview: note !== null, category };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -346,25 +410,9 @@ export async function ingestStructured(
   const tz = await getGroupTimezone(book.groupId);
   const postedOn = normalizeDateLoose(input.date) ?? todayISO(tz);
 
-  // Dedupe on the canonical (amount|merchant|date), same 10-min window as SMS —
-  // Shortcuts double-fires here too. Versioned prefix so a structured hash can
-  // never collide with a raw-text one.
+  // Dedupe on the canonical (amount|merchant|date), same 10-min window as SMS:
+  // Shortcuts double-fires here too.
   const rawText = JSON.stringify({ amount, merchant, date: postedOn, note });
-  const rawHash = createHash("sha256").update(`v2|${rawText}`).digest("hex");
-  const since = new Date(Date.now() - DEDUPE_WINDOW_MS);
-  const [dupe] = await db
-    .select({ id: transactions.id })
-    .from(transactions)
-    .where(
-      and(
-        eq(transactions.bookId, book.id),
-        eq(transactions.rawHash, rawHash),
-        gte(transactions.createdAt, since),
-      ),
-    )
-    .orderBy(desc(transactions.id))
-    .limit(1);
-  if (dupe) return { ok: true, id: dupe.id, deduped: true };
 
   // A merchant lets us categorize (same rules as SMS); without one the row is
   // valid but uncategorizable, so it surfaces for review rather than hiding.
@@ -381,7 +429,11 @@ export async function ingestStructured(
     recurringExpenseId = null;
   }
   const extra =
-    category === "fixed" ? await extraBillChargeNote(book, recurringExpenseId, Number(amount), postedOn) : null;
+    category === "fixed"
+      ? await extraBillChargeNote(book, recurringExpenseId, Number(amount), postedOn)
+      : !transfer && merchant && recurringExpenseId === null
+        ? await endedBillChargeNote(book, [merchant], Number(amount), postedOn)
+        : null;
   const needsReview = merchant === null || extra !== null;
 
   // An explicit API category wins; otherwise derive it (bill inherit / rules).
@@ -396,28 +448,20 @@ export async function ingestStructured(
     );
   }
 
-  const [row] = await db
-    .insert(transactions)
-    .values({
-      groupId: book.groupId,
-      bookId: book.id,
-      accountId: transfer ? transfer.accountId : accountId,
-      transferAccountId: transfer?.transferAccountId ?? null,
-      postedOn,
-      merchant,
-      amount: transfer?.amount ?? amount,
-      originalAmount: transfer?.amount ?? amount,
-      category,
-      recurringExpenseId,
-      spendCategory,
-      source: "api",
-      rawText,
-      rawHash,
-      needsReview,
-      note: note ?? extra,
-    })
-    .returning({ id: transactions.id });
-  await shareFromRules(book, { id: row.id, merchant, category, spendCategory });
-
-  return { ok: true, id: row.id, deduped: false, needsReview, category };
+  const saved = await saveOnce(book, accountId, rawText, {
+    accountId: transfer ? transfer.accountId : accountId,
+    transferAccountId: transfer?.transferAccountId ?? null,
+    postedOn,
+    merchant,
+    amount: transfer?.amount ?? amount,
+    originalAmount: transfer?.amount ?? amount,
+    category,
+    recurringExpenseId,
+    spendCategory,
+    source: "api",
+    rawText,
+    needsReview,
+    note: note ?? extra,
+  });
+  return saved.deduped ? saved : { ...saved, needsReview, category };
 }

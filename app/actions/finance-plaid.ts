@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, inArray, isNotNull, isNull, ne } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { Plaid } from "plaid";
 import { db } from "@/lib/db";
 import {
@@ -316,34 +316,32 @@ export async function mapBankAccountAction(
     if (clash) return { error: `${target.name} already gets transactions from another bank account.` };
   }
 
-  await db
-    .update(plaidAccounts)
-    .set({ financialAccountId })
-    .where(eq(plaidAccounts.id, plaidAccountId));
-
-  // Pointing the feed at a different account moves what it already imported.
+  // Pointing the feed at a different account moves what it already imported: every
+  // part of a split, and a transfer kept in the other book of a between-books move.
+  // The bank account is this book's, so its rows scope the move.
   const { previous } = bankAccount;
-  if (previous !== null && financialAccountId !== null && previous !== financialAccountId) {
-    const imported = db
-      .select({ id: plaidTransactions.ledgerTransactionId })
-      .from(plaidTransactions)
-      .where(
-        and(
-          eq(plaidTransactions.plaidAccountId, plaidAccountId),
-          isNotNull(plaidTransactions.ledgerTransactionId),
-        ),
-      );
-    await db
-      .update(transactions)
-      .set({ accountId: financialAccountId })
-      .where(and(eq(transactions.bookId, book.id), eq(transactions.accountId, previous), inArray(transactions.id, imported)));
-    await db
-      .update(transactions)
-      .set({ transferAccountId: financialAccountId })
-      .where(
-        and(eq(transactions.bookId, book.id), eq(transactions.transferAccountId, previous), inArray(transactions.id, imported)),
-      );
-  }
+  const moved = previous !== null && financialAccountId !== null && previous !== financialAccountId;
+  const imported = db
+    .select({
+      id: sql<number>`unnest(${plaidTransactions.ledgerTransactionId} || coalesce(${plaidTransactions.splitLedgerIds}, '{}'))`,
+    })
+    .from(plaidTransactions)
+    .where(and(eq(plaidTransactions.plaidAccountId, plaidAccountId), isNotNull(plaidTransactions.ledgerTransactionId)));
+  await db.batch([
+    db.update(plaidAccounts).set({ financialAccountId }).where(eq(plaidAccounts.id, plaidAccountId)),
+    ...(moved
+      ? [
+          db
+            .update(transactions)
+            .set({ accountId: financialAccountId })
+            .where(and(eq(transactions.accountId, previous), inArray(transactions.id, imported))),
+          db
+            .update(transactions)
+            .set({ transferAccountId: financialAccountId })
+            .where(and(eq(transactions.transferAccountId, previous), inArray(transactions.id, imported))),
+        ]
+      : []),
+  ]);
 
   await db
     .update(plaidTransactions)

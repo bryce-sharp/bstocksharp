@@ -66,6 +66,10 @@ Plaid's sign matches the ledger (positive = money out).
   this month, and that takes the month past the bill's amount, lands in Needs review
   with a note, so an extra donation or a double charge never quietly cuts the budget.
   A bill's first charge of the month never does. Card alerts and the structured feed do the same.
+- **A charge like an ended bill:** a charge that no current bill claims, but that matches
+  the words of a bill the household ended in the last year and is within a quarter of its
+  amount, lands in Needs review with a note, in case the cancel did not go through. Card
+  alerts and the structured feed do the same.
 - **Payments recorded in parts:** when no single row matches, two or three rows that add
   up to the bank amount to the cent (within a day of each other, entered by hand or
   sharing the merchant) are claimed together (`plaid_transactions.split_ledger_ids`).
@@ -76,7 +80,13 @@ Plaid's sign matches the ledger (positive = money out).
 - **Deposits described as payroll or direct deposit** are income even when Plaid's category
   disagrees, so a mislabeled paycheck never becomes a large refund.
 - **Transfers between connected accounts** keep one ledger row (from, into); the
-  second leg's raw row points at the same ledger row.
+  second leg's raw row points at the same ledger row. Only the other side of a transfer
+  pairs (by Plaid's kind, never by amount and date alone), only when exactly one fits,
+  and never with a leg already in a pair or re-filed by the household; otherwise the
+  transfer waits in Needs review. A card's payment side skips the transfer as a card
+  payment; a refund on the card does not.
+- **A new bank row saves in one batch** with its share and its bank link, so a sync
+  that fails part way never adds the same purchase twice on the retry.
 - **Income** (`INCOME_*`) is stored positive in the income lane.
 - **Refunds:** money in that is not income or a transfer becomes a negative amount
   in the merchant's lane (Plaid has no refund category).

@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   transactions,
@@ -209,8 +209,10 @@ export async function updateTransactionAction(
     set.bookId = (from ?? into)!.bookId;
   } else {
     set.transferAccountId = null;
-    // Any other row stays in the book of its own account.
-    if (row.accountId != null && !has("accountId")) {
+    // Any other row stays in the book of its own account, so a new account must be this book's.
+    if (has("accountId")) {
+      set.accountId = (await validAccount(book, set.accountId as number | null))?.id ?? null;
+    } else if (row.accountId != null) {
       const own = await transferAccount(row.accountId);
       if (own) set.bookId = own.bookId;
     }
@@ -440,8 +442,10 @@ export async function adjustFundAction(
   const { row } = await scopedFund(fundId);
   const amount = parseMoney(formData.get("amount"));
   if (amount === null || Number(amount) === 0) throw new Error("Enter an amount.");
-  const next = (Number(row.startingBalance) + Number(amount)).toFixed(2);
-  await db.update(funds).set({ startingBalance: next }).where(eq(funds.id, fundId));
+  await db
+    .update(funds)
+    .set({ startingBalance: sql`${funds.startingBalance} + ${amount}` })
+    .where(eq(funds.id, row.id));
   revalidatePath(BUDGET);
 }
 

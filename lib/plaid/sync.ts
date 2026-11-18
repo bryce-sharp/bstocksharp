@@ -54,23 +54,31 @@ const chunks = <T,>(xs: T[]) =>
   Array.from({ length: Math.ceil(xs.length / CHUNK) }, (_, i) => xs.slice(i * CHUNK, (i + 1) * CHUNK));
 const money = (n: number | null | undefined) => (n == null ? null : n.toFixed(2));
 
-/** Run fn holding the item's lease, or return null when another run holds it. */
+/**
+ * Run fn holding the item's lease, or return null when another run holds it. The
+ * lease outlasts Vercel's 300-second function limit, so it never expires under a
+ * live run, and a run releases only its own lease.
+ */
 async function withLease<T>(plaidItemId: number, fn: () => Promise<T>): Promise<T | null> {
   const [held] = await db
     .update(plaidItems)
-    .set({ syncLockedUntil: sql`now() + interval '3 minutes'` })
+    .set({ syncLockedUntil: sql`now() + interval '6 minutes'` })
     .where(
       and(
         eq(plaidItems.id, plaidItemId),
         or(isNull(plaidItems.syncLockedUntil), lt(plaidItems.syncLockedUntil, sql`now()`)),
       ),
     )
-    .returning({ id: plaidItems.id });
+    // As text: a JavaScript Date drops the microseconds the release compares.
+    .returning({ until: sql<string>`${plaidItems.syncLockedUntil}::text` });
   if (!held) return null;
   try {
     return await fn();
   } finally {
-    await db.update(plaidItems).set({ syncLockedUntil: null }).where(eq(plaidItems.id, plaidItemId));
+    await db
+      .update(plaidItems)
+      .set({ syncLockedUntil: null })
+      .where(and(eq(plaidItems.id, plaidItemId), sql`${plaidItems.syncLockedUntil} = ${held.until}::timestamptz`));
   }
 }
 
