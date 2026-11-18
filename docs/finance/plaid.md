@@ -81,12 +81,15 @@ Plaid's sign matches the ledger (positive = money out).
   disagrees, so a mislabeled paycheck never becomes a large refund.
 - **Transfers between connected accounts** keep one ledger row (from, into); the
   second leg's raw row points at the same ledger row. Only the other side of a transfer
-  pairs (by Plaid's kind, never by amount and date alone), only when exactly one fits,
-  and never with a leg already in a pair or re-filed by the household; otherwise the
-  transfer waits in Needs review. A card's payment side skips the transfer as a card
-  payment; a refund on the card does not.
+  pairs (by Plaid's kind, never by amount and date alone). Pair only when exactly one
+  eligible transfer leg matches, and this row is that leg's only match too. A leg already
+  in a pair, or re-filed by the household, never pairs. Otherwise the transfer waits in
+  Needs review. A card's payment side skips the transfer as a card payment; a refund on
+  the card does not.
 - **A new bank row saves in one batch** with its share and its bank link, so a sync
-  that fails part way never adds the same purchase twice on the retry.
+  that fails part way never adds the same purchase twice on the retry. The batch links
+  the bank rows only if no other sync linked them first; otherwise it saves nothing, so
+  two banks syncing at once never record one transfer twice.
 - **Income** (`INCOME_*`) is stored positive in the income lane.
 - **Refunds:** money in that is not income or a transfer becomes a negative amount
   in the merchant's lane (Plaid has no refund category).

@@ -211,6 +211,10 @@ export async function endedBillChargeNote(
         sql`not exists (select 1 from recurring_expenses v
           where coalesce(v.series_id, v.id) = coalesce(recurring_expenses.series_id, recurring_expenses.id)
             and (v.end_date is null or v.end_date >= ${postedOn}))`,
+        // Only its last version: the price and end date it had when the household ended it.
+        sql`not exists (select 1 from recurring_expenses w
+          where coalesce(w.series_id, w.id) = coalesce(recurring_expenses.series_id, recurring_expenses.id)
+            and w.start_date > recurring_expenses.start_date)`,
       ),
     );
   const rules: MerchantRule[] = ended.map((b) => ({
@@ -232,9 +236,8 @@ export async function endedBillChargeNote(
 }
 
 /**
- * Save an alert's row with its rule share, or return the row the same alert already
- * made for this account in the last 10 minutes. The lock makes two deliveries that
- * arrive together take turns, so the second one always sees the first.
+ * Save the alert and its rule share. If the same account received the alert in the
+ * last ten minutes, return the existing row. An advisory lock serializes duplicate deliveries.
  */
 async function saveOnce(
   book: BookRef,

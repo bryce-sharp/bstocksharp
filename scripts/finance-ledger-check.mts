@@ -29,13 +29,20 @@ async function check(name: string, run: () => Promise<void>) {
 }
 
 const stamp = Date.now().toString(36);
+// Per-run names, so two runs at once never replace or drop each other's test triggers.
+const failFn = `audit_fail_${stamp}`;
+const linkTrigger = `audit_fail_link_${stamp}`;
+const shareTrigger = `audit_fail_share_${stamp}`;
+const slowTrigger = `audit_slow_${stamp}`;
 const [group] = await db.insert(s.groups).values({ name: `Finance audit check ${stamp}`, isDemo: true }).returning();
 const G = group.id;
 
 async function cleanup() {
-  await db.execute(sql`drop trigger if exists audit_fail_link on plaid_transactions`);
-  await db.execute(sql`drop trigger if exists audit_fail_share on transaction_shares`);
-  await db.execute(sql`drop function if exists audit_fail()`);
+  await db.execute(sql.raw(`drop trigger if exists ${linkTrigger} on plaid_transactions`));
+  await db.execute(sql.raw(`drop trigger if exists ${shareTrigger} on transaction_shares`));
+  await db.execute(sql.raw(`drop trigger if exists ${slowTrigger} on transactions`));
+  await db.execute(sql.raw(`drop function if exists ${failFn}()`));
+  await db.execute(sql.raw(`drop function if exists ${slowTrigger}()`));
   await db.delete(s.groups).where(eq(s.groups.id, G));
 }
 
@@ -72,6 +79,23 @@ try {
   const pSavings = await pacct(savings, "depository");
   const pCard = await pacct(card, "credit");
   const pBrokerage = await pacct(brokerage, "depository");
+  // A second bank, in the other book, for transfers that arrive through two syncs at once.
+  const [creditUnion] = await db
+    .insert(s.financialAccounts)
+    .values({ groupId: G, bookId: bookB.id, name: "Credit union", kind: "savings" })
+    .returning();
+  const [item2] = await db
+    .insert(s.plaidItems)
+    .values({
+      groupId: G, bookId: bookB.id, itemId: `audit-${stamp}-2`, environment: "sandbox", accessTokenEnc: "x",
+      institutionName: "Audit Credit Union", syncFrom: "2026-01-01",
+    })
+    .returning();
+  const [pCreditUnionRow] = await db
+    .insert(s.plaidAccounts)
+    .values({ plaidItemId: item2.id, accountId: `audit-${stamp}-cu`, financialAccountId: creditUnion.id, name: "x", type: "depository" })
+    .returning();
+  const pCreditUnion = pCreditUnionRow.id;
 
   type Raw = typeof s.plaidTransactions.$inferSelect;
   type Txn = typeof s.transactions.$inferSelect;
@@ -97,16 +121,16 @@ try {
 
   // F01: a failed bank link saves nothing, and the retry saves exactly one row with its share.
   await check('F01: a failed bank link saves nothing, and the retry saves exactly one row with its share.', async () => {
-    await db.execute(sql`create or replace function audit_fail() returns trigger language plpgsql as $$
-      begin raise exception 'audit: injected failure'; end $$`);
+    await db.execute(sql.raw(`create function ${failFn}() returns trigger language plpgsql as $$
+      begin raise exception 'audit: injected failure'; end $$`));
     const f01 = await raw(pChecking, "25.00", "GENERAL_MERCHANDISE", "SUPPLY CO", "2026-11-02");
-    await db.execute(sql.raw(`create trigger audit_fail_link before update on plaid_transactions
+    await db.execute(sql.raw(`create trigger ${linkTrigger} before update on plaid_transactions
       for each row when (new.transaction_id = '${f01.transactionId}' and new.ledger_transaction_id is not null)
-      execute function audit_fail()`));
+      execute function ${failFn}()`));
     try {
       await assert.rejects(applyPlaidItem(item.id));
     } finally {
-      await db.execute(sql`drop trigger audit_fail_link on plaid_transactions`);
+      await db.execute(sql.raw(`drop trigger ${linkTrigger} on plaid_transactions`));
     }
     assert.equal((await groupRows("SUPPLY CO")).length, 0, "no row after a failed link");
     await applyPlaidItem(item.id);
@@ -212,12 +236,13 @@ try {
       })
       .returning();
     await db.insert(s.transactionShares).values({ transactionId: m2.id, bookId: bookB.id, spendCategory: "Print" });
-    await db.execute(sql`create trigger audit_fail_share before insert on transaction_shares
-      for each row execute function audit_fail()`);
+    // Only shares into this run's test book fail, never another household's.
+    await db.execute(sql.raw(`create trigger ${shareTrigger} before insert on transaction_shares
+      for each row when (new.book_id = ${bookB.id}) execute function ${failFn}()`));
     try {
       await assert.rejects(splitTransactionForBook(A, m2.id, [{ amount: 30, category: "discretionary" }, { amount: 20, category: "discretionary" }]));
     } finally {
-      await db.execute(sql`drop trigger audit_fail_share on transaction_shares`);
+      await db.execute(sql.raw(`drop trigger ${shareTrigger} on transaction_shares`));
     }
     const m2Rows = await groupRows("Print Shop");
     assert.deepEqual(m2Rows.map((r) => r.amount), ["50.00"]);
@@ -286,6 +311,48 @@ try {
   });
 
   // Ended bill: a charge after the cancel waits in review; the bill's own month and other charges do not.
+  await check("Review P1: two banks syncing at once record one transfer", async () => {
+    // Slow every new test-household row, so both syncs read before either saves.
+    await db.execute(sql.raw(`create function ${slowTrigger}() returns trigger language plpgsql as $$
+      begin perform pg_sleep(1.5); return new; end $$`));
+    await db.execute(sql.raw(`create trigger ${slowTrigger} before insert on transactions
+      for each row when (new.group_id = ${G}) execute function ${slowTrigger}()`));
+    try {
+      const out = await raw(pChecking, "500.00", "TRANSFER_OUT", "Transfer to credit union", "2026-11-14");
+      const into = await raw(pCreditUnion, "-500.00", "TRANSFER_IN", "Transfer from checking", "2026-11-14");
+      await Promise.all([applyPlaidItem(item.id), applyPlaidItem(item2.id)]);
+      const rows = await db
+        .select()
+        .from(s.transactions)
+        .where(and(eq(s.transactions.groupId, G), eq(s.transactions.amount, "500.00"), eq(s.transactions.category, "transfer")));
+      assert.equal(rows.length, 1, "one transfer row, not two");
+      const [outRow, intoRow] = [await rawRow(out.id), await rawRow(into.id)];
+      assert.deepEqual([outRow.ledgerTransactionId, intoRow.ledgerTransactionId], [rows[0].id, rows[0].id]);
+      assert.deepEqual([rows[0].accountId, rows[0].transferAccountId], [checking, creditUnion.id]);
+    } finally {
+      await db.execute(sql.raw(`drop trigger ${slowTrigger} on transactions`));
+    }
+  });
+
+  await check("Review P2: an ambiguous transfer stays in review in either order", async () => {
+    // One out, two in: the out leg has two partners, so nothing pairs.
+    const o = await raw(pChecking, "700.00", "TRANSFER_OUT", "Transfer out", "2026-11-16");
+    const i1 = await raw(pSavings, "-700.00", "TRANSFER_IN", "Transfer in", "2026-11-16");
+    const i2 = await raw(pBrokerage, "-700.00", "TRANSFER_IN", "Transfer in", "2026-11-16");
+    await applyPlaidItem(item.id);
+    const first = await Promise.all([o, i1, i2].map(async (r) => (await rawRow(r.id)).ledgerTransactionId));
+    assert.equal(new Set(first).size, 3, "three separate rows");
+    for (const id of first) assert.equal((await ledger(id!)).needsReview, true);
+    // The same with the two in legs arriving before the out leg.
+    const j1 = await raw(pSavings, "-800.00", "TRANSFER_IN", "Transfer in", "2026-11-17");
+    const j2 = await raw(pBrokerage, "-800.00", "TRANSFER_IN", "Transfer in", "2026-11-17");
+    const p = await raw(pChecking, "800.00", "TRANSFER_OUT", "Transfer out", "2026-11-18");
+    await applyPlaidItem(item.id);
+    const second = await Promise.all([j1, j2, p].map(async (r) => (await rawRow(r.id)).ledgerTransactionId));
+    assert.equal(new Set(second).size, 3, "three separate rows");
+    for (const id of second) assert.equal((await ledger(id!)).needsReview, true);
+  });
+
   await check('Ended bill: a charge after canceling waits in review with a note', async () => {
     await db.insert(s.recurringExpenses).values({
       groupId: G, bookId: A.id, name: "Spectrum", amount: "150.00", paymentsPerYear: 12, merchantPatterns: ["SPECTRUM"],
@@ -317,6 +384,19 @@ try {
     assert.match((await ledger(viaAlert.id)).note ?? "", /You ended Spectrum/);
     const late = await ingestStructured(A, { amount: "150.00", merchant: "SPECTRUM", date: "2027-11-25" }, checking);
     assert.ok(late.ok && !late.deduped && !late.needsReview, "more than a year later is a new purchase");
+    // Only the last version counts: $100 through Sep 30, then $200 until the cancel on Oct 20.
+    const [cox1] = await db
+      .insert(s.recurringExpenses)
+      .values({ groupId: G, bookId: A.id, name: "Cox", amount: "100.00", merchantPatterns: ["COX CABLE"], startDate: "2026-01-01", endDate: "2026-09-30" })
+      .returning();
+    await db.insert(s.recurringExpenses).values({
+      groupId: G, bookId: A.id, name: "Cox", amount: "200.00", merchantPatterns: ["COX CABLE"], startDate: "2026-10-01", endDate: "2026-10-20", seriesId: cox1.id,
+    });
+    const oldPrice = await ingestStructured(A, { amount: "100.00", merchant: "COX CABLE", date: "2026-11-20" }, checking);
+    assert.ok(oldPrice.ok && !oldPrice.deduped && !oldPrice.needsReview, "an old price is not the canceled bill");
+    const lastPrice = await ingestStructured(A, { amount: "200.00", merchant: "COX CABLE", date: "2026-11-20" }, checking);
+    assert.ok(lastPrice.ok && !lastPrice.deduped && lastPrice.needsReview);
+    assert.match((await ledger(lastPrice.id)).note ?? "", /You ended Cox on Oct 20, 2026/);
   });
 
   // F11: two adjustments at once both count.
