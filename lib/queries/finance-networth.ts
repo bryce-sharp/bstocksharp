@@ -455,12 +455,16 @@ function contributionsFor(
     const out: Split = new Map();
     const monthEnd = lastDayOfMonth(month);
     for (const profileId of people) {
-      const plan = effectiveAt(plans.filter((p) => p.profileId === profileId), monthEnd).at(-1);
-      const freq = plan?.payFrequency;
-      if (freq === "semimonthly" || freq === "monthly") {
-        payday(out, profileId, lastDayOfMonth(addMonths(month, -1)));
-        if (freq === "semimonthly") payday(out, profileId, `${month.slice(0, 7)}-15`);
-      } else if (plan) {
+      const planOn = (date: string) => effectiveAt(plans.filter((p) => p.profileId === profileId), date).at(-1);
+      const onPayday = (date: string) => ["semimonthly", "monthly"].includes(planOn(date)?.payFrequency ?? "");
+      // Last month's final payday lands now, under the plan in effect that day, even
+      // if the plan ended with that month (a deactivated person's last paycheck).
+      const prevEnd = lastDayOfMonth(addMonths(month, -1));
+      if (onPayday(prevEnd)) payday(out, profileId, prevEnd);
+      const mid = `${month.slice(0, 7)}-15`;
+      if (planOn(mid)?.payFrequency === "semimonthly") payday(out, profileId, mid);
+      const plan = planOn(monthEnd);
+      if (plan && !onPayday(monthEnd)) {
         payday(out, profileId, monthEnd, (PAYCHECKS_PER_YEAR[plan.payFrequency] ?? 24) / 12);
       }
     }

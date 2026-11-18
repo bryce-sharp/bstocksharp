@@ -105,6 +105,8 @@ export type AmortizedRow = {
   dueThisMonth: boolean;
   /** What actually posted this month (consumes the reserve); null = nothing. */
   paidThisMonthC: number | null;
+  /** Outside this month's plan: nothing set aside, and its payment adjusts spending. */
+  outsidePlan: boolean;
 };
 
 export type BudgetComputation = {
@@ -114,7 +116,7 @@ export type BudgetComputation = {
   dayOfMonth: number; // pace basis (= daysInMonth for past months)
   discretionary: {
     baseBudgetC: number;
-    estimateAdjustmentC: number; // Σ(estimate − actual) for posted estimates
+    estimateAdjustmentC: number; // Σ(expected − actual) for posted fixed bills, minus payments on set-aside bills outside the plan
     budgetC: number; // base + adjustment
     spentC: number; // Σ discretionary txns (gross)
     reimbursedC: number; // Σ reimbursement txns
@@ -214,10 +216,6 @@ export function computeBudgetMonth(input: EngineInput): BudgetComputation {
       deltaC: actual !== null ? expectedC - actual : null,
     };
   });
-  // A posted actual replaces its plan; the difference flows into (or out of) the
-  // discretionary budget. (Named "estimate" adjustment for history — it's now
-  // every fixed bill, not just estimates.)
-  const estimateAdjustmentC = fixedRows.reduce((s, r) => s + (r.deltaC ?? 0), 0);
 
   // ── Amortized lane: sinking funds ────────────────────────────────────────────
   // Outside the plan, a bill sets nothing aside and shows only when it was paid.
@@ -239,8 +237,17 @@ export function computeBudgetMonth(input: EngineInput): BudgetComputation {
       monthsAccrued,
       dueThisMonth: r.dueThisMonth,
       paidThisMonthC: paid,
+      outsidePlan: !r.inPlan,
     };
   });
+
+  // A posted actual replaces its plan; the difference flows into (or out of) the
+  // discretionary budget. (Named "estimate" adjustment for history — it's now
+  // every fixed bill, not just estimates.)
+  // A set-aside bill outside the plan saved nothing for its payment, so the payment
+  // (or a refund of it) comes out of spending once, like a fixed bill outside the plan.
+  const outsidePlanPaidC = amortizedRows.reduce((s, r) => s + (r.outsidePlan ? (r.paidThisMonthC ?? 0) : 0), 0);
+  const estimateAdjustmentC = fixedRows.reduce((s, r) => s + (r.deltaC ?? 0), 0) - outsidePlanPaidC;
 
   // ── Discretionary lane (the headline) ────────────────────────────────────────
   const spentC = sum("discretionary");

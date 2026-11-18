@@ -67,6 +67,7 @@ export default async function AtlasPage({
     name: p.name,
     color: p.color,
     comp: {
+      planId: p.plan.id,
       payFrequency: p.plan.payFrequency,
       grossPerPaycheck: p.grossPerPaycheck,
       baseSalary: p.plan.baseSalary != null ? Number(p.plan.baseSalary) : null,

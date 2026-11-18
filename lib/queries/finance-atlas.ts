@@ -43,10 +43,10 @@ export const PAYCHECKS_PER_YEAR: Record<string, number> = {
 
 type Dated = { startDate: string; endDate: string | null };
 /**
- * The writes that end a person's pay in every book when they are deactivated. Their
- * open pay plans and paycheck deductions end with the household's current month, so
- * past months keep their pay and reactivating them never brings it back. A plan or
- * deduction that starts after this month never ran, so it is removed.
+ * The writes that end a person's pay in every book when they are deactivated. End open
+ * pay plans and deductions on the last day of the household's current month. Preserve
+ * past income. Reactivation does not reopen ended plans or deductions. Remove plans and
+ * deductions that start after that month.
  */
 export function payEndWrites(profileId: number, today: string) {
   const monthEnd = lastDayOfMonth(today);

@@ -305,7 +305,13 @@ export default async function BudgetPage({
           {Math.abs(d(disc.estimateAdjustmentC)).toFixed(2)}:{" "}
           {[
             names(c.fixed.rows.filter((r) => r.deltaC && r.expectedC > 0), "came in different from the plan"),
-            names(c.fixed.rows.filter((r) => r.deltaC && r.expectedC === 0), "was paid this month but is not in the plan"),
+            names(
+              [
+                ...c.fixed.rows.filter((r) => r.deltaC && r.expectedC === 0),
+                ...c.amortized.rows.filter((r) => r.outsidePlan && r.paidThisMonthC),
+              ],
+              "was paid this month but is not in the plan",
+            ),
           ]
             .filter(Boolean)
             .join("; ")}

@@ -199,7 +199,7 @@ try {
     assert.equal(nov.computation.discretionary.budgetC, nov.computation.discretionary.baseBudgetC - 10000);
   });
 
-  await check("F12 review: an ended annual bill sets nothing aside, and a payment it got still shows", async () => {
+  await check("F12 review: an ended annual bill reserves nothing and still shows its actual payment", async () => {
     const { ref, accountId } = await newBook("Annual bills");
     await db.insert(s.recurringExpenses).values({
       groupId: G, bookId: ref.id, name: "Insurance", amount: "1200.00", paymentsPerYear: 1, startDate: "2026-01-01", endDate: "2026-11-15",
@@ -255,6 +255,56 @@ try {
     const dash = await getNetWorthDashboardForBook(ref, "all", "2026-11-20");
     assert.equal(dash.totals[dash.months.indexOf("2026-10-01")], 1200);
   });
+  await check("F12 review 2: an annual payment outside the plan, or its refund, changes spending money once", async () => {
+    const { ref, accountId } = await newBook("Annual payments");
+    const [future] = await db
+      .insert(s.recurringExpenses)
+      .values({ groupId: G, bookId: ref.id, name: "Insurance", amount: "1200.00", paymentsPerYear: 1, startDate: "2026-12-01" })
+      .returning();
+    const [gone] = await db
+      .insert(s.recurringExpenses)
+      .values({ groupId: G, bookId: ref.id, name: "Gym", amount: "300.00", paymentsPerYear: 1, startDate: "2026-01-01", endDate: "2026-10-31" })
+      .returning();
+    const pay = (postedOn: string, amount: string, recurringExpenseId: number) => ({
+      groupId: G, bookId: ref.id, accountId, postedOn, merchant: "Bill", amount, originalAmount: amount,
+      category: "amortized", recurringExpenseId, source: "manual",
+    });
+    // Paid before the bill starts, and a refund from a bill that already ended.
+    await db.insert(s.transactions).values([pay("2026-11-10", "1200.00", future.id), pay("2026-11-05", "-30.00", gone.id)]);
+    const nov = await getBudgetMonthForBook(ref, "2026-11-01", "2026-11-20");
+    const d = nov.computation.discretionary;
+    assert.equal(d.budgetC - d.baseBudgetC, -120000 + 3000, "the $1,200 comes out once and the $30 refund goes back");
+    assert.equal(d.remainingC, d.budgetC - d.netSpentC);
+    assert.equal(nov.computation.amortized.reservedMonthlyC, 0);
+  });
+
+  await check("F14 review 2: net worth keeps the last paycheck deduction after deactivation", async () => {
+    const { ref } = await newBook("Paycheck savings");
+    const hsa = async (name: string) =>
+      (await db.insert(s.financialAccounts).values({ groupId: G, bookId: ref.id, name, kind: "hsa" }).returning())[0].id;
+    const [monthlyHsa, semiHsa] = [await hsa("HSA monthly"), await hsa("HSA twice a month")];
+    const person = async (name: string, payFrequency: string, depositAccountId: number) => {
+      const [p] = await db.insert(s.profiles).values({ groupId: G, name }).returning();
+      await db.insert(s.compensationPlans).values({ profileId: p.id, bookId: ref.id, payFrequency, grossPerPaycheck: "1000.00", startDate: "2026-01-01" });
+      await db.insert(s.incomeDeductions).values({
+        profileId: p.id, bookId: ref.id, name: "HSA", type: "health", amountPerPaycheck: "100.00", depositAccountId, startDate: "2026-01-01",
+      });
+      return p.id;
+    };
+    const ids = [await person("Morgan", "monthly", monthlyHsa), await person("Riley", "semimonthly", semiHsa)];
+    for (const id of [monthlyHsa, semiHsa]) {
+      await db.insert(s.accountSnapshots).values(
+        ["2026-10-01", "2026-11-01", "2026-12-01"].map((month) => ({ accountId: id, month, balance: "1000.00" })),
+      );
+    }
+    for (const id of ids) await db.batch(payEndWrites(id, "2026-11-20"));
+    const dash = await getNetWorthDashboardForBook(ref, "all", "2027-01-05");
+    // A month-end payday lands the next month: November gets Oct 31's, December gets Nov 30's.
+    assert.deepEqual(dash.contributions[monthlyHsa].cumulative, [0, 100, 200]);
+    // Twice a month: November gets Oct 31 and Nov 15; December gets Nov 30 only.
+    assert.deepEqual(dash.contributions[semiHsa].cumulative, [0, 200, 300]);
+  });
+
 } finally {
   await db.delete(s.groups).where(eq(s.groups.id, G));
   const left = await db.select({ id: s.groups.id }).from(s.groups).where(eq(s.groups.id, G));

@@ -83,9 +83,9 @@ export async function getBudgetMonthForBook(
   const discretionaryBudgetC = cents(atlas.totals.discretionLeft);
   const hasIncome = atlas.totals.monthlyNet > 0;
 
-  // The month's bills, plus any bill a payment this month is filed under even if it
-  // ended earlier or starts later (it plans $0; see inPlan). Then each one's last
-  // matched payment BEFORE this month.
+  // Load bills active during the month and bills referenced by its confirmed payments.
+  // A bill outside the plan has an expected amount of $0 (inPlan). Also load each
+  // bill's last confirmed payment before the month.
   const paidThisMonth = db
     .select({ id: transactions.recurringExpenseId })
     .from(transactions)
