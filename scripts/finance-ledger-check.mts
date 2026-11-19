@@ -34,6 +34,7 @@ const failFn = `audit_fail_${stamp}`;
 const linkTrigger = `audit_fail_link_${stamp}`;
 const shareTrigger = `audit_fail_share_${stamp}`;
 const slowTrigger = `audit_slow_${stamp}`;
+const slowSeq = `audit_slow_seq_${stamp}`;
 const [group] = await db.insert(s.groups).values({ name: `Finance audit check ${stamp}`, isDemo: true }).returning();
 const G = group.id;
 
@@ -43,6 +44,7 @@ async function cleanup() {
   await db.execute(sql.raw(`drop trigger if exists ${slowTrigger} on transactions`));
   await db.execute(sql.raw(`drop function if exists ${failFn}()`));
   await db.execute(sql.raw(`drop function if exists ${slowTrigger}()`));
+  await db.execute(sql.raw(`drop sequence if exists ${slowSeq}`));
   await db.delete(s.groups).where(eq(s.groups.id, G));
 }
 
@@ -394,28 +396,59 @@ try {
     assert.equal((await rawRow(rightSide.id)).ledgerTransactionId, manual.id, "money into Savings takes it");
   });
 
-  await check("Review 3 P2: a household edit made during the sync keeps a hand-entered transfer", async () => {
-    const manual = await recorded(A.id, checking, savings, "1600.00", "2026-11-29");
-    // An earlier purchase saves slowly, so the household edit lands after the sync read the transfer.
-    await raw(pChecking, "16.00", "GENERAL_MERCHANDISE", "Slow Coffee", "2026-11-28");
-    const into = await raw(pSavings, "-1600.00", "TRANSFER_IN", "Transfer in", "2026-11-29");
+  // An earlier purchase saves slowly. Its trigger bumps a sequence first (visible at once to
+  // other sessions), so the household edit lands after the sync read the transfer.
+  const editDuringSync = async (amount: string, buyOn: string, legOn: string, leg: () => Promise<Raw>, edit: Partial<Txn>) => {
+    const manual = await recorded(A.id, checking, savings, amount, legOn);
+    await raw(pChecking, "16.00", "GENERAL_MERCHANDISE", "Slow Coffee", buyOn);
+    const bank = await leg();
+    await db.execute(sql.raw(`create sequence ${slowSeq}`));
     await db.execute(sql.raw(`create function ${slowTrigger}() returns trigger language plpgsql as $$
-      begin perform pg_sleep(1.5); return new; end $$`));
+      begin perform nextval('${slowSeq}'); perform pg_sleep(1.5); return new; end $$`));
     await db.execute(sql.raw(`create trigger ${slowTrigger} before insert on transactions
       for each row when (new.group_id = ${G}) execute function ${slowTrigger}()`));
     try {
       const sync = applyPlaidItem(item.id);
-      await new Promise((done) => setTimeout(done, 500));
-      await db.update(s.transactions).set({ transferAccountId: brokerage }).where(eq(s.transactions.id, manual.id));
+      for (let i = 0; ; i++) {
+        const { rows } = await db.execute<{ is_called: boolean }>(sql.raw(`select is_called from ${slowSeq}`));
+        if (rows[0]?.is_called) break;
+        if (i > 100) throw new Error("the sync never reached the slow purchase");
+        await new Promise((done) => setTimeout(done, 100));
+      }
+      await db.update(s.transactions).set(edit).where(eq(s.transactions.id, manual.id));
       await sync;
     } finally {
       await db.execute(sql.raw(`drop trigger ${slowTrigger} on transactions`));
       await db.execute(sql.raw(`drop function ${slowTrigger}()`));
+      await db.execute(sql.raw(`drop sequence ${slowSeq}`));
     }
-    const intoRow = (await rawRow(into.id)).ledgerTransactionId!;
-    assert.notEqual(intoRow, manual.id, "the edited transfer is not taken");
-    assert.equal((await ledger(intoRow)).needsReview, true, "the leg waits in review");
-    assert.equal((await ledger(manual.id)).transferAccountId, brokerage, "the household edit stays");
+    const bankRow = (await rawRow(bank.id)).ledgerTransactionId!;
+    assert.notEqual(bankRow, manual.id, "the edited transfer is not taken");
+    assert.equal((await ledger(bankRow)).needsReview, true, "the leg waits in review");
+    return ledger(manual.id);
+  };
+
+  await check("Review 3 P2: a household edit made during the sync keeps a hand-entered transfer", async () => {
+    const moved = await editDuringSync("1600.00", "2026-11-28", "2026-11-29",
+      () => raw(pSavings, "-1600.00", "TRANSFER_IN", "Transfer in", "2026-11-29"), { transferAccountId: brokerage });
+    assert.equal(moved.transferAccountId, brokerage, "the new destination stays");
+  });
+
+  await check("Review 4 P2: clearing a hand-entered transfer's source during the sync keeps it", async () => {
+    const cleared = await editDuringSync("5000.00", "2026-12-01", "2026-12-02",
+      () => raw(pChecking, "5000.00", "TRANSFER_OUT", "Transfer out", "2026-12-02"), { accountId: null });
+    assert.equal(cleared.accountId, null, "the cleared source stays");
+  });
+
+  await check("A bank transfer takes a hand-entered transfer only at the same amount", async () => {
+    const manual = await recorded(A.id, checking, savings, "1800.00", "2026-12-10");
+    // Within the 65-135% band that lets a purchase claim its alert before a tip.
+    const bigger = await raw(pChecking, "1900.00", "TRANSFER_OUT", "Transfer out", "2026-12-10");
+    await applyPlaidItem(item.id);
+    const biggerRow = (await rawRow(bigger.id)).ledgerTransactionId!;
+    assert.notEqual(biggerRow, manual.id, "a different amount is not this transfer");
+    assert.equal((await ledger(biggerRow)).needsReview, true, "the leg waits in review");
+    assert.deepEqual([(await ledger(manual.id)).amount, (await ledger(manual.id)).originalAmount], ["1800.00", "1800.00"]);
   });
 
   await check("Review 2 P2: a household edit to a one-sided transfer is never overwritten", async () => {

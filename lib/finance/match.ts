@@ -41,9 +41,14 @@ export type BankFacts = {
  * The ledger row a bank transaction should claim, or null. Within -3..+5 days:
  * the same amount wins first (best merchant likeness, then the nearest date;
  * a merchant that shares nothing must be within a day); failing that, the same
- * place at 65-135% of the amount (a tip added after the alert).
+ * place at 65-135% of the amount (a tip added after the alert). Transfers pass
+ * `allowTip: false`, because a transfer never grows after it is recorded.
  */
-export function pickMatch<T extends MatchCandidate>(bank: BankFacts, candidates: T[]): T | null {
+export function pickMatch<T extends MatchCandidate>(
+  bank: BankFacts,
+  candidates: T[],
+  { allowTip = true }: { allowTip?: boolean } = {},
+): T | null {
   const near = candidates.filter((c) => {
     const gap = dayGap(c.postedOn, bank.date);
     return gap >= -3 && gap <= 5;
@@ -64,7 +69,7 @@ export function pickMatch<T extends MatchCandidate>(bank: BankFacts, candidates:
       (like(c) >= 1 || Math.abs(dayGap(c.postedOn, bank.date)) <= 1),
   );
   if (exact.length) return best(exact);
-  if (bank.amount <= 0) return null;
+  if (bank.amount <= 0 || !allowTip) return null;
   return best(
     near.filter((c) => {
       const ratio = c.originalAmount / bank.amount;

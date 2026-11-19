@@ -234,9 +234,10 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
    * The one rule for whether an existing ledger row can become the transfer `from` →
    * `into`: it is still a transfer, its accounts are empty or already these, and
    * exactly `owners` live bank rows link it (1 for a one-sided bank row, 0 for a row
-   * entered by hand). A null account is one a single bank leg does not know, so any
-   * account fits there. Pairing checks the rule when reading, and the claim checks it
-   * again under the row lock, so a household edit made in between always wins.
+   * entered by hand). A null `from` or `into` skips that account check: a single bank
+   * leg checks its one known account exactly instead. Pairing checks the rule when
+   * reading, and the claim checks it again under the row lock, so a household edit
+   * made in between always wins.
    */
   const fitsPair = (ledgerId: SQL, from: SQL | null, into: SQL | null, owners: 0 | 1) => sql`exists (
     select 1 from transactions t
@@ -446,7 +447,7 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
         and(
           eq(transactions.bookId, bookId),
           ne(transactions.source, "plaid"),
-          // The original amount, so a household-adjusted amount still matches.
+          // Match the original amount; refresh keeps a household-adjusted amount.
           eq(transactions.originalAmount, amount),
           or(eq(transactions.accountId, fromId), eq(transactions.transferAccountId, intoId)),
           gte(transactions.postedOn, shiftDays(date, -7)),
@@ -457,6 +458,7 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
     return pickMatch(
       { date, amount: Number(amount), names: spellings(r) },
       candidates.filter((c) => !taken.has(c.id)).map((c) => ({ ...c, originalAmount: Number(c.originalAmount) })),
+      { allowTip: false },
     );
   }
 
@@ -573,7 +575,8 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
       return;
     }
 
-    // A transfer recorded by hand on this leg's side: money out of this account, or money into it.
+    // A transfer recorded by hand: an outgoing bank row matches its source account, an incoming row its destination.
+    const known = amount > 0 ? sql`account_id` : sql`transfer_account_id`;
     const handEntered = pickMatch(
       { date, amount: Number(abs), names: spellings(r) },
       pool
@@ -584,18 +587,20 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
             (amount > 0 ? c.accountId : c.transferAccountId) === r.financialAccountId,
         )
         .map((c) => ({ ...c, originalAmount: Number(c.originalAmount) })),
+      { allowTip: false },
     );
     if (handEntered) {
-      // Taken first, so a retry after a household edit leaves this leg in review instead.
+      // Marked taken before the claim, so a retry never picks the same row again.
       taken.add(handEntered.id);
-      const mine = sql`${r.financialAccountId}::int`;
+      const id = sql`${handEntered.id}::int`;
       const done = await db
         .batch([
-          db.execute(sql`select 1 from transactions where id = ${handEntered.id} for update`),
+          db.execute(sql`select 1 from transactions where id = ${id} for update`),
           claim(
             [r.id],
             handEntered.id,
-            fitsPair(sql`${handEntered.id}::int`, amount > 0 ? mine : null, amount > 0 ? null : mine, 0),
+            sql`${fitsPair(id, null, null, 0)}
+              and exists (select 1 from transactions where id = ${id} and ${known} = ${r.financialAccountId}::int)`,
           ),
         ])
         .catch(lost);
