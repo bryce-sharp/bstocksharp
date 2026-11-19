@@ -446,7 +446,7 @@ export const RECORDINGS: Recording[] = [
   {
     id: "rainOnTheQuilt",
     name: "Rain on the Quilt",
-    feel: "Vibraphone, keys and soft drums: the tune, a bouncy kalimba middle, then the tune again with the kalimba answering. About 2 minutes a loop.",
+    feel: "Vibraphone, keys and soft drums: the tune, a bouncy kalimba middle, then the tune again, where the kalimba answers it and then takes it for a few bars. About 2 minutes a loop.",
     src: "/games/snug/rain-on-the-quilt.m4a",
   },
 ];
