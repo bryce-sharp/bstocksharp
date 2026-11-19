@@ -84,7 +84,9 @@ export function MonthCrowdView({ monthKey }: { monthKey: string }) {
     <Section title="Everyone this month" note={plural(crowd.players, "player")}>
       <Row>
         <Figure label="Days played" value={crowd.medianDays ?? "–"} sub="typical player" />
-        {crowd.medianMs !== null && <Figure label="Typical time" value={time(crowd.medianMs)} sub={`average ${time(crowd.meanMs)}`} />}
+        {crowd.medianMs !== null && (
+          <Figure label="Typical time" value={time(crowd.medianMs)} sub={time(crowd.meanMs) === time(crowd.medianMs) ? undefined : `average ${time(crowd.meanMs)}`} />
+        )}
         {crowd.completed !== null && <Figure label="Quilts done" value={crowd.completed} />}
         {crowd.perfectMonths !== null && <Figure label="Perfect months" value={crowd.perfectMonths} />}
       </Row>
@@ -110,7 +112,8 @@ export function DayCrowdLine({ dateKey, run, scored }: { dateKey: string; run: R
         {crowd.medianMs !== null && (
           <>
             {" "}
-            &middot; typical {time(crowd.medianMs)} (average {time(crowd.meanMs)})
+            &middot; typical {time(crowd.medianMs)}
+            {time(crowd.meanMs) !== time(crowd.medianMs) && <> (average {time(crowd.meanMs)})</>}
           </>
         )}
       </div>
@@ -236,14 +239,18 @@ export function StatsPanel({ launch, today }: { launch: string; today: string })
       </Section>
 
       {s.byLevel.length > 0 && (
-        <Section title="Time by difficulty" note="Typical time on perfect days; average after it">
+        <Section title="Time by difficulty" note="Typical time on perfect days; average after it when it differs">
           <Bars
-            rows={s.byLevel.map((l) => ({
-              label: l.name,
-              value: l.medianMs,
-              text: `${formatDuration(l.medianMs)} · ${formatDuration(l.meanMs)}`,
-              title: `${l.name}: typical ${formatDuration(l.medianMs)}, average ${formatDuration(l.meanMs)} over ${plural(l.count, "day")}`,
-            }))}
+            rows={s.byLevel.map((l) => {
+              const typical = formatDuration(l.medianMs);
+              const average = formatDuration(l.meanMs);
+              return {
+                label: l.name,
+                value: l.medianMs,
+                text: typical === average ? typical : `${typical} · ${average}`,
+                title: `${l.name}: typical ${typical}, average ${average} over ${plural(l.count, "day")}`,
+              };
+            })}
           />
         </Section>
       )}
@@ -275,9 +282,6 @@ export function StatsPanel({ launch, today }: { launch: string; today: string })
         <Fact label="Perfect with no hints">{plural(s.perfectNoHints, "day")}</Fact>
         <Fact label="Hints used">{s.hints}</Fact>
         <Fact label="Days caught up later">{s.caughtUp}</Fact>
-        {timed > 0 && timed < s.runs.length && (
-          <div style={{ fontSize: 11.5, opacity: 0.6, marginTop: 6 }}>Time of day counts {plural(timed, "day")}; older runs did not record it.</div>
-        )}
       </Section>
     </div>
   );

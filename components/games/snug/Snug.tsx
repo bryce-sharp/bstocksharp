@@ -188,6 +188,8 @@ function HelpBtn({ seen, id, ...props }: { seen: Set<string>; id: string } & Par
 
 /** A far-future Monday: the gentle level (7 patches, 1 spare), and a date no one will play for years. */
 const LAB_DATE = "2029-01-01";
+/** The real page's gap above the game (measured on /games/snug): the lab's test quilt is sized as if it had the same. */
+const pageTop = () => (window.innerWidth < 600 ? 24 : 32);
 
 /** The sound lab's test quilt: a real Snug board that saves nothing. Remount it (a new `key`) to reset. */
 export function SnugPlayground({ quickHelp }: { quickHelp: boolean }) {
@@ -489,6 +491,8 @@ function SnugDay({
   const [helpSeen] = useState(() => new Set<string>());
   const playRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const inLab = !!lab;
 
   // Measured before the first paint, so a new day never shows a frame laid out at the wrong size.
   useLayoutEffect(() => {
@@ -497,7 +501,9 @@ function SnugDay({
     const measure = () => {
       const r = el.getBoundingClientRect();
       setWidth(r.width);
-      setTopY(r.top + window.scrollY);
+      // The lab's test quilt sits far down its page, so it measures from its own panel, as if it opened the page.
+      const root = inLab ? rootRef.current : null;
+      setTopY(root ? r.top - root.getBoundingClientRect().top + pageTop() : r.top + window.scrollY);
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -535,7 +541,7 @@ function SnugDay({
       window.cancelAnimationFrame(frame);
       window.removeEventListener("resize", onResize);
     };
-  }, [coarsePointer]);
+  }, [coarsePointer, inLab]);
 
   // Touches that start anywhere in the play area never scroll the page, even when they miss a piece.
   useEffect(() => {
@@ -1176,8 +1182,11 @@ function SnugDay({
   // When the wave of the pull reaches each placed patch, so the patches puff in the same order.
   const puffAt = useMemo(() => (finishing ? pullDelays(puzzle, pieces) : []), [finishing, puzzle, pieces]);
   const folded = phase === "done";
-  // Side by side, the card sits where the basket was; once it is closed the quilt slides to the middle of the panel.
-  const slide = folded && layout.side && !won && !showCard ? (width - (puzzle.cols + 2 * BOARD_PAD) * cell) / 2 - (board.x - BOARD_PAD * cell) : 0;
+  // Once the card is closed the quilt slides to the middle of the room the basket left: across side by side (where the
+  // card sits in the basket's place), and down when stacked, so a phone shows no empty band under it.
+  const centered = folded && !won && !showCard;
+  const slideX = centered && layout.side ? (width - (puzzle.cols + 2 * BOARD_PAD) * cell) / 2 - (board.x - BOARD_PAD * cell) : 0;
+  const slideY = centered && !layout.side ? (layout.height - (puzzle.rows + 2 * BOARD_PAD) * cell) / 2 - (board.y - BOARD_PAD * cell) : 0;
   const sameRun = (a: { gaps: number; timeMs: number } | null, b: { gaps: number; timeMs: number } | null) =>
     !!a && !!b && a.gaps === b.gaps && a.timeMs === b.timeMs;
   const cardNote = [
@@ -1226,7 +1235,7 @@ function SnugDay({
   };
 
   return (
-    <div style={{ fontFamily: FONT, color: INK, width: "100%", userSelect: "none" }}>
+    <div ref={rootRef} style={{ fontFamily: FONT, color: INK, width: "100%", userSelect: "none" }}>
       <QuiltBackdrop dateKey={dateKey} />
       <KnitDefs />
       {showHowTo && <HowToPlay onClose={tap(closeHowTo)} touch={coarsePointer} spares={puzzle.spares} />}
@@ -1351,7 +1360,7 @@ function SnugDay({
           {width > 0 && (
             <>
               {/* The quilt and its basket. Once the day is done the basket folds away, and with the card closed the quilt slides to the middle. */}
-              <div style={{ position: "absolute", inset: 0, transform: slide ? `translateX(${slide}px)` : "none", transition: "transform 520ms cubic-bezier(.3, .8, .3, 1)" }}>
+              <div style={{ position: "absolute", inset: 0, transform: slideX || slideY ? `translate(${slideX}px, ${slideY}px)` : "none", transition: "transform 520ms cubic-bezier(.3, .8, .3, 1)" }}>
               <Basket
                 style={{
                   left: tray.x - 8,
