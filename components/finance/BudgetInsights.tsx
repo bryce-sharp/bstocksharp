@@ -13,11 +13,7 @@ import { useTheme, alpha } from "@mui/material/styles";
 import InsightsIcon from "@mui/icons-material/Insights";
 import SpendTrendChart from "./SpendTrendChart";
 import SpendByTag, { type TagSpendRow } from "./SpendByTag";
-import BudgetAnalytics, {
-  CashFlowDetails,
-  type BudgetAnalyticsData,
-  type CashFlowDetailsData,
-} from "./BudgetAnalytics";
+import { CashFlowDetails, type CashFlowDetailsData } from "./BudgetAnalytics";
 import { useTableFilter } from "./useTableFilter";
 import { LANE_LABELS, UNTAGGED } from "@/lib/finance/cashflow";
 import { formatMoney, formatMoneySigned, formatDate } from "@/lib/format";
@@ -42,7 +38,6 @@ export type BudgetInsightsData = {
   untagged: number; // untagged discretionary rows this month
   topPurchases: { merchant: string; amount: number; date: string }[];
   topMerchants: { merchant: string; total: number; count: number }[];
-  details: BudgetAnalyticsData;
   /** The cash-flow view: every dollar in and out, never scored against the budget. */
   all: {
     moneyIn: number;
@@ -341,7 +336,6 @@ function DiscretionaryView({ d }: { d: BudgetInsightsData }) {
   // When every top spot is a single purchase, it lists the same three as Top purchases.
   const spotsRepeat = d.topMerchants.every((m) => m.count === 1);
   const hasTop = d.topPurchases.length > 0 || d.topMerchants.length > 0;
-  const hasDetails = d.details.reimbursed > 0 || d.details.recentMonths.length > 0;
   const { tag, lane, toggle } = useTableFilter();
 
   return (
@@ -425,13 +419,6 @@ function DiscretionaryView({ d }: { d: BudgetInsightsData }) {
         </>
       ) : null}
 
-      {/* The granular numbers, inline — not a third card */}
-      {hasDetails ? (
-        <>
-          <Divider sx={{ my: 1.5 }} />
-          <BudgetAnalytics d={d.details} />
-        </>
-      ) : null}
     </>
   );
 }

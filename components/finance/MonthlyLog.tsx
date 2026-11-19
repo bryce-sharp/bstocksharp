@@ -27,6 +27,7 @@ export default function MonthlyLog({
   windowStart,
   accounts,
   balances,
+  carried,
   totals,
   missingMonths,
   balancesByMonth,
@@ -37,6 +38,8 @@ export default function MonthlyLog({
   windowStart: number;
   accounts: SnapshotAccount[];
   balances: Record<number, (number | null)[]>;
+  /** The month a carried balance was last logged, aligned to `months`. */
+  carried: Record<number, (string | null)[]>;
   totals: number[];
   missingMonths: string[];
   balancesByMonth: Record<string, Record<number, number | null>>;
@@ -148,14 +151,20 @@ export default function MonthlyLog({
                 >
                   {accounts.map((a) => {
                     const v = balances[a.id]?.[i] ?? null;
+                    const from = carried[a.id]?.[i] ?? null;
                     return (
                       <Box key={a.id} sx={{ minWidth: 0 }}>
                         <Typography variant="caption" sx={{ color: "text.secondary" }} noWrap component="div">
                           {a.name}
                         </Typography>
-                        <Typography variant="body2" sx={{ color: v == null ? "text.disabled" : undefined }}>
+                        <Typography variant="body2" sx={{ color: v == null ? "text.disabled" : from ? "text.secondary" : undefined }}>
                           {v == null ? "—" : formatMoney(v)}
                         </Typography>
+                        {from ? (
+                          <Typography variant="caption" sx={{ color: "text.secondary" }} noWrap component="div">
+                            Not logged; from {formatMonth(from)}
+                          </Typography>
+                        ) : null}
                       </Box>
                     );
                   })}

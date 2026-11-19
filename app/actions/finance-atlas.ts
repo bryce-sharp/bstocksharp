@@ -22,6 +22,7 @@ import {
   parseStr,
   todayISO,
   currentMonthISO,
+  lastDayOfMonth,
 } from "@/lib/finance/parse";
 import { requireApp } from "@/lib/hub-apps";
 
@@ -79,9 +80,13 @@ async function activeCompPlan(profileId: number, book: BookRef) {
   return row ?? null;
 }
 
-/** Fix the ACTIVE plan in place (typo — recalculates its whole span). */
+/**
+ * Fix the plan the card shows in place (a typo: every month it covers recalculates,
+ * and its dates stay, so an ended plan stays ended). No plan shown: start one.
+ */
 export async function saveCompPlanAction(
   profileId: number,
+  planId: number | null,
   formData: FormData,
 ): Promise<void> {
   await requireApp("finance");
@@ -89,12 +94,19 @@ export async function saveCompPlanAction(
   const book = await requireBook();
   const data = parseComp(formData);
 
-  const active = await activeCompPlan(profileId, book);
-  if (active) {
-    await db
+  if (planId !== null) {
+    const [fixed] = await db
       .update(compensationPlans)
       .set(data)
-      .where(eq(compensationPlans.id, active.id));
+      .where(
+        and(
+          eq(compensationPlans.id, planId),
+          eq(compensationPlans.profileId, profileId),
+          eq(compensationPlans.bookId, book.id),
+        ),
+      )
+      .returning({ id: compensationPlans.id });
+    if (!fixed) throw new Error("That pay plan is gone. Reload and try again.");
   } else {
     const startDate =
       normalizeMonth(formData.get("startMonth")) ?? currentMonthISO();
@@ -282,9 +294,11 @@ export async function endDeductionAction(
   await requireApp("finance");
   const row = await scopedDeduction(id);
   await requireEditorFor(row.profileId);
+  // This month's paychecks already had it taken out, so it ends with the month.
+  const today = todayISO(await getGroupTimezone((await requireBook()).groupId));
   await db
     .update(incomeDeductions)
-    .set({ endDate: todayISO() })
+    .set({ endDate: lastDayOfMonth(today) })
     .where(eq(incomeDeductions.id, id));
   revalidatePath(ATLAS);
 }

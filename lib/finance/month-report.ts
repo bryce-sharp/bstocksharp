@@ -123,6 +123,7 @@ export function buildMonthReport(
     diff: r2(keptActual + actual.paycheckSavings - plan.savingsGoal - plan.paycheckSavings),
   };
 
+  const paycheckGap = r2(saved.paycheck - saved.paycheckPlanned);
   const worst = lines.reduce<ReportLine | null>((w, l) => (l.effect < (w?.effect ?? -0.5) ? l : w), null);
   const best = lines.reduce<ReportLine | null>((b, l) => (l.effect > (b?.effect ?? 0.5) ? l : b), null);
   let verdict: string;
@@ -131,14 +132,19 @@ export function buildMonthReport(
     // Mid-month, unposted paychecks and bills look like misses; the live signal
     // is the discretionary pace.
     verdict = `So far this month, discretionary is ${formatMoney(Math.abs(disc.effect))} ${disc.effect >= 0 ? "under" : "over"} budget.`;
-  } else if (plan.savingsGoal > 0 && diff < 0 && worst) {
+  } else if (saved.goal > 0 && saved.diff < 0 && (worst || paycheckGap < 0)) {
+    // The verdict judges the whole goal, the same Saved figure the table shows.
     const outcome =
       saved.actual >= 0
         ? `saved ${formatMoney(saved.actual)} instead of ${formatMoney(saved.goal)}`
         : `ended ${formatMoney(-saved.actual)} down instead of saving ${formatMoney(saved.goal)}`;
-    verdict = `${cap(phrase(worst, "hurt"))}, the main reason you ${outcome}.`;
-  } else if (plan.savingsGoal > 0 && diff >= 0) {
-    verdict = `You saved ${formatMoney(diff)} more than your goal${best && PHRASE[best.key].helped ? `, mostly because ${phrase(best, "helped")}` : ""}.`;
+    const reason =
+      worst && worst.effect <= paycheckGap
+        ? phrase(worst, "hurt")
+        : `paycheck savings came in ${formatMoney(-paycheckGap)} under plan`;
+    verdict = `${cap(reason)}, the main reason you ${outcome}.`;
+  } else if (saved.goal > 0 && saved.diff >= 0) {
+    verdict = `You saved ${formatMoney(saved.diff)} more than your goal${best && PHRASE[best.key].helped ? `, mostly because ${phrase(best, "helped")}` : ""}.`;
   } else {
     const outcome = keptActual >= 0 ? `kept ${formatMoney(keptActual)}` : `ended ${formatMoney(-keptActual)} down`;
     verdict = `You ${outcome}${worst ? `; ${phrase(worst, "hurt")}` : ""}.`;

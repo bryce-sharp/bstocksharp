@@ -56,6 +56,10 @@ export type EngineRecurring = {
   /** Most recent matched payment BEFORE this month (sinking-fund accrual). */
   lastActualOn: string | null;
   startDate: string; // fallback accrual anchor when never paid
+  /** In ATLAS's plan for this month (in effect on its as-of day). A bill outside the
+   *  plan has an expected amount of $0. Deduct any payment even if the bill has ended
+   *  or has not started. */
+  inPlan: boolean;
 };
 
 export type EngineFund = {
@@ -101,6 +105,8 @@ export type AmortizedRow = {
   dueThisMonth: boolean;
   /** What actually posted this month (consumes the reserve); null = nothing. */
   paidThisMonthC: number | null;
+  /** Outside this month's plan: nothing set aside, and its payment adjusts spending. */
+  outsidePlan: boolean;
 };
 
 export type BudgetComputation = {
@@ -110,7 +116,7 @@ export type BudgetComputation = {
   dayOfMonth: number; // pace basis (= daysInMonth for past months)
   discretionary: {
     baseBudgetC: number;
-    estimateAdjustmentC: number; // Σ(estimate − actual) for posted estimates
+    estimateAdjustmentC: number; // Σ(expected − actual) for posted fixed bills, minus payments on set-aside bills outside the plan
     budgetC: number; // base + adjustment
     spentC: number; // Σ discretionary txns (gross)
     reimbursedC: number; // Σ reimbursement txns
@@ -193,29 +199,30 @@ export function computeBudgetMonth(input: EngineInput): BudgetComputation {
   }
 
   // ── Fixed lane: billed vs expected; EVERY posted bill reconciles ─────────────
-  const fixedRows: FixedRow[] = fixedRecurring.map((r) => {
+  const fixedRows: FixedRow[] = fixedRecurring.flatMap((r) => {
     const actual = actualByRecurring.get(r.id) ?? null;
+    if (!r.inPlan && actual === null) return [];
+    const expectedC = r.inPlan ? r.monthlyC : 0;
     return {
       recurringExpenseId: r.id,
       name: r.name,
-      expectedC: r.monthlyC,
+      expectedC,
       actualC: actual,
       isEstimate: r.isEstimate,
       // Every fixed bill reconciles its real charge against the plan; the gap
       // frees up (or eats into) discretionary — a Spectrum overrun is real money
       // gone, same as an electric one. isEstimate is now only a display label
       // ("this one's a guess"), no longer a switch on this math.
-      deltaC: actual !== null ? r.monthlyC - actual : null,
+      deltaC: actual !== null ? expectedC - actual : null,
     };
   });
-  // A posted actual replaces its plan; the difference flows into (or out of) the
-  // discretionary budget. (Named "estimate" adjustment for history — it's now
-  // every fixed bill, not just estimates.)
-  const estimateAdjustmentC = fixedRows.reduce((s, r) => s + (r.deltaC ?? 0), 0);
 
   // ── Amortized lane: sinking funds ────────────────────────────────────────────
-  const amortizedRows: AmortizedRow[] = amortizedRecurring.map((r) => {
+  // Outside the plan, a bill sets nothing aside and shows only when it was paid.
+  const amortizedRows: AmortizedRow[] = amortizedRecurring.flatMap((r) => {
     const paid = actualByRecurring.get(r.id) ?? null;
+    if (!r.inPlan && paid === null) return [];
+    const monthlyC = r.inPlan ? r.monthlyC : 0;
     // Accrue from the month AFTER the last payment (that payment reset the
     // fund); never paid → from the bill's start month, inclusive.
     const monthsAccrued = r.lastActualOn
@@ -224,14 +231,23 @@ export function computeBudgetMonth(input: EngineInput): BudgetComputation {
     return {
       recurringExpenseId: r.id,
       name: r.name,
-      monthlyC: r.monthlyC,
+      monthlyC,
       targetC: r.perOccurrenceC,
-      accruedC: Math.min(r.perOccurrenceC, r.monthlyC * monthsAccrued),
+      accruedC: Math.min(r.perOccurrenceC, monthlyC * monthsAccrued),
       monthsAccrued,
       dueThisMonth: r.dueThisMonth,
       paidThisMonthC: paid,
+      outsidePlan: !r.inPlan,
     };
   });
+
+  // A posted actual replaces its plan; the difference flows into (or out of) the
+  // discretionary budget. (Named "estimate" adjustment for history — it's now
+  // every fixed bill, not just estimates.)
+  // A set-aside bill outside the plan saved nothing for its payment, so the payment
+  // (or a refund of it) comes out of spending once, like a fixed bill outside the plan.
+  const outsidePlanPaidC = amortizedRows.reduce((s, r) => s + (r.outsidePlan ? (r.paidThisMonthC ?? 0) : 0), 0);
+  const estimateAdjustmentC = fixedRows.reduce((s, r) => s + (r.deltaC ?? 0), 0) - outsidePlanPaidC;
 
   // ── Discretionary lane (the headline) ────────────────────────────────────────
   const spentC = sum("discretionary");

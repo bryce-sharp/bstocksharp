@@ -102,7 +102,7 @@ export default function AccountDetail({
   const movedIn = since(flows?.movedIn);
   const movedOut = since(flows?.movedOut);
   const landed = flows?.landed ?? [];
-  const landedTotal = landed.reduce((t, l) => t + l.amount, 0);
+  const landedTotal = since(flows?.landedIn);
   const putIn = paid + movedIn - movedOut + landedTotal;
   const hasPutIn = paid !== 0 || movedIn !== 0 || movedOut !== 0 || landedTotal !== 0;
   const rest = s.change != null ? s.change - putIn : null;
@@ -113,7 +113,13 @@ export default function AccountDetail({
       ? months.map((_, i) => {
           if (i < firstIdx) return null;
           const at = (series: number[] | undefined) => (series ? series[i] - series[firstIdx] : 0);
-          return balances[firstIdx]! + at(contributions?.cumulative) + at(flows?.movedIn) - at(flows?.movedOut);
+          return (
+            balances[firstIdx]! +
+            at(contributions?.cumulative) +
+            at(flows?.movedIn) -
+            at(flows?.movedOut) +
+            at(flows?.landedIn)
+          );
         })
       : null;
   // With the dashed line, zoom in so the gap between the two lines reads.
@@ -169,6 +175,7 @@ export default function AccountDetail({
               {
                 data: x,
                 scaleType: "time",
+                tickInterval: x,
                 valueFormatter: (d: Date, ctx: { location: string }) =>
                   d.toLocaleDateString("en-US", ctx.location === "tick" ? { month: "short" } : { month: "long", year: "numeric" }),
               },

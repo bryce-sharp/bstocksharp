@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, or } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   compensationPlans,
@@ -42,6 +42,47 @@ export const PAYCHECKS_PER_YEAR: Record<string, number> = {
 };
 
 type Dated = { startDate: string; endDate: string | null };
+/**
+ * The writes that end a person's pay in every book when they are deactivated. End open
+ * pay plans and deductions on the last day of the household's current month. Preserve
+ * past income. Reactivation does not reopen ended plans or deductions. Remove plans and
+ * deductions that start after that month.
+ */
+export function payEndWrites(profileId: number, today: string) {
+  const monthEnd = lastDayOfMonth(today);
+  return [
+    db.delete(compensationPlans).where(and(eq(compensationPlans.profileId, profileId), gt(compensationPlans.startDate, monthEnd))),
+    db
+      .update(compensationPlans)
+      .set({ endDate: monthEnd })
+      .where(
+        and(
+          eq(compensationPlans.profileId, profileId),
+          or(isNull(compensationPlans.endDate), gt(compensationPlans.endDate, monthEnd)),
+        ),
+      ),
+    db.delete(incomeDeductions).where(and(eq(incomeDeductions.profileId, profileId), gt(incomeDeductions.startDate, monthEnd))),
+    db
+      .update(incomeDeductions)
+      .set({ endDate: monthEnd })
+      .where(
+        and(
+          eq(incomeDeductions.profileId, profileId),
+          or(isNull(incomeDeductions.endDate), gt(incomeDeductions.endDate, monthEnd)),
+        ),
+      ),
+  ] as const;
+}
+
+/**
+ * The day a month's plan reads its config. Point-in-time semantics: past months read
+ * as of their last day; the current month reads as of today (a raise landing Aug 15
+ * shows from Aug 15). The budget uses the same day, so both count the same bills.
+ */
+export function planAsOf(month: string, today: string): string {
+  return month.slice(0, 7) === today.slice(0, 7) ? today : lastDayOfMonth(`${month.slice(0, 7)}-01`);
+}
+
 export const effectiveAt = <T extends Dated>(rows: T[], asOf: string): T[] =>
   rows.filter((r) => r.startDate <= asOf && (r.endDate === null || r.endDate >= asOf));
 
@@ -171,16 +212,14 @@ export async function getAtlasViewForBook(
       ? `${monthParam.slice(0, 7)}-01`
       : currentMonth;
   const isCurrentMonth = month === currentMonth;
-  // Point-in-time semantics: past months read as of their last day; the
-  // current month reads as of today (a raise landing Aug 15 shows from Aug 15).
-  const asOf = isCurrentMonth ? today : lastDayOfMonth(month);
+  const asOf = planAsOf(month, today);
 
   const [hubPeople, members, allPlans, allDeductions, allExpenses, accounts, goals] =
     await Promise.all([
       db
         .select()
         .from(profiles)
-        .where(and(eq(profiles.groupId, book.groupId), isNull(profiles.archivedAt)))
+        .where(eq(profiles.groupId, book.groupId))
         .orderBy(asc(profiles.sortOrder), asc(profiles.id)),
       listBookMembers(book.id),
       db
@@ -219,6 +258,7 @@ export async function getAtlasViewForBook(
     ]);
   // The book's members, plus anyone whose pay still lands in this book.
   const inBook = new Set([...members.map((m) => m.id), ...allPlans.map((p) => p.profileId)]);
+  // Deactivated people too: deactivating ends their plans (payEndWrites), so plan dates decide every month.
   const groupProfiles = hubPeople.filter((p) => inBook.has(p.id));
   const accountById = new Map(accounts.map((a) => [a.id, a]));
 

@@ -28,6 +28,8 @@ import {
 } from "@/app/actions/finance-atlas";
 
 export type CompValues = {
+  /** The pay plan the card shows; "fix" edits this row in place. */
+  planId: number;
   payFrequency: string;
   grossPerPaycheck: number;
   baseSalary: number | null;
@@ -96,7 +98,7 @@ export default function CompensationDialog({
       if (current && flavor === "raise") {
         await startCompPlanAction(profileId, formData);
       } else {
-        await saveCompPlanAction(profileId, formData);
+        await saveCompPlanAction(profileId, current?.planId ?? null, formData);
       }
       onClose();
     } catch (err) {

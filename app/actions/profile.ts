@@ -16,6 +16,9 @@ import { getProfile, listProfiles } from "@/lib/queries/profiles";
 import { APPS } from "@/lib/apps";
 import { currentLogin } from "@/lib/hub-apps";
 import { wouldStrandBook } from "@/lib/books";
+import { payEndWrites } from "@/lib/queries/finance-atlas";
+import { getGroupTimezone } from "@/lib/queries/group";
+import { todayISO } from "@/lib/finance/parse";
 import type { Sharing } from "@/lib/db/schema";
 import { cleanEquipment } from "@/lib/workout";
 
@@ -173,9 +176,9 @@ function parseHiddenApps(raw: FormDataEntryValue | null): string[] {
 }
 
 /**
- * Deactivate (soft-delete): hide from the switcher + stop it being active, but keep
- * ALL their data. Reversible via reactivateProfile. Can't leave zero active
- * profiles; if the archived one is currently active, switch to another first.
+ * Deactivate the person and keep their data. End their Finance pay plans and deductions
+ * with the household month. Reactivation restores the person but does not restart pay.
+ * At least one profile must remain active. If this person is active, switch to another profile first.
  */
 export async function deactivateProfile(id: number): Promise<void> {
   await requireEditorFor(id); // deactivate a person you've unlocked
@@ -194,10 +197,12 @@ export async function deactivateProfile(id: number): Promise<void> {
     if (other) await setActiveProfileCookie(other.id);
   }
 
-  await db
-    .update(profiles)
-    .set({ archivedAt: new Date() })
-    .where(eq(profiles.id, id));
+  // Save the archive flag and month-end pay cutoffs in one batch. Reactivation preserves those cutoff dates.
+  const today = todayISO(await getGroupTimezone(await requireGroupId()));
+  await db.batch([
+    db.update(profiles).set({ archivedAt: new Date() }).where(eq(profiles.id, id)),
+    ...payEndWrites(id, today),
+  ]);
 
   revalidatePath("/", "layout");
 }

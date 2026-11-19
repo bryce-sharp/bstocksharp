@@ -15,7 +15,6 @@ import {
   listMonthTransactionsForSession,
   listBudgetMonths,
   listBillsForMonth,
-  listRecentMonths,
   listMerchantSuggestions,
   getSpendTrend,
   monthReportFrom,
@@ -50,6 +49,8 @@ import { listBookMembers, otherBooksForViewer, requireBook, viewerBook } from "@
 export const metadata = { title: "Budget" };
 
 const d = (c: number) => Math.round(c) / 100;
+const names = (rows: { name: string }[], what: string) =>
+  rows.length ? `${rows.map((r) => r.name).join(", ")} ${what}` : null;
 
 // The Budget tab (F3): this month's transactions + the discretionary pace,
 // computed live from the ledger. Past months render frozen once closed (CP4b).
@@ -72,7 +73,7 @@ export default async function BudgetPage({
   const monthRange = { from: month, to: lastDayOfMonth(month) };
   const book = await requireBook();
   const [
-    [view, txns, accounts, monthsWithData, bills, groupProfiles, recentMonths, trend, suggest, categories, editor],
+    [view, txns, accounts, monthsWithData, bills, groupProfiles, trend, suggest, categories, editor],
     [flow, allTrend, tagSpend, lanes, sources, incomeCategories, bankAlerts, stale, priceSuggestions],
   ] = await Promise.all([
     Promise.all([
@@ -82,7 +83,6 @@ export default async function BudgetPage({
       listBudgetMonths(),
       listBillsForMonth(month),
       requireBook().then((b) => listBookMembers(b.id)),
-      listRecentMonths(month, 3),
       getSpendTrend(month),
       listMerchantSuggestions(),
       listSpendCategories(),
@@ -130,7 +130,7 @@ export default async function BudgetPage({
   // Insights top-3s are DISCRETIONARY only — the controllable spend. Rent and
   // tithing dominate raw "biggest purchase," which isn't insight; bills show in
   // the billed breakdown instead.
-  const discSpend = rows.filter((r) => r.category === "discretionary" && r.amount > 0);
+  const discSpend = rows.filter((r) => r.category === "discretionary" && r.amount > 0 && !r.needsReview);
   const topPurchases = [...discSpend]
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 3)
@@ -302,9 +302,20 @@ export default async function BudgetPage({
         <Alert severity="info" variant="outlined" sx={{ mb: 3 }}>
           Budget adjusted {formatMonth(month)} by{" "}
           {d(disc.estimateAdjustmentC) >= 0 ? "+" : "−"}$
-          {Math.abs(d(disc.estimateAdjustmentC)).toFixed(2)} —{" "}
-          {c.fixed.rows.filter((r) => r.deltaC).map((r) => r.name).join(", ")} came in
-          different from the plan.
+          {Math.abs(d(disc.estimateAdjustmentC)).toFixed(2)}:{" "}
+          {[
+            names(c.fixed.rows.filter((r) => r.deltaC && r.expectedC > 0), "came in different from the plan"),
+            names(
+              [
+                ...c.fixed.rows.filter((r) => r.deltaC && r.expectedC === 0),
+                ...c.amortized.rows.filter((r) => r.outsidePlan && r.paidThisMonthC),
+              ],
+              "was paid this month but is not in the plan",
+            ),
+          ]
+            .filter(Boolean)
+            .join("; ")}
+          .
         </Alert>
       ) : null}
 
@@ -323,10 +334,6 @@ export default async function BudgetPage({
           untagged: untaggedDisc,
           topPurchases,
           topMerchants,
-          details: {
-            reimbursed: d(disc.reimbursedC),
-            recentMonths,
-          },
           all: {
             moneyIn: flow.moneyIn,
             moneyOut: flow.moneyOut,

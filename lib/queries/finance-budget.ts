@@ -9,7 +9,7 @@ import {
   type Transaction,
 } from "@/lib/db/schema";
 import { computeBudgetMonth, type AmortizedRow, type EngineTxn, type BudgetComputation } from "@/lib/finance/budget-engine";
-import { getAtlasViewForBook } from "@/lib/queries/finance-atlas";
+import { effectiveAt, getAtlasViewForBook, planAsOf } from "@/lib/queries/finance-atlas";
 import { lastDayOfMonth, todayISO, currentMonthISO } from "@/lib/finance/parse";
 import { requireBook, type BookRef } from "@/lib/books";
 import { getGroupTimezone } from "@/lib/queries/group";
@@ -83,15 +83,34 @@ export async function getBudgetMonthForBook(
   const discretionaryBudgetC = cents(atlas.totals.discretionLeft);
   const hasIncome = atlas.totals.monthlyNet > 0;
 
-  // Effective recurring bills + their last matched payment BEFORE this month.
+  // Load bills active during the month and bills referenced by its confirmed payments.
+  // A bill outside the plan has an expected amount of $0 (inPlan). Also load each
+  // bill's last confirmed payment before the month.
+  const paidThisMonth = db
+    .select({ id: transactions.recurringExpenseId })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.bookId, book.id),
+        eq(transactions.needsReview, false),
+        inArray(transactions.category, ["fixed", "amortized"]),
+        gte(transactions.postedOn, start),
+        lte(transactions.postedOn, end),
+      ),
+    );
   const bills = await db
     .select()
     .from(recurringExpenses)
     .where(
       and(
         eq(recurringExpenses.bookId, book.id),
-        lte(recurringExpenses.startDate, end),
-        or(isNull(recurringExpenses.endDate), gte(recurringExpenses.endDate, start)),
+        or(
+          and(
+            lte(recurringExpenses.startDate, end),
+            or(isNull(recurringExpenses.endDate), gte(recurringExpenses.endDate, start)),
+          ),
+          inArray(recurringExpenses.id, paidThisMonth),
+        ),
       ),
     );
 
@@ -105,7 +124,8 @@ export async function getBudgetMonthForBook(
     .from(transactions)
     .innerJoin(recurringExpenses, eq(recurringExpenses.id, transactions.recurringExpenseId))
     .where(
-      and(eq(transactions.bookId, book.id), lt(transactions.postedOn, start)),
+      // A row in review counts nowhere until it is reviewed, in its month or later ones.
+      and(eq(transactions.bookId, book.id), eq(transactions.needsReview, false), lt(transactions.postedOn, start)),
     )
     .orderBy(desc(transactions.postedOn));
   const lastPaidBy = new Map<number, string>();
@@ -114,6 +134,7 @@ export async function getBudgetMonthForBook(
     if (!lastPaidBy.has(series)) lastPaidBy.set(series, p.postedOn);
   }
   const viewedMonthNum = Number(month.slice(5, 7));
+  const inPlan = new Set(effectiveAt(bills, planAsOf(start, today)).map((b) => b.id));
 
   const recurring = bills.map((b) => {
     const perOccurrenceC = cents(b.amount);
@@ -129,6 +150,7 @@ export async function getBudgetMonthForBook(
         (b.dueMonths?.includes(viewedMonthNum) ?? false),
       lastActualOn: lastPaidBy.get(b.seriesId ?? b.id) ?? null,
       startDate: b.startDate,
+      inPlan: inPlan.has(b.id),
     };
   });
 
@@ -175,6 +197,7 @@ export async function getBudgetMonthForBook(
         eq(transactions.bookId, book.id),
         inArray(transactions.category, ["fund", "income"]),
         isNotNull(transactions.fundId),
+        eq(transactions.needsReview, false),
         lt(transactions.postedOn, start),
       ),
     );
@@ -282,11 +305,12 @@ function nextDue(month: string, r: AmortizedRow, dueMonths: number[] | undefined
     return formatMonth(`${y + Math.floor((m - 1 + k) / 12)}-${String(n).padStart(2, "0")}-01`);
   };
   const paid = paidThisMonth(r);
+  // Nothing set aside means the bill is outside the plan: it is not due again.
+  if (r.monthlyC <= 0) return null;
   if (dueMonths?.length) {
     for (let k = paid ? 1 : 0; k <= 12; k++) if (dueMonths.includes(((m - 1 + k) % 12) + 1)) return at(k);
     return null;
   }
-  if (r.monthlyC <= 0) return null;
   return `about ${at(Math.round((paid ? r.targetC : r.targetC - r.accruedC) / r.monthlyC))}`;
 }
 
@@ -392,39 +416,6 @@ export async function listMonthTransactionsForSession(
   month: string,
 ): Promise<Transaction[]> {
   return listMonthTransactions(await requireBook(), month);
-}
-
-export type RecentMonth = {
-  month: string; // YYYY-MM-01
-  spent: number; // discretionary net, dollars
-  budget: number; // discretionary budget, dollars
-  remaining: number;
-};
-
-/**
- * The few months with data just BEFORE `month` (the one being viewed — so a
- * past month shows its own lead-up, not today's), newest first, each computed
- * the same way the page does.
- */
-export async function listRecentMonths(month: string, limit = 3): Promise<RecentMonth[]> {
-  const book = await requireBook();
-  const tz = await getGroupTimezone(book.groupId);
-  const viewed = `${month.slice(0, 7)}-01`;
-  const past = (await listBudgetMonths()).filter((m) => m < viewed);
-  const recent = past.slice(-limit).reverse(); // newest first
-  const dl = (c: number) => Math.round(c) / 100;
-
-  const out: RecentMonth[] = [];
-  for (const m of recent) {
-    const v = await getBudgetMonthForBook(book, m, todayISO(tz));
-    out.push({
-      month: m,
-      spent: dl(v.computation.discretionary.netSpentC),
-      budget: dl(v.computation.discretionary.budgetC),
-      remaining: dl(v.computation.discretionary.remainingC),
-    });
-  }
-  return out;
 }
 
 /** A bill version for the bill-pickers; its dates let a picker offer only the version in effect. */
@@ -607,6 +598,8 @@ export async function getSpendTrend(
             .where(
               and(
                 inBook(book),
+                // A row in review counts nowhere until it is reviewed, like the budget itself.
+                eq(transactions.needsReview, false),
                 gte(transactions.postedOn, prev),
                 lte(transactions.postedOn, lastDayOfMonth(cur)),
                 or(
