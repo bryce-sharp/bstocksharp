@@ -348,3 +348,11 @@ export async function searchTransactions(
 ): Promise<TxnPage> {
   return searchTransactionsForBook(await requireBook(), f, cursor);
 }
+
+/** Ids for new ledger rows, taken first so a row and the writes that point at it save in one db.batch. */
+export async function reserveTransactionIds(count: number): Promise<number[]> {
+  const next = await db.execute<{ id: number }>(
+    sql`SELECT nextval(pg_get_serial_sequence('transactions', 'id'))::int AS id FROM generate_series(1, ${count})`,
+  );
+  return next.rows.map((r) => r.id);
+}

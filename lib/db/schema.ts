@@ -1188,7 +1188,8 @@ export const plaidTransactions = pgTable(
     // (and the posted version of a pending row) must never bring it back.
     dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
     // One payment the household recorded in parts: ledgerTransactionId holds
-    // the largest part and these the rest. Syncs never change split amounts.
+    // the largest part and these the rest (an empty list once only one part is
+    // left; null means no parts). Syncs never change split amounts.
     splitLedgerIds: integer("split_ledger_ids").array(),
     createdAt: createdAt(),
   },

@@ -1,7 +1,7 @@
 import "server-only";
-import { and, eq, isNull, or, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { funds, plaidTransactions, recurringExpenses, transactions } from "@/lib/db/schema";
+import { funds, recurringExpenses, transactions } from "@/lib/db/schema";
 import { resolveSpendCategory } from "@/lib/finance/ingest";
 import { SPLIT_LANES, canSplit, splitProblem, type SplitPart } from "@/lib/finance/split";
 import { type BookRef } from "@/lib/books";
@@ -70,46 +70,51 @@ export async function splitTransactionForBook(book: BookRef, id: number, input: 
         p.spendCategory ?? (await resolveSpendCategory(book, p.category, row.merchant, p.recurringExpenseId)),
     })),
   );
-  const lane = (p: SplitPart) => ({
-    amount: p.amount.toFixed(2),
-    originalAmount: p.amount.toFixed(2),
-    category: p.category,
-    fundId: p.fundId,
-    recurringExpenseId: p.recurringExpenseId,
-    spendCategory: p.spendCategory,
-  });
   const [first, ...rest] = tagged;
+  const money = (n: number) => n.toFixed(2);
+  const restValues = sql.join(
+    rest.map(
+      (p, i) =>
+        sql`(${i}::int, ${money(p.amount)}::numeric, ${p.category}::text, ${p.fundId}::int, ${p.recurringExpenseId}::int, ${p.spendCategory}::text)`,
+    ),
+    sql`, `,
+  );
 
-  const added = await db
-    .insert(transactions)
-    .values(
-      rest.map((p) => ({
-        groupId: row.groupId,
-        bookId: row.bookId,
-        accountId: row.accountId,
-        postedOn: row.postedOn,
-        merchant: row.merchant,
-        source: row.source,
-        bankStatus: row.bankStatus,
-        ...lane(p),
-      })),
+  // One statement, so a failure saves nothing, and the amount guard makes a second
+  // request for the same purchase change nothing. The new parts are shared with every
+  // book the purchase was, under each book's own tag, and the bank payment covers them.
+  const added = await db.execute<{ id: number }>(sql`
+    with original as (
+      update transactions
+      set amount = ${money(first.amount)}, original_amount = ${money(first.amount)}, category = ${first.category},
+          fund_id = ${first.fundId}, recurring_expense_id = ${first.recurringExpenseId},
+          spend_category = ${first.spendCategory}, needs_review = false
+      where id = ${id} and book_id = ${book.id} and amount = ${row.amount}
+      returning group_id, book_id, account_id, posted_on, merchant, source, bank_status
+    ),
+    parts as (
+      insert into transactions (group_id, book_id, account_id, posted_on, merchant, source, bank_status,
+        amount, original_amount, category, fund_id, recurring_expense_id, spend_category)
+      select o.group_id, o.book_id, o.account_id, o.posted_on, o.merchant, o.source, o.bank_status,
+        p.amount, p.amount, p.category, p.fund_id, p.recurring_expense_id, p.spend_category
+      from original o cross join (values ${restValues}) as p(ord, amount, category, fund_id, recurring_expense_id, spend_category)
+      order by p.ord
+      returning id
+    ),
+    shares as (
+      insert into transaction_shares (transaction_id, book_id, spend_category)
+      select parts.id, s.book_id, s.spend_category
+      from parts cross join transaction_shares s
+      where s.transaction_id = ${id}
+    ),
+    bank as (
+      update plaid_transactions
+      set split_ledger_ids = coalesce(split_ledger_ids, '{}') || (select array_agg(id order by id) from parts)
+      where removed_at is null
+        and (ledger_transaction_id = ${id} or ${id} = any(split_ledger_ids))
+        and exists (select 1 from parts)
     )
-    .returning({ id: transactions.id });
-  const newIds = added.map((a) => a.id);
-
-  await db
-    .update(transactions)
-    .set({ ...lane(first), needsReview: false })
-    .where(eq(transactions.id, id));
-  // The bank payment that covers the row covers its new parts too.
-  await db
-    .update(plaidTransactions)
-    .set({ splitLedgerIds: sql`coalesce(${plaidTransactions.splitLedgerIds}, '{}') || ${sql.param(newIds)}::int[]` })
-    .where(
-      and(
-        isNull(plaidTransactions.removedAt),
-        or(eq(plaidTransactions.ledgerTransactionId, id), sql`${id} = any(${plaidTransactions.splitLedgerIds})`),
-      ),
-    );
-  return [id, ...newIds];
+    select id from parts order by id`);
+  if (!added.rows.length) throw new Error("This purchase changed. Reload and split it again.");
+  return [id, ...added.rows.map((r) => r.id)];
 }

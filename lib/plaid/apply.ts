@@ -1,11 +1,12 @@
 import "server-only";
-import { and, asc, eq, getTableColumns, gte, inArray, isNotNull, isNull, lte, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, getTableColumns, gte, inArray, isNotNull, isNull, lte, ne, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { financialAccounts, plaidAccounts, plaidItems, plaidTransactions, transactionShares, transactions } from "@/lib/db/schema";
-import { asTransfer, extraBillChargeNote, merchantRulesFor, transferRulesFor } from "@/lib/finance/ingest";
+import { asTransfer, endedBillChargeNote, extraBillChargeNote, merchantRulesFor, transferRulesFor } from "@/lib/finance/ingest";
 import { categorizeMerchant, type MerchantRule } from "@/lib/finance/sms";
 import { spendCategoryFor } from "@/lib/finance/categorize";
-import { shareFromRules, spendRulesFor } from "@/lib/queries/finance-categories";
+import { ruleShare, spendRulesFor } from "@/lib/queries/finance-categories";
+import { reserveTransactionIds } from "@/lib/queries/finance-transactions";
 import { getGroupTimezone } from "@/lib/queries/group";
 import { type BookRef } from "@/lib/books";
 import { pickMatch, pickSplit } from "@/lib/finance/match";
@@ -50,6 +51,17 @@ const shiftDays = (iso: string, n: number) =>
 const DROPPED_NOTE = "The bank dropped this charge. Delete it if it never went through.";
 const PAYMENT_APP_NOTE =
   "Money in from a payment app. Keep it as income (and pick a fund if it is one person's), or re-file it as a reimbursement.";
+
+/**
+ * True when a batch lost to another sync: `claim` found a bank row already linked
+ * (Postgres division by zero), or Postgres stopped one of two syncs that locked each other.
+ */
+function lostToOtherSync(err: unknown): boolean {
+  for (let e: unknown = err; e instanceof Error; e = e.cause) {
+    if ("code" in e && (e.code === "22012" || e.code === "40P01")) return true;
+  }
+  return false;
+}
 
 export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
   const stats: ApplyStats = { inserted: 0, claimed: 0, updated: 0, removed: 0, skipped: 0, review: 0 };
@@ -151,7 +163,7 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
       },
       tz,
     );
-  const kindOf = (r: Staged): BankKind =>
+  const kindOf = (r: Pick<Staged, "amount" | "pfcPrimary" | "pfcDetailed" | "accountType" | "name" | "statementText">): BankKind =>
     bankKind({
       amount: Number(r.amount),
       pfcPrimary: r.pfcPrimary,
@@ -197,15 +209,51 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
   const markApplied = (rawId: number, ledgerId: number | null, splitIds: number[] | null = null) =>
     db
       .update(plaidTransactions)
-      .set({ appliedAt: new Date(), ledgerTransactionId: ledgerId, splitLedgerIds: splitIds?.length ? splitIds : null })
+      .set({ appliedAt: new Date(), ledgerTransactionId: ledgerId, splitLedgerIds: splitIds })
       .where(eq(plaidTransactions.id, rawId));
+
+  /**
+   * Link bank rows to a ledger row. Each must still be waiting: not linked, not yet
+   * applied, not removed by the bank, not dismissed by the household. If any raw bank
+   * record is not, the SQL statement raises a division-by-zero error, and the
+   * transaction rolls back the entire batch. `onlyIf` adds a condition.
+   */
+  const claim = (rawIds: number[], ledgerId: number, onlyIf = sql`true`) =>
+    db.execute(sql`
+      with claimed as (
+        update plaid_transactions
+        set applied_at = now(), ledger_transaction_id = ${ledgerId}, split_ledger_ids = null
+        where id = any(${sql.param(rawIds)}::int[])
+          and ledger_transaction_id is null and applied_at is null and removed_at is null and dismissed_at is null
+          and ${onlyIf}
+        returning id
+      )
+      select count(*) / (case when count(*) = ${rawIds.length} then 1 else 0 end) as claimed from claimed`);
+
+  /**
+   * The one rule for whether an existing ledger row can become the transfer `from` →
+   * `into`: it is still a transfer, its accounts are empty or already these, and
+   * exactly `owners` live bank rows link it (1 for a one-sided bank row, 0 for a row
+   * entered by hand). A null `from` or `into` skips that account check: a single bank
+   * leg checks its one known account exactly instead. Pairing checks the rule when
+   * reading, and the claim checks it again under the row lock, so a household edit
+   * made in between always wins.
+   */
+  const fitsPair = (ledgerId: SQL, from: SQL | null, into: SQL | null, owners: 0 | 1) => sql`exists (
+    select 1 from transactions t
+    where t.id = ${ledgerId} and t.category = 'transfer'
+      and ${from === null ? sql`true` : sql`(t.account_id is null or t.account_id = ${from})`}
+      and ${into === null ? sql`true` : sql`(t.transfer_account_id is null or t.transfer_account_id = ${into})`}
+      and (select count(*) from plaid_transactions q
+           where q.removed_at is null and (q.ledger_transaction_id = t.id or t.id = any(q.split_ledger_ids))) = ${owners})`;
 
   /**
    * Bring a ledger row up to date with the bank, keeping the household's edits.
    * A payment recorded in parts only gets its status: the parts are the household's.
+   * An empty list still means parts: the household deleted all but one.
    */
   async function refresh(ledgerId: number, kind: BankKind, r: Staged, splitIds: number[] | null = null) {
-    if (splitIds?.length) {
+    if (splitIds !== null) {
       await db
         .update(transactions)
         .set({ bankStatus: r.pending ? "pending" : "posted" })
@@ -248,17 +296,22 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
     note?: string | null;
     /** A transfer between books lives in the book the money left. */
     bookId?: number;
-  }): Promise<number> {
-    const [row] = await db
-      .insert(transactions)
-      .values({
+    /** The bank rows this row records, linked in the same batch so a retry finds it. */
+    rawIds: number[];
+  }): Promise<number | null> {
+    const [id] = await reserveTransactionIds(1);
+    // Plaid's clean merchant name reads best in lists; the popup shows the bank's wording.
+    const merchant = (values.r.merchantName ?? values.r.name).slice(0, 200);
+    const share = ruleShare(book, { id, merchant, category: values.category, spendCategory: values.spendCategory }, spendRules);
+    const saved = await db.batch([
+      db.insert(transactions).values({
+        id,
         groupId: item.groupId,
         bookId: values.bookId ?? book.id,
         accountId: values.accountId,
         transferAccountId: values.transferAccountId,
         postedOn: values.date,
-        // Plaid's clean merchant name reads best in lists; the popup shows the bank's wording.
-        merchant: (values.r.merchantName ?? values.r.name).slice(0, 200),
+        merchant,
         amount: values.amount,
         originalAmount: values.amount,
         category: values.category,
@@ -268,15 +321,20 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
         needsReview: values.needsReview,
         note: values.note ?? null,
         bankStatus: values.r.pending ? "pending" : "posted",
-      })
-      .returning({ id: transactions.id, merchant: transactions.merchant });
+      }),
+      ...(share ? [db.insert(transactionShares).values(share).onConflictDoNothing()] : []),
+      claim(values.rawIds, id),
+    ]).catch((err: unknown) => {
+      if (lostToOtherSync(err)) return null;
+      throw err;
+    });
+    if (saved === null) return null;
     if (values.needsReview) stats.review++;
-    await shareFromRules(book, { ...row, category: values.category, spendCategory: values.spendCategory }, spendRules);
-    return row.id;
+    return id;
   }
 
-  /** Purchases, refunds, and income: categorized the way a card alert would be. */
-  async function insertCategorized(r: Staged, kind: BankKind, date: string): Promise<number> {
+  /** Purchases, refunds, and income: categorized the way a card alert would be. Null when another run recorded it first. */
+  async function insertCategorized(r: Staged, kind: BankKind, date: string): Promise<number | null> {
     let amount = ledgerAmount(kind, Number(r.amount));
     let accountId: number | null = r.financialAccountId;
     let transferAccountId: number | null = null;
@@ -314,95 +372,195 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
         : (spellings(r)
             .map((s) => spendCategoryFor(category, s, billCategory, spendRules))
             .find((tag) => tag !== null) ?? null);
-    // Money from a payment app may be someone's pay or a payback, and an extra charge
-    // on a paid bill may not be the bill: both wait for the household.
+    // Money from a payment app may be someone's pay or a payback, an extra charge on a
+    // paid bill may not be the bill, and a charge like an ended bill may mean the cancel
+    // failed: all of them wait for the household.
     let note: string | null = null;
     if (kind === "income" && fromPaymentApp(r.pfcDetailed)) note = PAYMENT_APP_NOTE;
     else if (category === "fixed") note = await extraBillChargeNote(book, recurringExpenseId, Number(amount), date);
+    else if (kind === "spend" && category !== "transfer" && recurringExpenseId === null) {
+      note = await endedBillChargeNote(book, spellings(r), Number(amount), date);
+    }
     return insertRow({
       r, date, accountId, transferAccountId, amount, category, recurringExpenseId, spendCategory,
-      needsReview: note !== null, note,
+      needsReview: note !== null, note, rawIds: [r.id],
     });
   }
 
   /**
-   * Money between accounts. A connected card on the other side makes it a card
-   * payment (skipped); a connected account on the other side makes ONE ledger
-   * row for both legs; otherwise transfer words, then a hand-entered transfer,
-   * and as a last resort a one-sided row in Needs review that the other leg
-   * completes when it arrives.
+   * Find raw bank records on the hub's other mapped accounts with the opposite amount
+   * and a nearby date. Counterparts may belong to another money book. A leg can pair
+   * only while it is still waiting, or when its one-sided row fits this pair (fitsPair).
    */
-  async function applyTransfer(r: Staged, date: string) {
-    const amount = Number(r.amount);
-    const abs = Math.abs(amount).toFixed(2);
-    const others = await db
+  async function transferSides(amount: number, onDate: string, financialAccountId: number) {
+    const mine = sql`${financialAccountId}::int`;
+    const theirs = sql`${plaidAccounts.financialAccountId}`;
+    const [from, into] = amount > 0 ? [mine, theirs] : [theirs, mine];
+    const rows = await db
       .select({
         id: plaidTransactions.id,
         ledgerId: plaidTransactions.ledgerTransactionId,
         financialAccountId: plaidAccounts.financialAccountId,
         accountType: plaidAccounts.type,
+        amount: plaidTransactions.amount,
+        onDate: sql<string>`coalesce(${plaidTransactions.authorizedDate}, ${plaidTransactions.date})::text`,
+        pfcPrimary: plaidTransactions.pfcPrimary,
+        pfcDetailed: plaidTransactions.pfcDetailed,
+        name: plaidTransactions.name,
+        statementText: sql<string | null>`${plaidTransactions.raw}->>'original_description'`,
+        free: sql<boolean>`(
+          (${plaidTransactions.ledgerTransactionId} is null and ${plaidTransactions.appliedAt} is null)
+          or ${fitsPair(sql`${plaidTransactions.ledgerTransactionId}`, from, into, 1)})`,
       })
       .from(plaidTransactions)
       .innerJoin(plaidAccounts, eq(plaidTransactions.plaidAccountId, plaidAccounts.id))
       .innerJoin(plaidItems, eq(plaidAccounts.plaidItemId, plaidItems.id))
       .where(
         and(
-          // Any of the hub's banks: the other side may be in another money book ("Between books").
           eq(plaidItems.groupId, item.groupId),
           isNull(plaidTransactions.removedAt),
           isNull(plaidTransactions.dismissedAt),
           isNotNull(plaidAccounts.financialAccountId),
-          ne(plaidAccounts.financialAccountId, r.financialAccountId!),
+          ne(plaidAccounts.financialAccountId, financialAccountId),
           eq(plaidTransactions.amount, (-amount).toFixed(2)),
-          sql`coalesce(${plaidTransactions.authorizedDate}, ${plaidTransactions.date}) between ${shiftDays(date, -3)} and ${shiftDays(date, 3)}`,
+          sql`coalesce(${plaidTransactions.authorizedDate}, ${plaidTransactions.date}) between ${shiftDays(onDate, -3)} and ${shiftDays(onDate, 3)}`,
         ),
       )
       .orderBy(asc(plaidTransactions.id));
+    return {
+      cardPayment: rows.some((o) => o.accountType === "credit" && kindOf(o) === "skip"),
+      legs: rows.filter((o) => o.accountType !== "credit" && o.free && kindOf(o) === "transfer"),
+    };
+  }
 
-    if (others.some((o) => o.accountType === "credit")) {
+  /** A transfer the household already recorded (by hand, an alert or a Shortcut) for this pair, owned by no bank row. */
+  async function recordedTransfer(r: Staged, date: string, bookId: number, fromId: number, intoId: number, amount: string) {
+    const candidates = await db
+      .select({
+        id: transactions.id,
+        postedOn: transactions.postedOn,
+        merchant: transactions.merchant,
+        originalAmount: transactions.originalAmount,
+      })
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.bookId, bookId),
+          ne(transactions.source, "plaid"),
+          // Match the original amount; refresh keeps a household-adjusted amount.
+          eq(transactions.originalAmount, amount),
+          or(eq(transactions.accountId, fromId), eq(transactions.transferAccountId, intoId)),
+          gte(transactions.postedOn, shiftDays(date, -7)),
+          lte(transactions.postedOn, shiftDays(date, 7)),
+          fitsPair(sql`${transactions.id}`, sql`${fromId}::int`, sql`${intoId}::int`, 0),
+        ),
+      );
+    return pickMatch(
+      { date, amount: Number(amount), names: spellings(r) },
+      candidates.filter((c) => !taken.has(c.id)).map((c) => ({ ...c, originalAmount: Number(c.originalAmount) })),
+      { allowTip: false },
+    );
+  }
+
+  /**
+   * Money between accounts. A matching card-payment leg makes this a skipped card
+   * payment. Pair two bank legs only when each has exactly one eligible counterpart;
+   * the pair completes a transfer the household already recorded, the other leg's
+   * one-sided row, or a new row. Otherwise, try transfer words and a hand-entered
+   * transfer. If neither matches, create a one-sided row in Needs review.
+   */
+  async function applyTransfer(r: Staged, date: string, retried = false): Promise<void> {
+    const amount = Number(r.amount);
+    const abs = Math.abs(amount).toFixed(2);
+    // If another sync linked this raw record, keep its ledger link. If the household
+    // deleted it meanwhile, keep it deleted. Otherwise, reload eligibility and retry once.
+    const lostRace = async () => {
+      const [now] = await db
+        .select({ ledgerId: plaidTransactions.ledgerTransactionId, dismissedAt: plaidTransactions.dismissedAt })
+        .from(plaidTransactions)
+        .where(eq(plaidTransactions.id, r.id));
+      if (now?.dismissedAt) await markApplied(r.id, null);
+      else if (now?.ledgerId == null && !retried) await applyTransfer(r, date, true);
+    };
+    const lost = (err: unknown) => {
+      if (lostToOtherSync(err)) return null;
+      throw err;
+    };
+
+    const { cardPayment, legs } = await transferSides(amount, date, r.financialAccountId!);
+    if (cardPayment) {
       await markApplied(r.id, null);
       stats.skipped++;
       return;
     }
 
-    const leg = others.find((o) => o.ledgerId !== null) ?? others[0];
+    // Pair two bank legs only when each has exactly one eligible counterpart, and the
+    // other leg is not a card payment. Leave ambiguous matches in review.
+    let leg = legs.length === 1 ? legs[0] : undefined;
+    if (leg) {
+      const back = await transferSides(Number(leg.amount), leg.onDate, leg.financialAccountId!);
+      if (back.cardPayment || back.legs.length !== 1 || back.legs[0].id !== r.id) leg = undefined;
+    }
     if (leg) {
       const [fromId, intoId] =
-        amount > 0 ? [r.financialAccountId, leg.financialAccountId] : [leg.financialAccountId, r.financialAccountId];
+        amount > 0 ? [r.financialAccountId!, leg.financialAccountId!] : [leg.financialAccountId!, r.financialAccountId!];
       const [from] = await db
         .select({ bookId: financialAccounts.bookId })
         .from(financialAccounts)
-        .where(eq(financialAccounts.id, fromId!))
+        .where(eq(financialAccounts.id, fromId))
         .limit(1);
       const fromBook = from?.bookId ?? book.id;
-      if (leg.ledgerId !== null) {
-        await db
+      const pairAs = (ledgerId: number) =>
+        db
           .update(transactions)
-          .set({
-            category: "transfer",
-            accountId: fromId,
-            transferAccountId: intoId,
-            spendCategory: null,
-            needsReview: false,
-            bookId: fromBook,
-          })
-          .where(eq(transactions.id, leg.ledgerId));
-        // A transfer is never counted by another book.
-        await db.delete(transactionShares).where(eq(transactionShares.transactionId, leg.ledgerId));
-        await refresh(leg.ledgerId, "transfer", r);
-        await markApplied(r.id, leg.ledgerId);
-        stats.updated++;
-      } else {
+          .set({ category: "transfer", accountId: fromId, transferAccountId: intoId, spendCategory: null, needsReview: false, bookId: fromBook })
+          .where(eq(transactions.id, ledgerId));
+      const [fromSql, intoSql] = [sql`${fromId}::int`, sql`${intoId}::int`];
+
+      if (leg.ledgerId === null) {
+        // Both legs are new: complete a transfer the household already recorded before making one.
+        const recorded = await recordedTransfer(r, date, fromBook, fromId, intoId, abs);
+        if (recorded) {
+          const done = await db
+            .batch([
+              db.execute(sql`select 1 from transactions where id = ${recorded.id} for update`),
+              claim([r.id, leg.id], recorded.id, fitsPair(sql`${recorded.id}::int`, fromSql, intoSql, 0)),
+              pairAs(recorded.id),
+            ])
+            .catch(lost);
+          if (done === null) return lostRace();
+          taken.add(recorded.id);
+          handled.add(leg.id);
+          await refresh(recorded.id, "transfer", r);
+          stats.claimed++;
+          return;
+        }
         const id = await insertRow({
           r, date, accountId: fromId, transferAccountId: intoId, amount: abs,
           category: "transfer", recurringExpenseId: null, spendCategory: null, needsReview: false,
-          bookId: fromBook,
+          bookId: fromBook, rawIds: [r.id, leg.id],
         });
-        await markApplied(r.id, id);
-        await markApplied(leg.id, id);
+        if (id === null) return lostRace();
         handled.add(leg.id);
         stats.inserted++;
+        return;
       }
+
+      // The other leg's one-sided row. The lock makes a competing leg or household edit
+      // wait or win; the same rule is then checked again before anything changes.
+      const ledgerId = leg.ledgerId;
+      const paired = await db
+        .batch([
+          db.execute(sql`select 1 from transactions where id = ${ledgerId} for update`),
+          claim([r.id], ledgerId, fitsPair(sql`${ledgerId}::int`, fromSql, intoSql, 1)),
+          pairAs(ledgerId),
+          // A transfer is never counted by another book.
+          db.delete(transactionShares).where(eq(transactionShares.transactionId, ledgerId)),
+        ])
+        .catch(lost);
+      if (paired === null) return lostRace();
+      await refresh(ledgerId, "transfer", r);
+      stats.updated++;
       return;
     }
 
@@ -410,13 +568,15 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
     if (byWords) {
       const id = await insertRow({
         r, date, accountId: byWords.accountId, transferAccountId: byWords.transferAccountId, amount: byWords.amount,
-        category: "transfer", recurringExpenseId: null, spendCategory: null, needsReview: false,
+        category: "transfer", recurringExpenseId: null, spendCategory: null, needsReview: false, rawIds: [r.id],
       });
-      await markApplied(r.id, id);
+      if (id === null) return lostRace();
       stats.inserted++;
       return;
     }
 
+    // A transfer recorded by hand: an outgoing bank row matches its source account, an incoming row its destination.
+    const known = amount > 0 ? sql`account_id` : sql`transfer_account_id`;
     const handEntered = pickMatch(
       { date, amount: Number(abs), names: spellings(r) },
       pool
@@ -424,14 +584,28 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
           (c) =>
             !taken.has(c.id) &&
             c.category === "transfer" &&
-            (c.accountId === r.financialAccountId || c.transferAccountId === r.financialAccountId),
+            (amount > 0 ? c.accountId : c.transferAccountId) === r.financialAccountId,
         )
         .map((c) => ({ ...c, originalAmount: Number(c.originalAmount) })),
+      { allowTip: false },
     );
     if (handEntered) {
+      // Marked taken before the claim, so a retry never picks the same row again.
       taken.add(handEntered.id);
+      const id = sql`${handEntered.id}::int`;
+      const done = await db
+        .batch([
+          db.execute(sql`select 1 from transactions where id = ${id} for update`),
+          claim(
+            [r.id],
+            handEntered.id,
+            sql`${fitsPair(id, null, null, 0)}
+              and exists (select 1 from transactions where id = ${id} and ${known} = ${r.financialAccountId}::int)`,
+          ),
+        ])
+        .catch(lost);
+      if (done === null) return lostRace();
       await refresh(handEntered.id, "transfer", r);
-      await markApplied(r.id, handEntered.id);
       stats.claimed++;
       return;
     }
@@ -441,8 +615,9 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
       accountId: amount > 0 ? r.financialAccountId : null,
       transferAccountId: amount > 0 ? null : r.financialAccountId,
       amount: abs, category: "transfer", recurringExpenseId: null, spendCategory: null, needsReview: true,
+      rawIds: [r.id],
     });
-    await markApplied(r.id, id);
+    if (id === null) return lostRace();
     stats.inserted++;
   }
 
@@ -484,12 +659,15 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
         continue;
       }
       if (pendingRow?.ledgerId) {
-        await db
-          .update(plaidTransactions)
-          .set({ ledgerTransactionId: null, splitLedgerIds: null })
-          .where(eq(plaidTransactions.id, pendingRow.id));
         await refresh(pendingRow.ledgerId, kind, r, pendingRow.splitIds);
-        await markApplied(r.id, pendingRow.ledgerId, pendingRow.splitIds);
+        // One batch, so the entry is never left with no bank row owning it.
+        await db.batch([
+          db
+            .update(plaidTransactions)
+            .set({ ledgerTransactionId: null, splitLedgerIds: null })
+            .where(eq(plaidTransactions.id, pendingRow.id)),
+          markApplied(r.id, pendingRow.ledgerId, pendingRow.splitIds),
+        ]);
         stats.updated++;
         continue;
       }
@@ -534,9 +712,7 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
       continue;
     }
 
-    const id = await insertCategorized(r, kind, date);
-    await markApplied(r.id, id);
-    stats.inserted++;
+    if ((await insertCategorized(r, kind, date)) !== null) stats.inserted++;
   }
 
   // Removals last, so a pending row that posted in this batch has already
@@ -582,18 +758,18 @@ export async function applyPlaidItem(plaidItemId: number): Promise<ApplyStats> {
 }
 
 /**
- * Before the household deletes a ledger row. A part of a split stops being
- * covered (its bank row keeps the other parts); any other bank row is dismissed
- * so the bank's later updates never bring the deleted row back.
+ * Before deleting a split part, remove its link and keep the remaining parts covered.
+ * Keep an empty split list when one part remains, so refresh preserves its amount.
+ * Dismiss an unsplit bank row so later updates cannot recreate the deleted transaction.
  */
 export async function releaseBankLinks(ledgerId: number): Promise<void> {
   await db.execute(sql`
     update plaid_transactions
-    set split_ledger_ids = nullif(array_remove(split_ledger_ids, ${ledgerId}), '{}')
+    set split_ledger_ids = array_remove(split_ledger_ids, ${ledgerId})
     where ${ledgerId} = any(split_ledger_ids)`);
   await db.execute(sql`
     update plaid_transactions
-    set ledger_transaction_id = split_ledger_ids[1], split_ledger_ids = nullif(split_ledger_ids[2:], '{}')
+    set ledger_transaction_id = split_ledger_ids[1], split_ledger_ids = split_ledger_ids[2:]
     where ledger_transaction_id = ${ledgerId} and cardinality(split_ledger_ids) > 0`);
   await db
     .update(plaidTransactions)

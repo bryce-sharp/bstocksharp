@@ -368,8 +368,8 @@ export default async function BudgetPage({
             <Typography variant="caption" sx={{ color: "text.secondary" }}>
               Tip: the ⚠ rows need a look (an unreadable alert, a one-sided
               transfer, a charge the bank dropped, an extra charge on a bill already
-              paid, or money in from a payment app). Open the ⋮ menu (or tap the row
-              on a phone) to set their details.
+              paid, a charge like a bill you ended, or money in from a payment app).
+              Open the ⋮ menu (or tap the row on a phone) to set their details.
             </Typography>
           </Box>
         ) : null}

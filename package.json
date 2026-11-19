@@ -19,7 +19,8 @@
     "db:seed": "node scripts/seed-weight.mjs",
     "db:migrate-plans": "node scripts/migrate-weight-plans.mjs",
     "snug:months": "node --experimental-strip-types --no-warnings --import ./scripts/node-hooks.mjs scripts/snug-months.mts",
-    "recipes:check": "node --experimental-strip-types --no-warnings --import ./scripts/node-hooks.mjs scripts/recipe-check.mts"
+    "recipes:check": "node --experimental-strip-types --no-warnings --import ./scripts/node-hooks.mjs scripts/recipe-check.mts",
+    "finance:check": "node --experimental-strip-types --no-warnings --env-file=.env.local --import ./scripts/node-hooks.mjs scripts/finance-ledger-check.mts"
   },
   "dependencies": {
     "@emotion/cache": "^11.14.0",
