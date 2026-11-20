@@ -2,7 +2,7 @@
 // Recorded songs already include reverb, so they use a separate music bus. The lab (/games/snug/lab/sounds)
 // plays every effect variant, and the game uses the selected variants.
 
-type Ctx = { ac: AudioContext; fx: GainNode; music: GainNode; musicDry: GainNode; room: ConvolverNode };
+type Ctx = { ac: AudioContext; master: GainNode; fx: GainNode; music: GainNode; musicDry: GainNode; room: ConvolverNode };
 let shared: Ctx | null = null;
 
 /** The audio graph, made on the first sound (browsers only allow audio after a tap). */
@@ -18,7 +18,11 @@ export function audio(): Ctx {
   const out = ac.createDynamicsCompressor();
   out.threshold.value = -18;
   out.ratio.value = 3;
-  out.connect(ac.destination);
+  // Every stop and start fades through this gain, because cutting a wave mid-cycle makes a click.
+  const master = ac.createGain();
+  out.connect(master).connect(ac.destination);
+  // Covers stops the game does not ask for too, such as a phone call or headphones being unplugged.
+  ac.onstatechange = () => fadeMaster(ac, master, 0, ac.state === "running" ? 1 : 0);
   // A small, warm room: decaying noise as the impulse.
   const room = ac.createConvolver();
   const len = Math.floor(ac.sampleRate * 1.6);
@@ -43,7 +47,7 @@ export function audio(): Ctx {
   const musicDry = ac.createGain();
   musicDry.gain.value = 0.35;
   musicDry.connect(out);
-  shared = { ac, fx, music, musicDry, room };
+  shared = { ac, master, fx, music, musicDry, room };
   return shared;
 }
 
@@ -476,7 +480,8 @@ function byStep(text: string) {
 }
 
 function tick() {
-  if (!live) return;
+  // While the browser holds the audio its clock stops, so notes scheduled now would all sound at once on return.
+  if (!live || shared?.ac.state !== "running") return;
   const { melody, low, eighthMs, voice, bus } = live;
   const note = melody.length ? melody[beat % melody.length] : null;
   if (note) sing(voice, note.midi, note.len, bus);
@@ -686,8 +691,28 @@ export function sampleEffects() {
 /** True once the browser lets sound play. */
 export const audioRunning = () => shared?.ac.state === "running";
 
-/** Quiets everything while the page is hidden, and picks up where it was when the page shows again. */
+/** Seconds to fade all sound in or out when the audio stops or starts. */
+const FADE = 0.12;
+let holdTimer = 0;
+
+/** Moves the master gain from `from` to `to` over FADE; while the audio is stopped its clock is frozen, so `from` is the first sample it plays again. */
+function fadeMaster(ac: AudioContext, master: GainNode, from: number, to: number) {
+  const t = ac.currentTime;
+  master.gain.cancelScheduledValues(t);
+  master.gain.setValueAtTime(from, t);
+  if (to !== from) master.gain.linearRampToValueAtTime(to, t + FADE);
+}
+
+/** Fades everything out while the page is hidden, and fades back in where it was when the page shows again. */
 export function holdAudio(hidden: boolean) {
   if (!shared) return;
-  void (hidden ? shared.ac.suspend() : shared.ac.resume()).catch(() => {});
+  const { ac, master } = shared;
+  window.clearTimeout(holdTimer);
+  if (hidden) {
+    fadeMaster(ac, master, master.gain.value, 0);
+    holdTimer = window.setTimeout(() => void ac.suspend().catch(() => {}), FADE * 1000 + 50);
+  } else if (ac.state === "running") {
+    // Shown again before the fade finished: turn the sound back up from where it is.
+    fadeMaster(ac, master, master.gain.value, 1);
+  } else void ac.resume().catch(() => {});
 }
