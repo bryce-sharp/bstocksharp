@@ -25,6 +25,7 @@ export type RecipeInput = {
   servings: string;
   prepMin: string;
   cookMin: string;
+  coolMin: string;
   notes: string;
   sourceName: string;
   sourceUrl: string;
@@ -132,6 +133,7 @@ function parseRecipe(input: unknown) {
     servings: count(input.servings, "Servings", 999, 1),
     prepMin: count(input.prepMin, "Prep time", 10_000),
     cookMin: count(input.cookMin, "Cook time", 10_000),
+    coolMin: count(input.coolMin, "Cool/set time", 10_000),
     notes: text(input.notes, RECIPE_LIMITS.text),
     sourceName: text(input.sourceName, RECIPE_LIMITS.title),
     sourceUrl: webAddress(input.sourceUrl),
