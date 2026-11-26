@@ -200,7 +200,7 @@ whole. Ingredient and step ids are stable from the first PR, so uses, links and 
 
 | Table | Columns |
 | --- | --- |
-| `recipes` | id, groupId, createdByProfileId, version, title, description, servings, prepMin, cookMin, notes, tags (jsonb), sourceKind (`mine` · `imported`), sourceUrl, sourceName, imageUrl, ingredients (jsonb), steps (jsonb), createdAt, updatedAt |
+| `recipes` | id, groupId, createdByProfileId, version, title, description, servings, prepMin, cookMin, coolMin (cool, chill, set or rest after cooking; counts in the total), notes, tags (jsonb), sourceKind (`mine` · `imported`), sourceUrl, sourceName, imageUrl, ingredients (jsonb), steps (jsonb), createdAt, updatedAt |
 | `recipe_favorites` | profileId, recipeId (unique together) |
 | `recipe_logs` | id, recipeId, recipeVersion, profileId, cookedOn, rating (1 to 5, optional), counted (false when something went wrong), notes, servings, mealId, createdAt |
 | `meals` | id, groupId, menuId, cookedOn, notes, recipeIds (jsonb, ordered: what was made), createdByProfileId, createdAt |

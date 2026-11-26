@@ -305,6 +305,14 @@ eq("paste page", { t: potRoast.title, d: potRoast.description, s: potRoast.servi
   n: "Leftovers keep 4 days.",
 });
 
+// Time after cooking: a card's Chill or Cool label fills cool/set time; recipe data never guesses one.
+const pie = recipeFromText("No-Bake Pie\nPrep Time: 15 mins\nChill Time: 4 hours\nServes 8\n\nIngredients\n- 1 crust\n- 8 oz cream cheese\n- 1 cup sugar\n\nInstructions\n1. Beat the filling.\n2. Chill until set.");
+eq("paste chill time", [pie.prepMin, pie.cookMin, pie.coolMin], [15, null, 240]);
+const cooled = recipeFromText("Brownies\nPrep Time 10 minutes\nBake Time 25 minutes\nCooling Time 1 hour\n\nIngredients\n1 cup flour\n1 cup sugar\n2 eggs\n\nInstructions\nMix.\nBake.");
+eq("paste cooling time", [cooled.prepMin, cooled.cookMin, cooled.coolMin], [10, 25, 60]);
+const chilled = recipeFromHtml(ld({ "@type": "Recipe", name: "Cheesecake", recipeIngredient: ["1 crust"], prepTime: "PT30M", cookTime: "PT1H", totalTime: "PT8H30M" }), "https://x.com");
+eq("recipe data leaves cool/set time empty", chilled && [chilled.prepMin, chilled.cookMin, chilled.coolMin], [30, 60, null]);
+
 // An older post with no Ingredients heading, read from the page's text.
 const oldPost = `<html><head><title>Lentil Soup - Some Blog</title></head><body><nav>Home</nav><p>A story about soup.</p><p>Lentil Soup</p><p>Adapted from a friend</p><p>Total Time: 45 minutes</p><p>1 cup lentils<br>1 onion, diced<br>2 carrots, diced<br>4 cups stock<br>Salt and pepper</p><p>1. Soften the onion and carrots.</p><p>2. Add lentils and stock; simmer 30 minutes.</p><p>Thanks for reading, see you next week!</p><p>Share this:</p></body></html>`;
 const soup = recipeFromPageText(oldPost, "https://blog.example/lentil-soup/");

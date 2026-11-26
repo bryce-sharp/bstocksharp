@@ -1326,6 +1326,8 @@ export const recipes = pgTable(
     servings: integer("servings"),
     prepMin: integer("prep_min"),
     cookMin: integer("cook_min"),
+    // Cooling, chilling, setting or resting after cooking; counts in the total time.
+    coolMin: integer("cool_min"),
     notes: text("notes"),
     tags: jsonb("tags").$type<string[]>().notNull().default([]),
     sourceKind: varchar("source_kind", { length: 20 }).notNull().default("mine"), // mine | imported

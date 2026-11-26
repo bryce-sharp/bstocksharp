@@ -29,9 +29,11 @@ export function formatMinutes(n: number): string {
   return `${Math.floor(n / 60)} hr${rest ? ` ${rest} min` : ""}`;
 }
 
-/** The recipe's total time, or null when neither time is known. */
-export function totalMinutes(r: { prepMin: number | null; cookMin: number | null }): number | null {
-  return r.prepMin === null && r.cookMin === null ? null : (r.prepMin ?? 0) + (r.cookMin ?? 0);
+/** The recipe's total time (prep, cook, then cool or set), or null when no time is known. */
+export function totalMinutes(r: { prepMin: number | null; cookMin: number | null; coolMin: number | null }): number | null {
+  return r.prepMin === null && r.cookMin === null && r.coolMin === null
+    ? null
+    : (r.prepMin ?? 0) + (r.cookMin ?? 0) + (r.coolMin ?? 0);
 }
 
 /** Tags tidied for saving: trimmed, single-spaced, no repeats ignoring case, within the limits. */

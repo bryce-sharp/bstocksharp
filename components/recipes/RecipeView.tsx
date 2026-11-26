@@ -145,7 +145,8 @@ export default function RecipeView({
   const times = [
     recipe.prepMin ? `Prep ${formatMinutes(recipe.prepMin)}` : null,
     recipe.cookMin ? `Cook ${formatMinutes(recipe.cookMin)}` : null,
-    total && recipe.prepMin && recipe.cookMin ? `Total ${formatMinutes(total)}` : null,
+    recipe.coolMin ? `Cool/set ${formatMinutes(recipe.coolMin)}` : null,
+    total && [recipe.prepMin, recipe.cookMin, recipe.coolMin].filter(Boolean).length >= 2 ? `Total ${formatMinutes(total)}` : null,
   ].filter(Boolean);
 
   const stepper = <SizeStepper amount={amount} servings={servings} onChange={setAmount} />;

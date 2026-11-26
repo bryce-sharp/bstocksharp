@@ -40,6 +40,7 @@ export async function listRecipes(profileId: number | null) {
         servings: recipes.servings,
         prepMin: recipes.prepMin,
         cookMin: recipes.cookMin,
+        coolMin: recipes.coolMin,
         tags: recipes.tags,
         ingredients: recipes.ingredients,
         version: recipes.version,
@@ -239,7 +240,7 @@ export async function getMenu(id: number) {
   const [found, cooking, logs, ratings] = await Promise.all([
     recipeIds.length
       ? db
-          .select({ id: recipes.id, title: recipes.title, servings: recipes.servings, prepMin: recipes.prepMin, cookMin: recipes.cookMin })
+          .select({ id: recipes.id, title: recipes.title, servings: recipes.servings, prepMin: recipes.prepMin, cookMin: recipes.cookMin, coolMin: recipes.coolMin })
           .from(recipes)
           .where(and(eq(recipes.groupId, groupId), inArray(recipes.id, recipeIds)))
       : [],

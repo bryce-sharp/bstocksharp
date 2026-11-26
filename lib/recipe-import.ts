@@ -10,6 +10,8 @@ export type RecipeDraft = {
   servings: number | null;
   prepMin: number | null;
   cookMin: number | null;
+  /** Cooling, chilling, setting or resting after cooking, when the text names it. */
+  coolMin: number | null;
   tags: string[];
   ingredients: DraftIngredient[];
   steps: string[];
@@ -358,6 +360,8 @@ export function recipeFromHtml(html: string, pageUrl: string): RecipeDraft | nul
     servings: yieldServings(recipe.recipeYield),
     prepMin: prep,
     cookMin: cook ?? (prep === null ? total : null),
+    // Recipe data has no cooling time; its total also counts rising and marinating, so the gap is not cooling.
+    coolMin: null,
     tags,
     ingredients: withCardGroups(grouped(ingredients), html),
     steps: lines(steps, RECIPE_LIMITS.step),
@@ -373,7 +377,10 @@ const INGREDIENTS_HEADING = /^\s*(ingredients?|what you(?:'|’)?ll need|you(?:'
 const STEPS_HEADING = /^\s*(instructions?|directions?|method|steps?|preparation|how to make (it|them))\s*:?\s*$/i;
 const NOTES_HEADING = /^\s*(recipe notes?|notes?|tips|cook(?:'|’)?s notes?|baker(?:'|’)?s notes?)\s*:?\s*$/i;
 const END_HEADING = /^\s*(nutrition( facts| information)?|did you make this|share this|related recipes|more recipes|recipe by\b|shop this post|explore more|leave a (comment|review))/i;
-const META = /^\s*(prep(?:aration)? time|cook(?:ing)? time|bake time|total time|servings|serves|yield|makes)\s*:?\s*(.*)$/i;
+const META =
+  /^\s*(prep(?:aration)? time|cook(?:ing)? time|bake time|cool(?:ing)? time|chill(?:ing)? time|rest(?:ing)? time|set(?:ting)? time|total time|servings|serves|yield|makes)\s*:?\s*(.*)$/i;
+/** A META label for time after cooking: cool, chill, rest or set. */
+const AFTER_COOKING = /^(cool|chill|rest|set)/;
 // Recipe-card buttons and labels that come along when a whole page is copied.
 const JUNK = /^\s*(\d+x(\s+\d+x)*|us customary|us|metric|scale|print( recipe)?|pin( recipe)?|jump to recipe|rate this recipe|leave a review|save|cook mode|prevent your screen from going dark)\s*$/i;
 const QUANTITY = /^\s*([-*•▢☐□◻]\s*)?(\d|[¼½¾⅓⅔⅛]|a |an |one |two |pinch|dash|handful)/i;
@@ -395,7 +402,7 @@ const STOP = /^\s*(share this|print|related|leave a (comment|reply)|comments?|po
  * An older post's recipe with no Ingredients heading: its name, a block of amount lines, then the method. The
  * block is the longest run of lines that are amounts or short ("Freshly ground pepper"), with blank lines between.
  */
-function headinglessRecipe(all: string[]): { title: string; ingredients: string[]; steps: string[]; servingsText: string | null; prepMin: number | null; cookMin: number | null } | null {
+function headinglessRecipe(all: string[]): { title: string; ingredients: string[]; steps: string[]; servingsText: string | null; prepMin: number | null; cookMin: number | null; coolMin: number | null } | null {
   // An amount line, not a numbered step ("1. Mix"), a rating ("5 from 27 votes") or a time ("7 minutes").
   const isAmount = (l: string) =>
     QUANTITY.test(l) && l.length <= 120 && !/^\s*\d+\s*[.)]\s/.test(l) && !/^\s*\d+(\.\d+)?\s*(from|stars?|votes?|reviews?|minutes?|mins?|hours?|hrs?)\b/i.test(l);
@@ -420,6 +427,7 @@ function headinglessRecipe(all: string[]): { title: string; ingredients: string[
   let servingsText: string | null = null;
   let prepMin: number | null = null;
   let cookMin: number | null = null;
+  let coolMin: number | null = null;
   for (let i = best.start - 1; i >= Math.max(0, best.start - 10) && !title; i--) {
     const l = all[i]!;
     if (!l) continue;
@@ -428,6 +436,7 @@ function headinglessRecipe(all: string[]): { title: string; ingredients: string[
       const label = meta[1]!.toLowerCase();
       if (label.startsWith("prep")) prepMin ??= textMinutes(meta[2] ?? "");
       else if (label.startsWith("cook") || label.startsWith("bake")) cookMin ??= textMinutes(meta[2] ?? "");
+      else if (AFTER_COOKING.test(label)) coolMin ??= textMinutes(meta[2] ?? "");
       else if (/serv|yield|makes/.test(label)) servingsText ??= l;
       continue;
     }
@@ -449,7 +458,7 @@ function headinglessRecipe(all: string[]): { title: string; ingredients: string[
     steps.push(l);
   }
   if (!steps.length) return null;
-  return { title, ingredients: all.slice(best.start, best.end).filter(Boolean), steps, servingsText, prepMin, cookMin };
+  return { title, ingredients: all.slice(best.start, best.end).filter(Boolean), steps, servingsText, prepMin, cookMin, coolMin };
 }
 
 /**
@@ -473,6 +482,7 @@ export function recipeFromText(text: string): RecipeDraft {
     servings: yieldServings(plain.servingsText),
     prepMin: plain.prepMin,
     cookMin: plain.cookMin,
+    coolMin: plain.coolMin,
     tags: [],
     ingredients: grouped(plain.ingredients.map(tidyLine)),
     steps: lines(splitPasted(plain.steps.join("\n")), RECIPE_LIMITS.step),
@@ -497,6 +507,7 @@ export function recipeFromText(text: string): RecipeDraft {
   };
   let prepMin: number | null = null;
   let cookMin: number | null = null;
+  let coolMin: number | null = null;
   let servingsText: string | null = null;
   let cardStart = top;
   let metaEnd = -1;
@@ -511,6 +522,7 @@ export function recipeFromText(text: string): RecipeDraft {
     const label = m[1]!.toLowerCase();
     if (label.startsWith("prep") && prepMin === null) prepMin = textMinutes(value);
     else if ((label.startsWith("cook") || label.startsWith("bake")) && cookMin === null) cookMin = textMinutes(value);
+    else if (AFTER_COOKING.test(label) && coolMin === null) coolMin = textMinutes(value);
     else if (/serv|yield|makes/.test(label) && servingsText === null && /\d/.test(value)) servingsText = `${label} ${value}`;
   }
   const isProse = (l: string) => l.length > 90 || /[.!?]$/.test(l);
@@ -549,6 +561,7 @@ export function recipeFromText(text: string): RecipeDraft {
     servings: yieldServings(servingsText ?? /(?:serves|servings|makes|yield)\D{0,12}(\d+[^\n]*)/i.exec(text)?.[1] ?? null),
     prepMin,
     cookMin,
+    coolMin,
     tags: [],
     ingredients,
     steps: lines(splitPasted(stepLines.join("\n")).map((st) => withoutIngredientEcho(st, ingredients.map((i) => i.text))), RECIPE_LIMITS.step),

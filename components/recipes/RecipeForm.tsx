@@ -73,6 +73,7 @@ export default function RecipeForm({
   const [servings, setServings] = React.useState(start?.servings?.toString() ?? "");
   const [prepMin, setPrepMin] = React.useState(start?.prepMin?.toString() ?? "");
   const [cookMin, setCookMin] = React.useState(start?.cookMin?.toString() ?? "");
+  const [coolMin, setCoolMin] = React.useState(start?.coolMin?.toString() ?? "");
   const [tags, setTags] = React.useState<string[]>(start?.tags ?? []);
   const [ingredients, setIngredients] = React.useState<Line[]>(() => (draft ? ingredientLines(draft.ingredients.map((i) => ({ ...i, id: newLineId() }))) : ingredientLines(recipe?.ingredients ?? [])));
   const [steps, setSteps] = React.useState<Line[]>(() =>
@@ -159,6 +160,7 @@ export default function RecipeForm({
       servings,
       prepMin,
       cookMin,
+      coolMin,
       notes,
       sourceName,
       sourceUrl,
@@ -214,10 +216,11 @@ export default function RecipeForm({
             placeholder="A line or two: what it is, when you make it"
             sx={fieldSx}
           />
-          <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr 1fr", sm: "repeat(3, 1fr)" } }}>
+          <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr 1fr", sm: "repeat(4, 1fr)" } }}>
             <TextField label="Servings" value={servings} onChange={(e) => touched(setServings)(digits(e.target.value))} slotProps={{ htmlInput: { inputMode: "numeric" } }} sx={fieldSx} />
             <TextField label="Prep minutes" value={prepMin} onChange={(e) => touched(setPrepMin)(digits(e.target.value))} slotProps={{ htmlInput: { inputMode: "numeric" } }} sx={fieldSx} />
             <TextField label="Cook minutes" value={cookMin} onChange={(e) => touched(setCookMin)(digits(e.target.value))} slotProps={{ htmlInput: { inputMode: "numeric" } }} sx={fieldSx} />
+            <TextField label="Cool/set minutes" value={coolMin} onChange={(e) => touched(setCoolMin)(digits(e.target.value))} slotProps={{ htmlInput: { inputMode: "numeric" } }} sx={fieldSx} />
           </Box>
           <Autocomplete
             multiple
